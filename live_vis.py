@@ -316,17 +316,18 @@ class LiveVis(object):
                     key, hex(key), key_label, tag, tag)
 
     def display_frame(self, frame):
-        if self.settings.static_files_input_mode == "siamese_image_list":
+
+        full_pane_shape = self.panes['input'].data.shape[:2][::-1]
+        if self.settings.is_siamese:
             frame1 = frame[0]
             frame2 = frame[1]
-            full_pane_shape = self.panes['input'].data.shape[:2][::-1]
             half_pane_shape = (full_pane_shape[0] / 2, full_pane_shape[1])
             frame_disp1 = cv2.resize(frame1[:], half_pane_shape)
             frame_disp2 = cv2.resize(frame2[:], half_pane_shape)
             frame_disp = np.concatenate((frame_disp1, frame_disp2), axis=1)
 
         else:
-            frame_disp = cv2.resize(frame[:], self.panes['input'].data.shape[:2][::-1])
+            frame_disp = cv2.resize(frame[:], full_pane_shape)
 
         self.panes['input'].data[:] = frame_disp
 

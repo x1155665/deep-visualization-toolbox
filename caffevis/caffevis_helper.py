@@ -1,4 +1,6 @@
 import numpy as np
+import os
+import caffe
 
 from image_misc import get_tiles_height_width, caffe_load_image
 
@@ -6,7 +8,7 @@ from image_misc import get_tiles_height_width, caffe_load_image
 
 def net_preproc_forward(settings, net, img, data_hw):
 
-    if settings.static_files_input_mode == "siamese_image_list":
+    if settings.is_siamese:
         appropriate_shape = data_hw + (6,)
     else:
         appropriate_shape = data_hw + (3,)
@@ -121,3 +123,27 @@ def check_force_backward_true(prototxt_file):
         print 'to your prototxt file before continuing to force backprop to compute derivatives'
         print 'at the data layer as well.\n\n'
 
+
+def load_mean(data_mean_file):
+    filename, file_extension = os.path.splitext(data_mean_file)
+    if file_extension == ".npy":
+        # load mean from numpy array
+        data_mean = np.load(data_mean_file)
+        print "Loaded mean from numpy file, data_mean.shape: ", data_mean.shape
+
+    elif file_extension == ".binaryproto":
+
+        # load mean from binary protobuf file
+        blob = caffe.proto.caffe_pb2.BlobProto()
+        data = open(data_mean_file, 'rb').read()
+        blob.ParseFromString(data)
+        data_mean = np.array(caffe.io.blobproto_to_array(blob))
+        data_mean = np.squeeze(data_mean)
+        print "Loaded mean from binaryproto file, data_mean.shape: ", data_mean.shape
+
+    else:
+        # unknown file extension, trying to load as numpy array
+        data_mean = np.load(data_mean_file)
+        print "Loaded mean from numpy file, data_mean.shape: ", data_mean.shape
+
+    return data_mean

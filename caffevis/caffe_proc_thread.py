@@ -85,7 +85,7 @@ class CaffeProcThread(CodependentThread):
                 #print 'TIMING:, processing frame'
                 self.frames_processed_fwd += 1
 
-                if self.settings.static_files_input_mode == "siamese_image_list":
+                if self.settings.is_siamese:
                     frame1 = frame[0]
                     frame2 = frame[1]
 
