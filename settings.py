@@ -67,14 +67,17 @@ debug_window_panes = locals().get('debug_window_panes', False)
 # names), one can simply define control_pane_height. If more
 if 'default_window_panes' in locals():
     raise Exception('Override window panes in settings_local.py by defining window_panes, not default_window_panes')
+
+control_pane_height = locals().get('control_pane_height', 30)
+
 default_window_panes = (
     # (i, j, i_size, j_size)
     ('input',            (  0,    0,  300,   300)),    # This pane is required to show the input picture
     ('caffevis_aux',     (300,    0,  300,   300)),
     ('caffevis_back',    (600,    0,  300,   300)),
     ('caffevis_status',  (900,    0,   30,  1500)),
-    ('caffevis_control', (  0,  300,   30,   900)),
-    ('caffevis_layers',  ( 30,  300,  870,   900)),
+    ('caffevis_control', (  0,  300,   control_pane_height,   900)),
+    ('caffevis_layers',  ( control_pane_height,  300,  900-control_pane_height,   900)),
     ('caffevis_jpgvis',  (  0, 1200,  900,   300)),
 )
 window_panes = locals().get('window_panes', default_window_panes)
@@ -109,10 +112,13 @@ static_files_ignore_case = locals().get('static_files_ignore_case', True)
 # runtime via 'stretch_mode' key.)
 static_file_stretch_mode = locals().get('static_file_stretch_mode', False)
 
-# contains the input mode for reading static images, can be: 'directory', 'image_list', 'siamese_image_list'
+# is the network loaded a siamese network
+is_siamese = locals().get('is_siamese', False)
+
+# contains the input mode for reading static images, can be: 'directory', 'image_list'
 static_files_input_mode = locals().get('static_files_input_mode', 'directory')
 
-# contains the file name to read, relevant only when static_files_input_mode is 'image_list' or 'siamese_image_list'
+# contains the file name to read, relevant only when static_files_input_mode is 'image_list'
 static_files_input_file = locals().get('static_files_input_file', 'images_file_list.txt')
 
 # int, 0+. How many times to go through the main loop after a keypress
@@ -307,6 +313,15 @@ caffevis_label_thick = locals().get('caffevis_label_thick', 1)
 # caffe net parameter - channel swap
 caffe_net_channel_swap = locals().get('caffe_net_channel_swap', (2,1,0))
 
+# caffe net parameter - raw scale
+caffe_net_raw_scale = locals().get('caffe_net_raw_scale', 1.0)
+
+# caffe net parameter - image dims
+caffe_net_image_dims = locals().get('caffe_net_image_dims', None)
+
+# # should we duplicate the mean file channels, this is used when we load a siamese network which has an input with 6
+# # channels (3 for each image)
+# duplicate_mean_channels = locals().get('duplicate_mean_channels', False)
 
 ####################################
 #
@@ -320,8 +335,13 @@ def assert_in_settings(setting_name):
     if not setting_name in bound_locals:
         raise Exception('The "%s" setting is required; be sure to define it in settings_local.py' % setting_name)
 
+# Set this to point to your compiled checkout of caffe
 assert_in_settings('caffevis_caffe_root')
+
+# Path to caffe deploy prototxt file. Minibatch size should be 1.
 assert_in_settings('caffevis_deploy_prototxt')
+
+# Path to network weights to load.
 assert_in_settings('caffevis_network_weights')
 assert_in_settings('caffevis_data_mean')
 

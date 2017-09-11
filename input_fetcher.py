@@ -207,9 +207,9 @@ class InputImageFetcher(CodependentThread):
             # available_files - local list of files
             if self.settings.static_files_input_mode == "directory":
                 available_files = self.get_files_from_directory()
-            elif self.settings.static_files_input_mode == "image_list":
+            elif (self.settings.static_files_input_mode == "image_list") and (not self.settings.is_siamese):
                 available_files = self.get_files_from_image_list()
-            elif self.settings.static_files_input_mode == "siamese_image_list":
+            elif (self.settings.static_files_input_mode == "image_list") and (self.settings.is_siamese):
                 available_files = self.get_files_from_siamese_image_list()
             else:
                 raise Exception(('Error: setting static_files_input_mode has invalid option (%s)' %
@@ -227,7 +227,7 @@ class InputImageFetcher(CodependentThread):
             if self.latest_static_filename != available_files[self.static_file_idx] or self.latest_static_frame is None:
                 self.latest_static_filename = available_files[self.static_file_idx]
 
-                if self.settings.static_files_input_mode == "siamese_image_list":
+                if self.settings.is_siamese:
                     # loading two images for siamese network
                     im1 = cv2_read_file_rgb(os.path.join(self.settings.static_files_dir, self.latest_static_filename[0]))
                     im2 = cv2_read_file_rgb(os.path.join(self.settings.static_files_dir, self.latest_static_filename[1]))

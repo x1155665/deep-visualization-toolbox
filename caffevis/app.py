@@ -11,13 +11,14 @@ import StringIO
 from misc import WithTimer
 from numpy_cache import FIFOLimitedArrayCache
 from app_base import BaseApp
-from image_misc import norm01, norm01c, norm0255, tile_images_normalize, ensure_float01, tile_images_make_tiles, ensure_uint255_and_resize_to_fit, get_tiles_height_width, get_tiles_height_width_ratio
+from image_misc import norm01, norm01c, norm0255, tile_images_normalize, ensure_float01, tile_images_make_tiles, \
+    ensure_uint255_and_resize_to_fit, get_tiles_height_width, get_tiles_height_width_ratio
 from image_misc import FormattedString, cv2_typeset_text, to_255
 from caffe_proc_thread import CaffeProcThread
 from jpg_vis_loading_thread import JPGVisLoadingThread
 from caffevis_app_state import CaffeVisAppState
-from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, check_force_backward_true
-
+from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, \
+    check_force_backward_true, load_mean
 
 
 class CaffeVisApp(BaseApp):
@@ -36,7 +37,7 @@ class CaffeVisApp(BaseApp):
         else:
             self._net_channel_swap_inv = tuple([self._net_channel_swap.index(ii) for ii in range(len(self._net_channel_swap))])
 
-        self._range_scale = 1.0      # not needed; image already in [0,255]
+        self._range_scale = settings.caffe_net_raw_scale
 
         # Set the mode to CPU or GPU. Note: in the latest Caffe
         # versions, there is one Caffe object *per thread*, so the
@@ -56,32 +57,13 @@ class CaffeVisApp(BaseApp):
             mean = None,                                 # Set to None for now, assign later         # self._data_mean,
             channel_swap = self._net_channel_swap,
             raw_scale = self._range_scale,
+            image_dims=settings.caffe_net_image_dims,
         )
 
         if isinstance(settings.caffevis_data_mean, basestring):
             # If the mean is given as a filename, load the file
             try:
-
-                filename, file_extension = os.path.splitext(settings.caffevis_data_mean)
-                if file_extension == ".npy":
-                    # load mean from numpy array
-                    self._data_mean = np.load(settings.caffevis_data_mean)
-                    print "Loaded mean from numpy file, data_mean.shape: ", self._data_mean.shape
-
-                elif file_extension == ".binaryproto":
-
-                    # load mean from binary protobuf file
-                    blob = caffe.proto.caffe_pb2.BlobProto()
-                    data = open(settings.caffevis_data_mean, 'rb').read()
-                    blob.ParseFromString(data)
-                    self._data_mean = np.array(caffe.io.blobproto_to_array(blob))
-                    self._data_mean = np.squeeze(self._data_mean)
-                    print "Loaded mean from binaryproto file, data_mean.shape: ", self._data_mean.shape
-
-                else:
-                    # unknown file extension, trying to load as numpy array
-                    self._data_mean = np.load(settings.caffevis_data_mean)
-                    print "Loaded mean from numpy file, data_mean.shape: ", self._data_mean.shape
+                self._data_mean = load_mean(settings.caffevis_data_mean)
 
             except IOError:
                 print '\n\nCound not load mean file:', settings.caffevis_data_mean
@@ -529,7 +511,7 @@ class CaffeVisApp(BaseApp):
             grad_blob = grad_blob[0]                    # bc01 -> c01
             grad_blob = grad_blob.transpose((1,2,0))    # c01 -> 01c
             if self._net_channel_swap_inv is None:
-                grad_img = grad_blob[:, :, :]  # e.g. BGR -> RGB
+                grad_img = grad_blob[:, :, :]  # do nothing
             else:
                 grad_img = grad_blob[:, :, self._net_channel_swap_inv]  # e.g. BGR -> RGB
                 
@@ -553,15 +535,18 @@ class CaffeVisApp(BaseApp):
             if len(grad_img.shape) == 2:
                 grad_img = np.tile(grad_img[:,:,np.newaxis], 3)
 
-            if (self.settings.static_files_input_mode ==  "siamese_image_list") and (grad_img.shape[2] == 6):
+            if (self.settings.is_siamese) and (grad_img.shape[2] == 6):
 
+                # split gradient into two images, by channels
                 grad_img1 = grad_img[:, :, 0:3]
                 grad_img2 = grad_img[:, :, 3:6]
 
+                # resize each gradient image to half the pane size
                 half_pane_shape = (pane.data.shape[0] / 2, pane.data.shape[1])
                 grad_img_disp1 = cv2.resize(grad_img1[:], half_pane_shape)
                 grad_img_disp2 = cv2.resize(grad_img2[:], half_pane_shape)
 
+                # generate the pane image by concatenating both images
                 grad_img_disp = np.concatenate((grad_img_disp1, grad_img_disp2), axis=1)
 
             else:
