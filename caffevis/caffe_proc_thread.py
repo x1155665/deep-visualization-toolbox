@@ -112,6 +112,10 @@ class CaffeProcThread(CodependentThread):
                         except AttributeError:
                             print 'ERROR: required bindings (backward_from_layer) not found! Try using the deconv-deep-vis-toolbox branch as described here: https://github.com/yosinski/deep-visualization-toolbox'
                             raise
+                        except ValueError:
+                            print "ERROR: probably impossible to backprop layer %s, ignoring to avoid crash" % (backprop_layer)
+                            with self.state.lock:
+                                self.state.back_enabled = False
                 else:
                     with WithTimer('CaffeProcThread:deconv', quiet = self.debug_level < 1):
                         #print '**** Doing deconv with %s diffs in [%s,%s]' % (backprop_layer, diffs.min(), diffs.max())
@@ -120,6 +124,10 @@ class CaffeProcThread(CodependentThread):
                         except AttributeError:
                             print 'ERROR: required bindings (deconv_from_layer) not found! Try using the deconv-deep-vis-toolbox branch as described here: https://github.com/yosinski/deep-visualization-toolbox'
                             raise
+                        except ValueError:
+                            print "ERROR: probably impossible to deconv layer %s, ignoring to avoid crash" % (backprop_layer)
+                            with self.state.lock:
+                                self.state.back_enabled = False
 
                 with self.state.lock:
                     self.state.back_stale = False
