@@ -109,7 +109,9 @@ class NetMaxTracker(object):
         self.max_trackers = {}
 
         for layer in self.layers:
-            blob = net.blobs[layer].data
+
+            top_name = net.top_names[layer][0]
+            blob = net.blobs[top_name].data
 
             # normalize layer name, this is used for siamese networks where we want layers "conv_1" and "conv_1_p" to
             # count as the same layer in terms of activations
@@ -131,7 +133,9 @@ class NetMaxTracker(object):
             self._init_with_net(net)
 
         for layer in self.layers:
-            blob = net.blobs[layer].data
+
+            top_name = net.top_names[layer][0]
+            blob = net.blobs[top_name].data
 
             normalized_layer_name = self.settings.normalize_layer_name_for_max_tracker_fn(layer)
 
@@ -268,12 +272,13 @@ def save_representations(net, datadir, filelist, layer, first_N = None):
         with WithTimer('Predict   ', quiet = not do_print):
             net.predict([im], oversample = False)   # Just take center crop
         with WithTimer('Store     ', quiet = not do_print):
+            top_name = net.top_names[layer][0]
             if rep is None:
-                rep_shape = net.blobs[layer].data[0].shape   # e.g. (256,13,13)
+                rep_shape = net.blobs[top_name].data[0].shape   # e.g. (256,13,13)
                 rep = np.zeros((len(image_indices),) + rep_shape)   # e.g. (1000,256,13,13)
                 indices = [0] * len(image_indices)
             indices[ii] = image_idx
-            rep[ii] = net.blobs[layer].data[0]
+            rep[ii] = net.blobs[top_name].data[0]
 
     print 'done!'
     return indices,rep
@@ -283,7 +288,8 @@ def save_representations(net, datadir, filelist, layer, first_N = None):
 def get_max_data_extent(net, layer, rc, is_conv):
     '''Gets the maximum size of the data layer that can influence a unit on layer.'''
     if is_conv:
-        conv_size = net.blobs[layer].data.shape[2:4]        # e.g. (13,13) for conv5
+        top_name = net.top_names[layer][0]
+        conv_size = net.blobs[top_name].data.shape[2:4]        # e.g. (13,13) for conv5
         layer_slice_middle = (conv_size[0]/2,conv_size[0]/2+1, conv_size[1]/2,conv_size[1]/2+1)   # e.g. (6,7,6,7,), the single center unit
         data_slice = rc.convert_region(layer, 'data', layer_slice_middle)
         return data_slice[1]-data_slice[0], data_slice[3]-data_slice[2]   # e.g. (163, 163) for conv5
@@ -416,11 +422,12 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
             # in siamese network, we wish to return from the normalized layer name and selected input index to the denormalized layer name
             # e.g. from "conv1_1" and selected_input_index=1 to "conv1_1_p"
             denormalized_layer_name = settings.denormalize_layer_name_for_max_tracker_fn(layer, selected_input_index)
+            denormalized_top_name = net.top_names[denormalized_layer_name][0]
 
-            if len(net.blobs[denormalized_layer_name].data.shape) == 4:
-                reproduced_val = net.blobs[denormalized_layer_name].data[0,channel_idx,ii,jj]
+            if len(net.blobs[denormalized_top_name].data.shape) == 4:
+                reproduced_val = net.blobs[denormalized_top_name].data[0,channel_idx,ii,jj]
             else:
-                reproduced_val = net.blobs[denormalized_layer_name].data[0,channel_idx]
+                reproduced_val = net.blobs[denormalized_top_name].data[0,channel_idx]
             if abs(reproduced_val - recorded_val) > .1:
                 print 'Warning: recorded value %s is suspiciously different from reproduced value %s. Is the filelist the same?' % (recorded_val, reproduced_val)
 
@@ -452,7 +459,7 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
                                      autoscale = False, autoscale_center = 0)
 
             if do_deconv or do_deconv_norm:
-                diffs = net.blobs[denormalized_layer_name].diff * 0
+                diffs = net.blobs[denormalized_top_name].diff * 0
                 if len(diffs.shape) == 4:
                     diffs[0,channel_idx,ii,jj] = 1.0
                 else:
@@ -494,7 +501,7 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
 
 
             if do_backprop or do_backprop_norm:
-                diffs = net.blobs[denormalized_layer_name].diff * 0
+                diffs = net.blobs[denormalized_top_name].diff * 0
 
                 if len(diffs.shape) == 4:
                     diffs[0,channel_idx,ii,jj] = 1.0
