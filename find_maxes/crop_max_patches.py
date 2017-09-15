@@ -69,13 +69,13 @@ def main():
         mt = nmt.max_trackers[normalized_layer_name]
 
         if args.idx_begin is None:
-            args.idx_begin = 0
+            idx_begin = 0
         if args.idx_end is None:
-            args.idx_end = mt.max_vals.shape[0]
+            idx_end = mt.max_vals.shape[0]
 
-        with WithTimer('Saved %d images per unit for %s units %d:%d.' % (args.N, normalized_layer_name, args.idx_begin, args.idx_end)):
+        with WithTimer('Saved %d images per unit for %s units %d:%d.' % (args.N, normalized_layer_name, idx_begin, idx_end)):
 
-            output_max_patches(settings, mt, net, normalized_layer_name, args.idx_begin, args.idx_end,
+            output_max_patches(settings, mt, net, normalized_layer_name, idx_begin, idx_end,
                                args.N, args.datadir, args.filelist, args.outdir,
                                (args.do_maxes, args.do_deconv, args.do_deconv_norm, args.do_backprop, args.do_backprop_norm, args.do_info))
 

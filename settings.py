@@ -323,7 +323,7 @@ caffe_net_image_dims = locals().get('caffe_net_image_dims', None)
 # function used to convert a string label into something else, can be an integer
 convert_label_fn = locals().get('convert_label_fn', lambda label: int(label.strip()))
 
-# layers list used in NetMaxTracker
+# list of all the layer names which we want to track their maximal activations, usually convolutionals and fully-connecteds
 layers_for_max_tracker = locals().get('layers_for_max_tracker', ['conv1', 'conv2', 'conv3', 'conv4', 'conv5', 'fc6', 'fc7', 'fc8', 'prob'])
 
 # function used to check if a layer is a convolutional
@@ -350,19 +350,19 @@ max_tracker_do_maxes = locals().get('max_tracker_do_maxes', True)
 max_tracker_do_deconv = locals().get('max_tracker_do_deconv', True)
 
 # default value for do_deconv_norm parameter in max tracker
-max_tracker_do_deconv_norm = locals().get('max_tracker_do_deconv_norm', True)
+max_tracker_do_deconv_norm = locals().get('max_tracker_do_deconv_norm', False)
 
 # default value for do_backprop parameter in max tracker
-max_tracker_do_backprop = locals().get('max_tracker_do_backprop', True)
+max_tracker_do_backprop = locals().get('max_tracker_do_backprop', False)
 
 # default value for do_backprop_norm parameter in max tracker
-max_tracker_do_backprop_norm = locals().get('max_tracker_do_backprop_norm', True)
+max_tracker_do_backprop_norm = locals().get('max_tracker_do_backprop_norm', False)
 
 # default value for do_info parameter in max tracker
 max_tracker_do_info = locals().get('max_tracker_do_info', True)
 
 # default value for output_dir parameter in max tracker
-max_tracker_output_dir = locals().get('max_tracker_output_dir', True)
+max_tracker_output_dir = locals().get('max_tracker_output_dir', './')
 
 # default value for layer parameter in max_tracker
 max_tracker_layers_to_output = locals().get('max_tracker_layers_to_output', [])
