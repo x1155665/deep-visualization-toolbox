@@ -51,6 +51,7 @@ class CaffeVisAppState(object):
         self.layers_show_back = False   # False: show forward activations. True: show backward diffs
         self.show_label_predictions = self.settings.caffevis_init_show_label_predictions
         self.show_unit_jpgs = self.settings.caffevis_init_show_unit_jpgs
+        self.siamese_input_mode = 2 # 0: first image, 1: second image, 2: both images
         self.drawing_stale = True
         kh,_ = self.bindings.get_key_help('help_mode')
         self.extra_msg = '%s for help' % kh[0]
@@ -172,6 +173,9 @@ class CaffeVisAppState(object):
 
             elif tag == 'toggle_unit_jpgs':
                 self.show_unit_jpgs = not self.show_unit_jpgs
+
+            elif tag == 'siamese_input_mode':
+                self.siamese_input_mode = (self.siamese_input_mode + 1) % 3
 
             else:
                 key_handled = False
