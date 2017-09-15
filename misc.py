@@ -60,3 +60,47 @@ def tsplit(string, no_empty_strings, *delimiters):
         strings = filter(None, strings)
 
     return strings
+
+
+def get_files_from_directory(settings):
+    # returns list of files in requested directory
+
+    available_files = []
+    match_flags = re.IGNORECASE if settings.static_files_ignore_case else 0
+    for filename in os.listdir(settings.static_files_dir):
+        if re.match(settings.static_files_regexp, filename, match_flags):
+            available_files.append(filename)
+
+    return available_files
+
+
+def get_files_from_image_list(settings):
+    # returns list of files in requested image list file
+
+    available_files = []
+    labels = []
+
+    with open(settings.static_files_input_file, 'r') as image_list_file:
+        lines = image_list_file.readlines()
+        # take first token from each line
+        available_files = [tsplit(line, True, ' ', ',', '\t')[0] for line in lines if line.strip() != ""]
+        labels = [tsplit(line, True, ' ', ',', '\t')[1] for line in lines if line.strip() != ""]
+
+    return available_files, labels
+
+
+def get_files_from_siamese_image_list(settings):
+    # returns list of pair files in requested siamese image list file
+
+    available_files = []
+    labels = []
+
+    with open(settings.static_files_input_file, 'r') as image_list_file:
+        lines = image_list_file.readlines()
+        # take first and second tokens from each line
+        available_files = [(tsplit(line, True, ' ', ',', '\t')[0], tsplit(line, True, ' ', ',', '\t')[1])
+                           for line in lines if line.strip() != ""]
+        labels = [tsplit(line, True, ' ', ',', '\t')[2] for line in lines if line.strip() != ""]
+
+    return available_files, labels
+

@@ -7,7 +7,7 @@ import numpy as np
 
 from codependent_thread import CodependentThread
 from image_misc import cv2_imshow_rgb, cv2_read_file_rgb, read_cam_frame, crop_to_square
-from misc import tsplit
+from misc import tsplit, get_files_from_directory, get_files_from_image_list, get_files_from_siamese_image_list
 
 
 class InputImageFetcher(CodependentThread):
@@ -159,41 +159,7 @@ class InputImageFetcher(CodependentThread):
             self.latest_frame_data = frame
             self.latest_frame_is_from_cam = from_cam
 
-    def get_files_from_directory(self):
-        # returns list of files in requested directory
 
-        available_files = []
-        match_flags = re.IGNORECASE if self.settings.static_files_ignore_case else 0
-        for filename in os.listdir(self.settings.static_files_dir):
-            if re.match(self.settings.static_files_regexp, filename, match_flags):
-                available_files.append(filename)
-
-        return available_files
-
-    def get_files_from_image_list(self):
-        # returns list of files in requested image list file
-
-        available_files = []
-
-        with open(self.settings.static_files_input_file, 'r') as image_list_file:
-            lines = image_list_file.readlines()
-            # take first token from each line
-            available_files = [tsplit(line, True,' ',',','\t')[0] for line in lines if line.strip() != ""]
-
-        return available_files
-
-    def get_files_from_siamese_image_list(self):
-        # returns list of pair files in requested siamese image list file
-
-        available_files = []
-
-        with open(self.settings.static_files_input_file, 'r') as image_list_file:
-            lines = image_list_file.readlines()
-            # take first and second tokens from each line
-            available_files = [(tsplit(line, True, ' ', ',','\t')[0], tsplit(line, True, ' ', ',','\t')[1])
-                               for line in lines if line.strip() != ""]
-
-        return available_files
 
     def check_increment_and_load_image(self):
         with self.lock:
@@ -206,11 +172,11 @@ class InputImageFetcher(CodependentThread):
 
             # available_files - local list of files
             if self.settings.static_files_input_mode == "directory":
-                available_files = self.get_files_from_directory()
+                available_files = get_files_from_directory(self.settings)
             elif (self.settings.static_files_input_mode == "image_list") and (not self.settings.is_siamese):
-                available_files = self.get_files_from_image_list()
+                available_files, labels = get_files_from_image_list(self.settings)
             elif (self.settings.static_files_input_mode == "image_list") and (self.settings.is_siamese):
-                available_files = self.get_files_from_siamese_image_list()
+                available_files, labels = get_files_from_siamese_image_list(self.settings)
             else:
                 raise Exception(('Error: setting static_files_input_mode has invalid option (%s)' %
                                 (self.settings.static_files_input_mode) ))
