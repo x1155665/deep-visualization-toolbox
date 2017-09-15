@@ -8,7 +8,7 @@ from image_misc import get_tiles_height_width, caffe_load_image
 
 def net_preproc_forward(settings, net, img, data_hw):
 
-    if settings.is_siamese:
+    if settings.is_siamese and img.shape[2] == 6:
         appropriate_shape = data_hw + (6,)
     else:
         appropriate_shape = data_hw + (3,)

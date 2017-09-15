@@ -85,7 +85,8 @@ class CaffeProcThread(CodependentThread):
                 #print 'TIMING:, processing frame'
                 self.frames_processed_fwd += 1
 
-                if self.settings.is_siamese:
+                if self.settings.is_siamese and ((type(frame), len(frame)) == (tuple, 2)):
+
                     frame1 = frame[0]
                     frame2 = frame[1]
 

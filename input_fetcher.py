@@ -125,14 +125,25 @@ class InputImageFetcher(CodependentThread):
                 if self.freeze_cam and self.latest_cam_frame is not None:
                     # If static file mode was switched to cam mode but cam is still frozen, we need to push the cam frame again
                     if not self.latest_frame_is_from_cam:
-                        self._increment_and_set_frame(self.latest_cam_frame, True)
+
+                        if self.settings.is_siamese:
+                            im = (self.latest_cam_frame, self.latest_cam_frame)
+                        else:
+                            im = self.latest_cam_frame
+
+                        self._increment_and_set_frame(im, True)
                 else:
                     frame_full = read_cam_frame(self.bound_cap_device)
                     #print '====> just read frame', frame_full.shape
                     frame = crop_to_square(frame_full)
                     with self.lock:
                         self.latest_cam_frame = frame
-                        self._increment_and_set_frame(self.latest_cam_frame, True)
+
+                        if self.settings.is_siamese:
+                            im = (self.latest_cam_frame, self.latest_cam_frame)
+                        else:
+                            im = self.latest_cam_frame
+                        self._increment_and_set_frame(im, True)
             
             time.sleep(self.sleep_after_read_frame)
             #print 'Reading one frame took', time.time() - start_time

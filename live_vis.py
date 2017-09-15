@@ -318,7 +318,7 @@ class LiveVis(object):
     def display_frame(self, frame):
 
         full_pane_shape = self.panes['input'].data.shape[:2][::-1]
-        if self.settings.is_siamese:
+        if self.settings.is_siamese and ((type(frame),len(frame)) == (tuple,2)):
             frame1 = frame[0]
             frame2 = frame[1]
             half_pane_shape = (full_pane_shape[0] / 2, full_pane_shape[1])
