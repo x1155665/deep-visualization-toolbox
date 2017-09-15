@@ -51,7 +51,6 @@ class CaffeVisApp(BaseApp):
         self.settings = settings
         self.bindings = key_bindings
 
-
         self._net_channel_swap = settings.caffe_net_channel_swap
 
         if self._net_channel_swap is None:

@@ -7,7 +7,7 @@ import numpy as np
 
 import settings
 from optimize.gradient_optimizer import GradientOptimizer, FindParams
-from caffevis.caffevis_helper import check_force_backward_true, read_label_file
+from caffevis.caffevis_helper import check_force_backward_true, read_label_file, load_mean
 
 LR_POLICY_CHOICES = ('constant', 'progress', 'progress01')
 
@@ -25,8 +25,6 @@ def get_parser():
                         help = 'Path to caffe network prototxt.')
     parser.add_argument('--net-weights', type = str, default = settings.caffevis_network_weights,
                         help = 'Path to caffe network weights.')
-    parser.add_argument('--mean', type = str, default = repr(settings.caffevis_data_mean),
-                        help = '''Mean. The mean may be None, a tuple of one mean value per channel, or a string specifying the path to a mean image to load. Because of the multiple datatypes supported, this argument must be specified as a string that evaluates to a valid Python object. For example: "None", "(10,20,30)", and "'mean.npy'" are all valid values. Note that to specify a string path to a mean file, it must be passed with quotes, which usually entails passing it with double quotes in the shell! Alternately, just provide the mean in settings_local.py.''')
     parser.add_argument('--channel-swap-to-rgb', type = str, default = '(2,1,0)',
                         help = 'Permutation to apply to channels to change to RGB space for plotting. Hint: (0,1,2) if your network is trained for RGB, (2,1,0) if it is trained for BGR.')
     parser.add_argument('--data-size', type = str, default = '(227,227)',
@@ -37,25 +35,25 @@ def get_parser():
     # Where to start
     parser.add_argument('--start-at', type = str, default = 'mean_plus_rand', choices = ('mean_plus_rand', 'randu', 'mean'),
                         help = 'How to generate x0, the initial point used in optimization.')
-    parser.add_argument('--rand-seed', type = int, default = 0,
+    parser.add_argument('--rand-seed', type = int, default = settings.optimize_image_rand_seed,
                         help = 'Random seed used for generating the start-at image (use different seeds to generate different images).')
 
     # What to optimize
-    parser.add_argument('--push-layer', type = str, default = 'fc8',
+    parser.add_argument('--push-layer', type = str, default = settings.optimize_image_push_layer,
                         help = 'Name of layer that contains the desired neuron whose value is optimized.')
-    parser.add_argument('--push-channel', type = int, default = '130',
+    parser.add_argument('--push-channel', type = int, default = settings.optimize_image_push_channel,
                         help = 'Channel number for desired neuron whose value is optimized (channel for conv, neuron index for FC).')
-    parser.add_argument('--push-spatial', type = str, default = 'None',
+    parser.add_argument('--push-spatial', type = str, default = settings.optimize_image_push_spatial,
                         help = 'Which spatial location to push for conv layers. For FC layers, set this to None. For conv layers, set it to a tuple, e.g. when using `--push-layer conv5` on AlexNet, --push-spatial (6,6) will maximize the center unit of the 13x13 spatial grid.')
     parser.add_argument('--push-dir', type = float, default = 1,
                         help = 'Which direction to push the activation of the selected neuron, that is, the value used to begin backprop. For example, use 1 to maximize the selected neuron activation and  -1 to minimize it.')
 
     # Use regularization?
-    parser.add_argument('--decay', type = float, default = 0,
+    parser.add_argument('--decay', type = float, default = settings.optimize_image_decay,
                         help = 'Amount of L2 decay to use.')
-    parser.add_argument('--blur-radius', type = float, default = 0,
+    parser.add_argument('--blur-radius', type = float, default = settings.optimize_image_blur_radius,
                         help = 'Radius in pixels of blur to apply after each BLUR_EVERY steps. If 0, perform no blurring. Blur sizes between 0 and 0.3 work poorly.')
-    parser.add_argument('--blur-every', type = int, default = 0,
+    parser.add_argument('--blur-every', type = int, default = settings.optimize_image_blue_every,
                         help = 'Blur every BLUR_EVERY steps. If 0, perform no blurring.')
     parser.add_argument('--small-val-percentile', type = float, default = 0,
                         help = 'Induce sparsity by setting pixels with absolute value under SMALL_VAL_PERCENTILE percentile to 0. Not discussed in paper. 0 to disable.')
@@ -67,21 +65,21 @@ def get_parser():
                         help = 'Induce sparsity by setting pixels with contribution under PX_BENEFIT_PERCENTILE percentile to 0. \\theta_{c_pct} from the paper. 0 to disable.')
 
     # How much to optimize
-    parser.add_argument('--lr-policy', type = str, default = 'constant', choices = LR_POLICY_CHOICES,
+    parser.add_argument('--lr-policy', type = str, default = settings.optimize_image_lr_policy, choices = LR_POLICY_CHOICES,
                         help = 'Learning rate policy. See description in lr-params.')
-    parser.add_argument('--lr-params', type = str, default = '{"lr": 1}',
+    parser.add_argument('--lr-params', type = str, default = settings.optimize_image_lr_params,
                         help = 'Learning rate params, specified as a string that evalutes to a Python dict. Params that must be provided dependon which lr-policy is selected. The "constant" policy requires the "lr" key and uses the constant given learning rate. The "progress" policy requires the "max_lr" and "desired_prog" keys and scales the learning rate such that the objective function will change by an amount equal to DESIRED_PROG under a linear objective assumption, except the LR is limited to MAX_LR. The "progress01" policy requires the "max_lr", "early_prog", and "late_prog_mult" keys and is tuned for optimizing neurons with outputs in the [0,1] range, e.g. neurons on a softmax layer. Under this policy optimization slows down as the output approaches 1 (see code for details).')
-    parser.add_argument('--max-iter', type = int, default = 500,
+    parser.add_argument('--max-iter', type = int, default = settings.optimize_image_max_iter,
                         help = 'Number of iterations of the optimization loop.')
 
     # Where to save results
-    parser.add_argument('--output-prefix', type = str, default = 'optimize_results/opt',
+    parser.add_argument('--output-prefix', type = str, default = settings.optimize_image_output_prefix,
                         help = 'Output path and filename prefix (default: optimize_results/opt)')
     parser.add_argument('--output-template', type = str, default = '%(p.push_layer)s_%(p.push_channel)04d_%(p.rand_seed)d',
                         help = 'Output filename template; see code for details (default: "%%(p.push_layer)s_%%(p.push_channel)04d_%%(p.rand_seed)d"). '
                         'The default output-prefix and output-template produce filenames like "optimize_results/opt_prob_0278_0_best_X.jpg"')
-    parser.add_argument('--brave', action = 'store_true', help = 'Allow overwriting existing results files. Default: off, i.e. cowardly refuse to overwrite existing files.')
-    parser.add_argument('--skipbig', action = 'store_true', help = 'Skip outputting large *info_big.pkl files (contains pickled version of x0, last x, best x, first x that attained max on the specified layer.')
+    parser.add_argument('--brave', action = 'store_true', default=True, help = 'Allow overwriting existing results files. Default: off, i.e. cowardly refuse to overwrite existing files.')
+    parser.add_argument('--skipbig', action = 'store_true', default=True, help = 'Skip outputting large *info_big.pkl files (contains pickled version of x0, last x, best x, first x that attained max on the specified layer.')
 
     return parser
 
@@ -135,22 +133,37 @@ def main():
     args = parser.parse_args()
     
     # Finish parsing args
-    channel_swap_to_rgb = eval(args.channel_swap_to_rgb)
-    assert isinstance(channel_swap_to_rgb, tuple) and len(channel_swap_to_rgb) > 0, 'channel_swap_to_rgb should be a tuple'
-    data_size = eval(args.data_size)
-    assert isinstance(data_size, tuple) and len(data_size) == 2, 'data_size should be a length 2 tuple'
-    #channel_swap_inv = tuple([net_channel_swap.index(ii) for ii in range(len(net_channel_swap))])
 
     lr_params = parse_and_validate_lr_params(parser, args.lr_policy, args.lr_params)
     push_spatial = parse_and_validate_push_spatial(parser, args.push_spatial)
-    
-    # Load mean
-    data_mean = eval(args.mean)
 
-    if isinstance(data_mean, basestring):
+    net_channel_swap = settings.caffe_net_channel_swap
+
+    range_scale = settings.caffe_net_raw_scale
+            
+    # Load network
+    sys.path.insert(0, os.path.join(args.caffe_root, 'python'))
+    import caffe
+    if settings.caffevis_mode_gpu:
+        caffe.set_mode_gpu()
+        print 'optimize_image mode (in main thread):     GPU'
+    else:
+        caffe.set_mode_cpu()
+        print 'optimize_image mode (in main thread):     CPU'
+
+    net = caffe.Classifier(
+        args.deploy_proto,
+        args.net_weights,
+        mean=None,  # Set to None for now, assign later         # self._data_mean,
+        channel_swap=net_channel_swap,
+        raw_scale=range_scale,
+        image_dims=settings.caffe_net_image_dims,
+    )
+
+    if isinstance(settings.caffevis_data_mean, basestring):
         # If the mean is given as a filename, load the file
         try:
-            data_mean = np.load(data_mean)
+            data_mean = load_mean(settings.caffevis_data_mean)
         except IOError:
             print '\n\nCound not load mean file:', data_mean
             print 'To fetch a default model and mean file, use:\n'
@@ -158,40 +171,37 @@ def main():
             print '  $ cp ./fetch.sh\n\n'
             print 'Or to use your own mean, change caffevis_data_mean in settings_local.py or override by running with `--mean MEAN_FILE` (see --help).\n'
             raise
+        input_shape = net.blobs[net.inputs[0]].data.shape[-2:]  # e.g. 227x227
+
         # Crop center region (e.g. 227x227) if mean is larger (e.g. 256x256)
-        excess_h = data_mean.shape[1] - data_size[0]
-        excess_w = data_mean.shape[2] - data_size[1]
-        assert excess_h >= 0 and excess_w >= 0, 'mean should be at least as large as %s' % repr(data_size)
-        data_mean = data_mean[:, (excess_h/2):(excess_h/2+data_size[0]), (excess_w/2):(excess_w/2+data_size[1])]
-    elif data_mean is None:
+        excess_h = data_mean.shape[1] - input_shape[0]
+        excess_w = data_mean.shape[2] - input_shape[1]
+        assert excess_h >= 0 and excess_w >= 0, 'mean should be at least as large as %s' % repr(input_shape)
+        data_mean = data_mean[:, (excess_h / 2):(excess_h / 2 + input_shape[0]),
+                    (excess_w / 2):(excess_w / 2 + input_shape[1])]
+    elif args.data_mean is None:
         pass
     else:
         # The mean has been given as a value or a tuple of values
-        data_mean = np.array(data_mean)
+        data_mean = np.array(settings.caffevis_data_mean)
         # Promote to shape C,1,1
         while len(data_mean.shape) < 3:
             data_mean = np.expand_dims(data_mean, -1)
 
     print 'Using mean:', repr(data_mean)
-            
-    # Load network
-    sys.path.insert(0, os.path.join(args.caffe_root, 'python'))
-    import caffe
-    net = caffe.Classifier(
-        args.deploy_proto,
-        args.net_weights,
-        mean = data_mean,
-        raw_scale = 1.0,
-    )
+
+    if data_mean is not None:
+        net.transformer.set_mean(net.inputs[0], data_mean)
+
     check_force_backward_true(settings.caffevis_deploy_prototxt)
 
     labels = None
     if settings.caffevis_labels:
         labels = read_label_file(settings.caffevis_labels)
 
-    optimizer = GradientOptimizer(net, data_mean, labels = labels,
+    optimizer = GradientOptimizer(settings, net, data_mean, labels = labels,
                                   label_layers = settings.caffevis_label_layers,
-                                  channel_swap_to_rgb = channel_swap_to_rgb)
+                                  channel_swap_to_rgb = net_channel_swap)
     
     params = FindParams(
         start_at = args.start_at,

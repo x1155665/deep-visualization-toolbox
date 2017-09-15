@@ -3,6 +3,7 @@
 import os
 import errno
 import pickle
+import datetime
 import StringIO
 from pylab import *
 from scipy.ndimage.filters import gaussian_filter
@@ -154,7 +155,8 @@ class FindResults(object):
 class GradientOptimizer(object):
     '''Finds images by gradient.'''
     
-    def __init__(self, net, data_mean, labels = None, label_layers = None, channel_swap_to_rgb = None):
+    def __init__(self, settings, net, data_mean, labels = None, label_layers = None, channel_swap_to_rgb = None):
+        self.settings = settings
         self.net = net
         self.data_mean = data_mean
         self.labels = labels if labels else ['labels not provided' for ii in range(1000)]
@@ -304,7 +306,7 @@ class GradientOptimizer(object):
                 # constant fixed learning rate
                 lr = params.lr_params['lr']
             else:
-                raise Exception('Unimlemented lr_policy')
+                raise Exception('Unimplemented lr_policy')
 
             
             # 6. Apply gradient update and regularizations
@@ -345,6 +347,8 @@ class GradientOptimizer(object):
                     smallaben3 = tile(smallaben[:,newaxis,:,:], (1,3,1,1))
                     xx = xx - xx*smallaben3
 
+            print '     timestamp:', datetime.datetime.now()
+
         if results.meta_result is None:
             if results.majority_obj is not None:
                 results.meta_result = 'Metaresult: majority success'
@@ -381,9 +385,23 @@ class GradientOptimizer(object):
                 saveimagesc('%smajority_Xpm.jpg' % prefix, asimg + self._data_mean_rgb_img)  # PlusMean
 
         if results.best_xx is not None:
-            asimg = results.best_xx[self.channel_swap_to_rgb].transpose((1,2,0))
-            saveimagescc('%sbest_X.jpg' % prefix, asimg, 0)
-            saveimagesc('%sbest_Xpm.jpg' % prefix, asimg + self._data_mean_rgb_img)  # PlusMean
+            # results.best_xx.shape is (6,224,224)
+
+            if (self.settings.is_siamese) and (results.best_xx.shape[0] == 6):
+                asimg1 = results.best_xx[self.channel_swap_to_rgb[[0,1,2]]].transpose((1, 2, 0))
+                asimg2 = results.best_xx[self.channel_swap_to_rgb[[3,4,5]]].transpose((1, 2, 0))
+
+                saveimagescc('%sbest_X_A.jpg' % prefix, asimg1, 0)
+                saveimagescc('%sbest_X_B.jpg' % prefix, asimg2, 0)
+
+                saveimagesc('%sbest_Xpm_A.jpg' % prefix, asimg1 + self._data_mean_rgb_img[:,:,[0,1,2]])  # PlusMean
+                saveimagesc('%sbest_Xpm_B.jpg' % prefix, asimg2 + self._data_mean_rgb_img[:,:,[3,4,5]])  # PlusMean
+
+
+            else:
+                asimg = results.best_xx[self.channel_swap_to_rgb].transpose((1,2,0))
+                saveimagescc('%sbest_X.jpg' % prefix, asimg, 0)
+                saveimagesc('%sbest_Xpm.jpg' % prefix, asimg + self._data_mean_rgb_img)  # PlusMean
 
         with open('%sinfo.txt' % prefix, 'w') as ff:
             print >>ff, params

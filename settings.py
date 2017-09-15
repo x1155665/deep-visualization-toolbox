@@ -392,6 +392,39 @@ max_tracker_layers_list = locals().get('max_tracker_layers_list', default_max_tr
 # note: if an item in the list is a pair of layers, then it is a siamese layer
 siamese_layers_list = locals().get('siamese_layers_list', [])
 
+# rand-seed parameter for optimize_image.py
+optimize_image_rand_seed = locals().get('optimize_image_rand_seed', 0)
+
+# push-layer parameter for optimize_image.py
+optimize_image_push_layer = locals().get('optimize_image_push_layer', 'fc8')
+
+# push-channel parameter for optimize_image.py
+optimize_image_push_channel = locals().get('optimize_image_push_channel', '130')
+
+# push-spatial parameter for optimize_image.py
+optimize_image_push_spatial = locals().get('optimize_image_push_spatial', 'None')
+
+# decay parameter for optimize_image.py
+optimize_image_decay = locals().get('optimize_image_decay', 0)
+
+# blur-radius parameter for optimize_image.py
+optimize_image_blur_radius = locals().get('optimize_image_blur_radius', 0)
+
+# blur-every parameter for optimize_image.py
+optimize_image_blue_every = locals().get('optimize_image_blue_every', 0)
+
+# lr-policy parameter for optimize_image.py
+optimize_image_lr_policy = locals().get('optimize_image_lr_policy', 'constant')
+
+# lr-params parameter for optimize_image.py
+optimize_image_lr_params = locals().get('optimize_image_lr_params', '{"lr": 1}')
+
+# max-iter parameter for optimize_image.py
+optimize_image_max_iter = locals().get('optimize_image_max_iter', 500)
+
+# output-prefix parameter for optimize_image.py
+optimize_image_output_prefix = locals().get('optimize_image_output_prefix', 'optimize_results/opt')
+
 
 ####################################
 #
