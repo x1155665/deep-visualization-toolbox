@@ -495,7 +495,12 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
 
             if do_backprop or do_backprop_norm:
                 diffs = net.blobs[denormalized_layer_name].diff * 0
-                diffs[0,channel_idx,ii,jj] = 1.0
+
+                if len(diffs.shape) == 4:
+                    diffs[0,channel_idx,ii,jj] = 1.0
+                else:
+                    diffs[0,channel_idx] = 1.0
+
                 with WithTimer('Backward  ', quiet = not do_print):
                     net.backward_from_layer(denormalized_layer_name, diffs)
 
