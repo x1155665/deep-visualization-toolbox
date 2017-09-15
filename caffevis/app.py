@@ -21,14 +21,36 @@ from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_
     check_force_backward_true, load_mean
 
 
+def process_settings(settings):
+
+    # convert layers_list_to_show to layer_to_selected_image, only relevant in siamese networks
+    if settings.is_siamese:
+        settings.siamese_layer_to_selected_image = dict()
+        for item in settings.siamese_layers_list:
+
+            # if simple layer name, selected both images
+            if type(item) is str:
+                settings.siamese_layer_to_selected_image[item] = -1
+
+            # if item is pair of layers
+            elif (type(item) is tuple) and (len(item) == 2):
+                settings.siamese_layer_to_selected_image[item[0]] = 0
+                settings.siamese_layer_to_selected_image[item[1]] = 1
+
+    return
+
 class CaffeVisApp(BaseApp):
     '''App to visualize using caffe.'''
 
     def __init__(self, settings, key_bindings):
         super(CaffeVisApp, self).__init__(settings, key_bindings)
+
+        process_settings(settings)
+
         print 'Got settings', settings
         self.settings = settings
         self.bindings = key_bindings
+
 
         self._net_channel_swap = settings.caffe_net_channel_swap
 
@@ -537,17 +559,29 @@ class CaffeVisApp(BaseApp):
 
             if (self.settings.is_siamese) and (grad_img.shape[2] == 6):
 
+                selected_image = -1
+                if state_layer in self.settings.siamese_layer_to_selected_image:
+                    selected_image = self.settings.siamese_layer_to_selected_image[state_layer]
+
                 # split gradient into two images, by channels
                 grad_img1 = grad_img[:, :, 0:3]
                 grad_img2 = grad_img[:, :, 3:6]
 
-                # resize each gradient image to half the pane size
-                half_pane_shape = (pane.data.shape[0] / 2, pane.data.shape[1])
-                grad_img_disp1 = cv2.resize(grad_img1[:], half_pane_shape)
-                grad_img_disp2 = cv2.resize(grad_img2[:], half_pane_shape)
+                # use both images
+                if selected_image == -1:
+                    # resize each gradient image to half the pane size
+                    half_pane_shape = (pane.data.shape[0] / 2, pane.data.shape[1])
+                    grad_img_disp1 = cv2.resize(grad_img1[:], half_pane_shape)
+                    grad_img_disp2 = cv2.resize(grad_img2[:], half_pane_shape)
 
-                # generate the pane image by concatenating both images
-                grad_img_disp = np.concatenate((grad_img_disp1, grad_img_disp2), axis=1)
+                    # generate the pane image by concatenating both images
+                    grad_img_disp = np.concatenate((grad_img_disp1, grad_img_disp2), axis=1)
+
+                elif selected_image == 0:
+                    grad_img_disp = grad_img1
+
+                elif selected_image == 1:
+                    grad_img_disp = grad_img2
 
             else:
                 grad_img_disp = grad_img

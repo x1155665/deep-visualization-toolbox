@@ -388,7 +388,9 @@ default_max_tracker_layers_list.append(('conv4', 'Convolution', (13,13),   (13,1
 default_max_tracker_layers_list.append(('conv5', 'Convolution', (13,13),   (13,13), (3,3),   (1,1),  (1,1)))
 max_tracker_layers_list = locals().get('max_tracker_layers_list', default_max_tracker_layers_list)
 
-
+# list of siamese layers/blobs to show
+# note: if an item in the list is a pair of layers, then it is a siamese layer
+siamese_layers_list = locals().get('siamese_layers_list', [])
 
 
 ####################################
