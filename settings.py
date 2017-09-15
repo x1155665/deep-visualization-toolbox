@@ -319,9 +319,24 @@ caffe_net_raw_scale = locals().get('caffe_net_raw_scale', 1.0)
 # caffe net parameter - image dims
 caffe_net_image_dims = locals().get('caffe_net_image_dims', None)
 
-# # should we duplicate the mean file channels, this is used when we load a siamese network which has an input with 6
-# # channels (3 for each image)
-# duplicate_mean_channels = locals().get('duplicate_mean_channels', False)
+# function used to convert a string label into something else, can be an integer
+convert_label_fn = locals().get('convert_label_fn', lambda label: int(label.strip()))
+
+# layers list used in NetMaxTracker
+layers_for_max_tracker = locals().get('layers_for_max_tracker', ['conv1', 'conv2', 'conv3', 'conv4', 'conv5', 'fc6', 'fc7', 'fc8', 'prob'])
+
+# function used to check if a layer is a convolutional
+is_conv_fn = locals().get('is_conv_fn', lambda layer_name: 'conv' in layer_name)
+
+# function to normalize layer name used in NetMaxTracker to combine activations of siamese layers
+# for example. this is used to make activations of layer "conv_1" and "conv_1_p" count the same
+normalize_layer_name_for_max_tracker_fn = locals().get('normalize_layer_name_for_max_tracker_fn', lambda layer_name: layer_name)
+
+# function which selects an image from a siamese input pair, given the layer name
+siamese_layer_to_index_of_saved_image_fn = locals().get('siamese_layer_to_index_of_saved_image_fn', lambda layer_name: 0)
+
+# location for max tracker output file
+find_max_acts_output_file = locals().get('find_max_acts_output_file', 'find_max_acts_output.pickled')
 
 ####################################
 #
