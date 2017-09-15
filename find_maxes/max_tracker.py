@@ -54,7 +54,7 @@ class MaxTracker(object):
         if is_conv:
             self.max_locs = -np.ones((n_channels, n_top, 5), dtype = 'int')   # image_idx, image_class, selected_input_index, i, j
         else:
-            self.max_locs = -np.ones((n_channels, n_top, 3), dtype = 'int')      # image_idx, image_class, selected_input_index
+            self.max_locs = -np.ones((n_channels, n_top, 3), dtype = 'int')   # image_idx, image_class, selected_input_index
 
         # set of seen inputs, used to avoid updating on the same input twice
         self.seen_inputs = set()
@@ -124,7 +124,7 @@ class NetMaxTracker(object):
                                                                       dtype = blob.dtype)
 
         self.init_done = True
-        
+
     def update(self, net, image_idx, image_class, net_unique_input_source):
         '''Updates the maxes found so far with the state of the given net. If a new max is found, it is stored together with the image_idx.'''
         if not self.init_done:
@@ -293,16 +293,21 @@ def get_max_data_extent(net, layer, rc, is_conv):
 
 
 
-def output_max_patches(max_tracker, net, layer, idx_begin, idx_end, num_top, datadir, filelist, outdir, do_which):
+def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, num_top, datadir, filelist, outdir, do_which):
     do_maxes, do_deconv, do_deconv_norm, do_backprop, do_backprop_norm, do_info = do_which
     assert do_maxes or do_deconv or do_deconv_norm or do_backprop or do_backprop_norm or do_info, 'nothing to do'
 
     mt = max_tracker
-    rc = RegionComputer()
-    
-    image_filenames, image_labels = load_file_list(filelist)
-    print 'Loaded filenames and labels for %d files' % len(image_filenames)
-    print '  First file', os.path.join(datadir, image_filenames[0])
+    rc = RegionComputer(settings.max_tracker_layers_list)
+
+    image_filenames, image_labels = load_file_list(settings)
+
+    if settings.is_siamese:
+        print 'Loaded filenames and labels for %d pairs' % len(image_filenames)
+        print '  First pair', image_filenames[0]
+    else:
+        print 'Loaded filenames and labels for %d files' % len(image_filenames)
+        print '  First file', os.path.join(datadir, image_filenames[0])
 
     num_top_in_mt = mt.max_locs.shape[1]
     assert num_top <= num_top_in_mt, 'Requested %d top images but MaxTracker contains only %d' % (num_top, num_top_in_mt)
@@ -310,7 +315,7 @@ def output_max_patches(max_tracker, net, layer, idx_begin, idx_end, num_top, dat
 
     size_ii, size_jj = get_max_data_extent(net, layer, rc, mt.is_conv)
     data_size_ii, data_size_jj = net.blobs['data'].data.shape[2:4]
-    
+
     n_total_images = (idx_end-idx_begin) * num_top
     for cc, channel_idx in enumerate(range(idx_begin, idx_end)):
         unit_dir = os.path.join(outdir, layer, 'unit_%04d' % channel_idx)
@@ -325,9 +330,9 @@ def output_max_patches(max_tracker, net, layer, idx_begin, idx_end, num_top, dat
         for max_idx_0 in range(num_top):
             max_idx = num_top_in_mt - 1 - max_idx_0
             if mt.is_conv:
-                im_idx, im_class, ii, jj = mt.max_locs[channel_idx, max_idx]
+                im_idx, im_class, selected_input_index, ii, jj = mt.max_locs[channel_idx, max_idx]
             else:
-                im_idx, im_class = mt.max_locs[channel_idx, max_idx]
+                im_idx, im_class, selected_input_index = mt.max_locs[channel_idx, max_idx]
             recorded_val = mt.max_vals[channel_idx, max_idx]
             filename = image_filenames[im_idx]
             do_print = (max_idx_0 == 0)
@@ -340,12 +345,18 @@ def output_max_patches(max_tracker, net, layer, idx_begin, idx_end, num_top, dat
                 data_indices = rc.convert_region(layer, 'data', layer_indices)
                 data_ii_start,data_ii_end,data_jj_start,data_jj_end = data_indices
 
+                # safe guard edges
+                data_ii_start = max(data_ii_start, 0)
+                data_jj_start = max(data_jj_start, 0)
+                data_ii_end = min(data_ii_end, data_size_ii)
+                data_jj_end = min(data_jj_end, data_size_jj)
+
                 touching_imin = (data_ii_start == 0)
                 touching_jmin = (data_jj_start == 0)
 
                 # Compute how much of the data slice falls outside the actual data [0,max] range
-                ii_outside = size_ii - (data_ii_end - data_ii_start)     # possibly 0
-                jj_outside = size_jj - (data_jj_end - data_jj_start)     # possibly 0
+                ii_outside = size_ii - (data_ii_end - data_ii_start)  # possibly 0
+                jj_outside = size_jj - (data_jj_end - data_jj_start)  # possibly 0
 
                 if touching_imin:
                     out_ii_start = ii_outside
@@ -368,9 +379,9 @@ def output_max_patches(max_tracker, net, layer, idx_begin, idx_end, num_top, dat
             if do_info:
                 print >>info_file, 1 if mt.is_conv else 0, '%.6f' % mt.max_vals[channel_idx, max_idx],
                 if mt.is_conv:
-                    print >>info_file, '%d %d %d %d' % tuple(mt.max_locs[channel_idx, max_idx]),
+                    print >>info_file, '%d %d %d %d %d' % tuple(mt.max_locs[channel_idx, max_idx]),
                 else:
-                    print >>info_file, '%d %d' % tuple(mt.max_locs[channel_idx, max_idx]),
+                    print >>info_file, '%d %d %d' % tuple(mt.max_locs[channel_idx, max_idx]),
                 print >>info_file, filename
 
             if not (do_maxes or do_deconv or do_deconv_norm or do_backprop or do_backprop_norm):
@@ -378,55 +389,138 @@ def output_max_patches(max_tracker, net, layer, idx_begin, idx_end, num_top, dat
 
 
             with WithTimer('Load image', quiet = not do_print):
-                im = caffe.io.load_image(os.path.join(datadir, filename))
-            with WithTimer('Predict   ', quiet = not do_print):
-                net.predict([im], oversample = False)   # Just take center crop, same as in scan_images_for_maxes
 
-            if len(net.blobs[layer].data.shape) == 4:
-                reproduced_val = net.blobs[layer].data[0,channel_idx,ii,jj]
+                if settings.is_siamese:
+                    # in siamese network, filename is a pair of image file names
+                    filename1 = filename[0]
+                    filename2 = filename[1]
+
+                    # load both images
+                    im1 = caffe.io.load_image(os.path.join(datadir, filename1))
+                    im2 = caffe.io.load_image(os.path.join(datadir, filename2))
+
+                    # resize images according to input dimension
+                    net_input_dims = net.blobs['data'].data.shape[2:4]
+                    im1 = caffe.io.resize_image(im1, net_input_dims)
+                    im2 = caffe.io.resize_image(im2, net_input_dims)
+
+                    # concatenate channelwise
+                    im = np.concatenate((im1, im2), axis=2)
+                else:
+                    im = caffe.io.load_image(os.path.join(datadir, filename))
+
+            with WithTimer('Predict   ', quiet = not do_print):
+                net.predict([im], oversample = False)
+
+
+            # in siamese network, we wish to return from the normalized layer name and selected input index to the denormalized layer name
+            # e.g. from "conv1_1" and selected_input_index=1 to "conv1_1_p"
+            denormalized_layer_name = settings.denormalize_layer_name_for_max_tracker_fn(layer, selected_input_index)
+
+            if len(net.blobs[denormalized_layer_name].data.shape) == 4:
+                reproduced_val = net.blobs[denormalized_layer_name].data[0,channel_idx,ii,jj]
             else:
-                reproduced_val = net.blobs[layer].data[0,channel_idx]
+                reproduced_val = net.blobs[denormalized_layer_name].data[0,channel_idx]
             if abs(reproduced_val - recorded_val) > .1:
                 print 'Warning: recorded value %s is suspiciously different from reproduced value %s. Is the filelist the same?' % (recorded_val, reproduced_val)
 
             if do_maxes:
                 #grab image from data layer, not from im (to ensure preprocessing / center crop details match between image and deconv/backprop)
-                out_arr = np.zeros((3,size_ii,size_jj), dtype='float32')
-                out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].data[0,:,data_ii_start:data_ii_end,data_jj_start:data_jj_end]
+
+                if settings.is_siamese:
+
+                    # input is first image so select first 3 channels
+                    if selected_input_index == 0:
+                        out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
+                        out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].data[0, 0:3, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
+                    # input is second image so select second 3 channels
+                    elif selected_input_index == 1:
+                        out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
+                        out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].data[0, 3:6, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
+                    # input is both images so select concatenate data horizontally
+                    elif selected_input_index == -1:
+                        out_arr = np.zeros((3, size_ii, size_jj*2), dtype='float32')
+                        out_arr[:, out_ii_start:out_ii_end, (0 + out_jj_start):(0 + out_jj_end)] = net.blobs['data'].data[0, 0:3, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
+                        out_arr[:, out_ii_start:out_ii_end, (size_jj + out_jj_start):(size_jj + out_jj_end)] = net.blobs['data'].data[0, 3:6, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
+                    else:
+                        print "Error: invalid value for selected_input_index (", selected_input_index, ")"
+                else:
+                    out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].data[0,:,data_ii_start:data_ii_end,data_jj_start:data_jj_end]
+
                 with WithTimer('Save img  ', quiet = not do_print):
                     save_caffe_image(out_arr, os.path.join(unit_dir, 'maxim_%03d.png' % max_idx_0),
                                      autoscale = False, autoscale_center = 0)
-                
+
             if do_deconv or do_deconv_norm:
-                diffs = net.blobs[layer].diff * 0
+                diffs = net.blobs[denormalized_layer_name].diff * 0
                 if len(diffs.shape) == 4:
                     diffs[0,channel_idx,ii,jj] = 1.0
                 else:
                     diffs[0,channel_idx] = 1.0
                 with WithTimer('Deconv    ', quiet = not do_print):
-                    net.deconv_from_layer(layer, diffs)
+                    net.deconv_from_layer(denormalized_layer_name, diffs)
 
-                out_arr = np.zeros((3,size_ii,size_jj), dtype='float32')
-                out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0,:,data_ii_start:data_ii_end,data_jj_start:data_jj_end]
+                if settings.is_siamese:
+
+                    # input is first image so select first 3 channels
+                    if selected_input_index == 0:
+                        out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
+                        out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0, 0:3, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
+                    # input is second image so select second 3 channels
+                    elif selected_input_index == 1:
+                        out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
+                        out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0, 3:6, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
+                    # input is both images so select concatenate data horizontally
+                    elif selected_input_index == -1:
+                        out_arr = np.zeros((3, size_ii, size_jj*2), dtype='float32')
+                        out_arr[:, out_ii_start:out_ii_end, (0 + out_jj_start):(0 + out_jj_end)] = net.blobs['data'].diff[0, 0:3, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
+                        out_arr[:, out_ii_start:out_ii_end, (size_jj + out_jj_start):(size_jj + out_jj_end)] = net.blobs['data'].diff[0, 3:6, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
+
+                else: # normal operation
+                    out_arr = np.zeros((3,size_ii,size_jj), dtype='float32')
+                    out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0,:,data_ii_start:data_ii_end,data_jj_start:data_jj_end]
+
                 if out_arr.max() == 0:
                     print 'Warning: Deconv out_arr in range', out_arr.min(), 'to', out_arr.max(), 'ensure force_backward: true in prototxt'
+
                 if do_deconv:
-                    with WithTimer('Save img  ', quiet = not do_print):
+                    with WithTimer('Save img  ', quiet=not do_print):
                         save_caffe_image(out_arr, os.path.join(unit_dir, 'deconv_%03d.png' % max_idx_0),
-                                         autoscale = False, autoscale_center = 0)
+                                         autoscale=False, autoscale_center=0)
                 if do_deconv_norm:
                     out_arr = np.linalg.norm(out_arr, axis=0)
-                    with WithTimer('Save img  ', quiet = not do_print):
+                    with WithTimer('Save img  ', quiet=not do_print):
                         save_caffe_image(out_arr, os.path.join(unit_dir, 'deconvnorm_%03d.png' % max_idx_0))
 
+
             if do_backprop or do_backprop_norm:
-                diffs = net.blobs[layer].diff * 0
+                diffs = net.blobs[denormalized_layer_name].diff * 0
                 diffs[0,channel_idx,ii,jj] = 1.0
                 with WithTimer('Backward  ', quiet = not do_print):
-                    net.backward_from_layer(layer, diffs)
+                    net.backward_from_layer(denormalized_layer_name, diffs)
 
-                out_arr = np.zeros((3,size_ii,size_jj), dtype='float32')
-                out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0,:,data_ii_start:data_ii_end,data_jj_start:data_jj_end]
+                if settings.is_siamese:
+
+                    # input is first image so select first 3 channels
+                    if selected_input_index == 0:
+                        out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
+                        out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0, 0:3, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
+
+                    # input is second image so select second 3 channels
+                    elif selected_input_index == 1:
+                        out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
+                        out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0, 3:6, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
+
+                    # input is both images so select concatenate data horizontally
+                    elif selected_input_index == -1:
+                        out_arr = np.zeros((3, size_ii, size_jj*2), dtype='float32')
+                        out_arr[:, out_ii_start:out_ii_end, (0 + out_jj_start):(0 + out_jj_end)] = net.blobs['data'].diff[0, 0:3, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
+                        out_arr[:, out_ii_start:out_ii_end, (size_jj + out_jj_start):(size_jj + out_jj_end)] = net.blobs['data'].diff[0, 3:6, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
+
+                else: # normal operation
+                    out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
+                    out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0,:,data_ii_start:data_ii_end,data_jj_start:data_jj_end]
+
                 if out_arr.max() == 0:
                     print 'Warning: Deconv out_arr in range', out_arr.min(), 'to', out_arr.max(), 'ensure force_backward: true in prototxt'
                 if do_backprop:
@@ -437,6 +531,6 @@ def output_max_patches(max_tracker, net, layer, idx_begin, idx_end, num_top, dat
                     out_arr = np.linalg.norm(out_arr, axis=0)
                     with WithTimer('Save img  ', quiet = not do_print):
                         save_caffe_image(out_arr, os.path.join(unit_dir, 'backpropnorm_%03d.png' % max_idx_0))
-                
+
         if do_info:
             info_file.close()

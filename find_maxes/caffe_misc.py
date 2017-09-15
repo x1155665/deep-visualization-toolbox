@@ -81,21 +81,23 @@ def get_pool_converter(bot_size, top_size, filter_width = (1,1), stride = (1,1),
 
 
 class RegionComputer(object):
-    '''Computes regions of possible influcence from higher layers to lower layers.
+    '''Computes regions of possible influcence from higher layers to lower layers.'''
 
-    Woefully hardcoded'''
-
-    def __init__(self):
+    def __init__(self, layers_list):
         #self.net = net
+
         _tmp = []
-        _tmp.append(('data', None))
-        _tmp.append(('conv1', get_conv_converter((227,227), (55,55), (11,11), (4,4))))
-        _tmp.append(('pool1', get_pool_converter((55,55),   (27,27), (3,3),   (2,2))))
-        _tmp.append(('conv2', get_conv_converter((27,27),   (27,27), (5,5),   (1,1),  (2,2))))
-        _tmp.append(('pool2', get_pool_converter((27,27),   (13,13), (3,3),   (2,2))))
-        _tmp.append(('conv3', get_conv_converter((13,13),   (13,13), (3,3),   (1,1),  (1,1))))
-        _tmp.append(('conv4', get_conv_converter((13,13),   (13,13), (3,3),   (1,1),  (1,1))))
-        _tmp.append(('conv5', get_conv_converter((13,13),   (13,13), (3,3),   (1,1),  (1,1))))
+
+        for (name, type, input, output, filter, stride, pad) in layers_list:
+            if type == 'Input':
+                _tmp.append((name, None))
+            elif type == 'Convolution':
+                _tmp.append((name, get_conv_converter(input, output, filter, stride, pad)))
+            elif type == 'Pooling':
+                _tmp.append((name, get_pool_converter(input, output, filter, stride, pad)))
+            else:
+                continue # skip adding layer
+
         self.names = [tt[0] for tt in _tmp]
         self.converters = [tt[1] for tt in _tmp]
         

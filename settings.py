@@ -8,6 +8,7 @@ import os
 import sys
 
 # Import local / overridden settings. Turn off creation of settings_local.pyc to avoid stale settings if settings_local.py is removed.
+
 sys.dont_write_bytecode = True
 try:
     from settings_local import *
@@ -329,14 +330,57 @@ layers_for_max_tracker = locals().get('layers_for_max_tracker', ['conv1', 'conv2
 is_conv_fn = locals().get('is_conv_fn', lambda layer_name: 'conv' in layer_name)
 
 # function to normalize layer name used in NetMaxTracker to combine activations of siamese layers
-# for example. this is used to make activations of layer "conv_1" and "conv_1_p" count the same
+# for example, this is used to make activations of layer "conv_1" and "conv_1_p" count the same
 normalize_layer_name_for_max_tracker_fn = locals().get('normalize_layer_name_for_max_tracker_fn', lambda layer_name: layer_name)
+
+# function to denormalize layer name used in NetMaxTracker to split combined activations of siamese layers
+# for example, given layer name "conv_1" and selected_input_index = 1, we might want to return "conv_1_p" to state that the twin layer should be used as source
+denormalize_layer_name_for_max_tracker_fn = locals().get('denormalize_layer_name_for_max_tracker_fn', lambda layer_name, selected_input_index: layer_name)
 
 # function which selects an image from a siamese input pair, given the layer name
 siamese_layer_to_index_of_saved_image_fn = locals().get('siamese_layer_to_index_of_saved_image_fn', lambda layer_name: 0)
 
 # location for max tracker output file
 find_max_acts_output_file = locals().get('find_max_acts_output_file', 'find_max_acts_output.pickled')
+
+# default value for do_maxes parameter in max_tracker
+max_tracker_do_maxes = locals().get('max_tracker_do_maxes', True)
+
+# default value for do_deconv parameter in max tracker
+max_tracker_do_deconv = locals().get('max_tracker_do_deconv', True)
+
+# default value for do_deconv_norm parameter in max tracker
+max_tracker_do_deconv_norm = locals().get('max_tracker_do_deconv_norm', True)
+
+# default value for do_backprop parameter in max tracker
+max_tracker_do_backprop = locals().get('max_tracker_do_backprop', True)
+
+# default value for do_backprop_norm parameter in max tracker
+max_tracker_do_backprop_norm = locals().get('max_tracker_do_backprop_norm', True)
+
+# default value for do_info parameter in max tracker
+max_tracker_do_info = locals().get('max_tracker_do_info', True)
+
+# default value for output_dir parameter in max tracker
+max_tracker_output_dir = locals().get('max_tracker_output_dir', True)
+
+# default value for layer parameter in max_tracker
+max_tracker_layers_to_output = locals().get('max_tracker_layers_to_output', [])
+
+# default value for list of layers used in max tracker
+# note the default is a hardcoded choice which was used in the original code,
+# for backward comparability we keep it as default, but you should change this parameter for each network
+default_max_tracker_layers_list = []
+# Description                           Name     Type           Input      Output   Filter   Stride  Pad
+default_max_tracker_layers_list.append(('data',  'Input',       None,      None,    None,    None,   None,))
+default_max_tracker_layers_list.append(('conv1', 'Convolution', (227,227), (55,55), (11,11), (4,4),  (0,0)))
+default_max_tracker_layers_list.append(('pool1', 'Pooling',     (55,55),   (27,27), (3,3),   (2,2),  (0,0)))
+default_max_tracker_layers_list.append(('conv2', 'Convolution', (27,27),   (27,27), (5,5),   (1,1),  (2,2)))
+default_max_tracker_layers_list.append(('pool2', 'Pooling',     (27,27),   (13,13), (3,3),   (2,2),  (0,0)))
+default_max_tracker_layers_list.append(('conv3', 'Convolution', (13,13),   (13,13), (3,3),   (1,1),  (1,1)))
+default_max_tracker_layers_list.append(('conv4', 'Convolution', (13,13),   (13,13), (3,3),   (1,1),  (1,1)))
+default_max_tracker_layers_list.append(('conv5', 'Convolution', (13,13),   (13,13), (3,3),   (1,1),  (1,1)))
+max_tracker_layers_list = locals().get('max_tracker_layers_list', default_max_tracker_layers_list)
 
 ####################################
 #
