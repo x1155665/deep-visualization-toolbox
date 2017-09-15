@@ -193,6 +193,12 @@ caffevis_prob_layer = locals().get('caffevis_prob_layer', None)
 # visualizations from, if any. None to disable.
 caffevis_unit_jpg_dir = locals().get('caffevis_unit_jpg_dir', None)
 
+# what is the folder format for loading precomputed visualizations,
+# options are:
+#   "original_combined_single_image" - every unit has a single layer
+#   "max_tracker_output" - every unit has a list of images to be loaded
+caffevis_unit_jpg_dir_folder_format = locals().get('caffevis_unit_jpg_dir_folder_format', 'original_combined_single_image')
+
 # List. For which layers should jpgs be loaded for
 # visualization? If a layer name (full name, not prettified) is given
 # here, we will try to load jpgs to visualize each unit. This is used
@@ -381,6 +387,9 @@ default_max_tracker_layers_list.append(('conv3', 'Convolution', (13,13),   (13,1
 default_max_tracker_layers_list.append(('conv4', 'Convolution', (13,13),   (13,13), (3,3),   (1,1),  (1,1)))
 default_max_tracker_layers_list.append(('conv5', 'Convolution', (13,13),   (13,13), (3,3),   (1,1),  (1,1)))
 max_tracker_layers_list = locals().get('max_tracker_layers_list', default_max_tracker_layers_list)
+
+
+
 
 ####################################
 #

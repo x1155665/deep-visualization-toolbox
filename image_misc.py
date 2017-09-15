@@ -277,6 +277,15 @@ def ensure_uint255_and_resize_to_fit(img, out_max_shape,
                          shrink_interpolation = shrink_interpolation,
                          grow_interpolation = grow_interpolation)
 
+def ensure_uint255_and_resize_without_fit(img, out_max_shape,
+                                     shrink_interpolation = cv2.INTER_LINEAR,
+                                     grow_interpolation = cv2.INTER_NEAREST):
+    as_uint255 = ensure_uint255(img)
+    return resize_without_fit(as_uint255, out_max_shape,
+                         dtype_out = 'uint8',
+                         shrink_interpolation = shrink_interpolation,
+                         grow_interpolation = grow_interpolation)
+
 
 def ensure_uint255(arr):
     '''If data is float, multiply by 255 and convert to uint8. Else leave as uint8.'''
@@ -357,6 +366,45 @@ def resize_to_fit(img, out_max_shape,
     out = cv2.resize(img,
             (int(img.shape[1] * scale), int(img.shape[0] * scale)),   # in (c,r) order
                      interpolation = grow_interpolation if scale > 1 else shrink_interpolation)
+    if convert_late:
+        out = np.array(out, dtype=dtype_out)
+    return out
+
+
+def resize_without_fit(img, out_max_shape,
+                dtype_out = None,
+                shrink_interpolation = cv2.INTER_LINEAR,
+                grow_interpolation = cv2.INTER_NEAREST):
+    '''Resizes (without fit) to out_max_shape.
+
+    If one of the out_max_shape dimensions is None, then use only the other dimension to perform resizing.
+
+    '''
+
+    if dtype_out is not None and img.dtype != dtype_out:
+        dtype_in_size = img.dtype.itemsize
+        dtype_out_size = np.dtype(dtype_out).itemsize
+        convert_early = (dtype_out_size < dtype_in_size)
+        convert_late = not convert_early
+    else:
+        convert_early = False
+        convert_late = False
+    if out_max_shape[0] is None:
+        scale_0 = float(out_max_shape[1]) / img.shape[1]
+        scale_1 = float(out_max_shape[1]) / img.shape[1]
+    elif out_max_shape[1] is None:
+        scale_1 = float(out_max_shape[0]) / img.shape[0]
+        scale_0 = float(out_max_shape[0]) / img.shape[0]
+    else:
+
+        scale_0 = float(out_max_shape[0]) / img.shape[0]
+        scale_1 = float(out_max_shape[1]) / img.shape[1]
+
+    if convert_early:
+        img = np.array(img, dtype=dtype_out)
+    out = cv2.resize(img,
+            (int(img.shape[1] * scale_1), int(img.shape[0] * scale_0)),   # in (c,r) order
+                     interpolation = grow_interpolation if min(scale_0,scale_1) > 1 else shrink_interpolation)
     if convert_late:
         out = np.array(out, dtype=dtype_out)
     return out
