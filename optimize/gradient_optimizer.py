@@ -211,7 +211,8 @@ class GradientOptimizer(object):
         is_labeled_unit = params.push_layer in self.label_layers
 
         # Sanity checks for conv vs FC layers
-        data_shape = self.net.blobs[params.push_layer].data.shape
+        top_name = self.net.top_names[params.push_layer][0]
+        data_shape = self.net.blobs[top_name].data.shape
         assert len(data_shape) in (2,4), 'Expected shape of length 2 (for FC) or 4 (for conv) layers but shape is %s' % repr(data_shape)
         is_conv = (len(data_shape) == 4)
 
@@ -240,7 +241,8 @@ class GradientOptimizer(object):
             # 1. Push data through net
             out = self.net.forward_all(data = xx)
             #shownet(net)
-            acts = self.net.blobs[params.push_layer].data[0]    # chop off batch dimension
+            top_name = self.net.top_names[params.push_layer][0]
+            acts = self.net.blobs[top_name].data[0]    # chop off batch dimension
 
             if not is_conv:
                 # promote to 3D
@@ -274,7 +276,8 @@ class GradientOptimizer(object):
 
 
             # 4. Do backward pass to get gradient
-            diffs = self.net.blobs[params.push_layer].diff * 0
+            top_name = self.net.top_names[params.push_layer][0]
+            diffs = self.net.blobs[top_name].diff * 0
             if not is_conv:
                 # Promote bc -> bc01
                 diffs = diffs[:,:,np.newaxis,np.newaxis]
