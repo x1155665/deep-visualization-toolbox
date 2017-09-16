@@ -181,10 +181,10 @@ class GradientOptimizer(object):
         print params
         
         x0 = self._get_x0(params)
-        xx, results = self._optimize(params, x0)
-        self.save_results(params, results, prefix_template, brave = brave, skipbig = skipbig, skipsmall = skipsmall)
-
-        print str([results[batch_index].meta_result for batch_index in range(params.batch_size)])
+        xx, results, results_generated = self._optimize(params, x0, prefix_template)
+        if results_generated:
+            self.save_results(params, results, prefix_template, brave = brave, skipbig = skipbig, skipsmall = skipsmall)
+            print str([results[batch_index].meta_result for batch_index in range(params.batch_size)])
         
         return xx
 
@@ -204,10 +204,17 @@ class GradientOptimizer(object):
 
         return x0
         
-    def _optimize(self, params, x0):
+    def _optimize(self, params, x0, prefix_template):
         xx = x0.copy()
 
-        results = [FindResults(i) for i in range(params.batch_size)]
+        results = [FindResults(batch_index) for batch_index in range(params.batch_size)]
+
+        # check if all required outputs exist, in which case skip this optimization
+        all_outputs = [self.generate_output_names(batch_index, params, results, prefix_template) for batch_index in range(params.batch_size)]
+        relevant_outputs = [best_X_name for [best_X_name, best_Xpm_name, majority_X_name, majority_Xpm_name, info_name, info_pkl_name, info_big_pkl_name] in all_outputs]
+        relevant_outputs_exist = [os.path.exists(best_X_name) for best_X_name in relevant_outputs]
+        if all(relevant_outputs_exist):
+            return xx, results, False
 
         # Whether or not the unit being optimized corresponds to a label (e.g. one of the 1000 imagenet classes)
         is_labeled_unit = params.push_layer in self.label_layers
@@ -240,7 +247,6 @@ class GradientOptimizer(object):
             # 0. Crop data
             xx = minimum(255.0, maximum(0.0, xx + self.batched_data_mean)) - self.batched_data_mean     # Crop all values to [0,255]
 
-
             # 1. Push data through net
             out = self.net.forward_all(data = xx)
             #shownet(net)
@@ -248,10 +254,8 @@ class GradientOptimizer(object):
             acts = self.net.blobs[top_name].data
 
             if not is_conv:
-            #     promote to 3D
+                # promote to 4D
                 acts = np.reshape(acts, (params.batch_size, -1, 1, 1))
-            # else:
-            #     reshaped_acts = np.reshape(acts, (params.batch_size, -1))
 
             reshaped_acts = np.reshape(acts, (params.batch_size, -1))
 
@@ -387,7 +391,7 @@ class GradientOptimizer(object):
                 else:
                     results[batch_index].meta_result = 'batch_index: %d, Metaresult: majority failure' % batch_index
 
-        return xx, results
+        return xx, results, True
 
     def find_selected_input_index(self, layer):
 
@@ -408,35 +412,49 @@ class GradientOptimizer(object):
 
         return -1
 
+    def generate_output_names(self, batch_index, params, results, prefix_template):
+
+        results_and_params = combine_dicts((('p.', params.__dict__),
+                                            ('r.', results[batch_index].__dict__)))
+        prefix = prefix_template % results_and_params
+
+        if os.path.isdir(prefix):
+            if prefix[-1] != '/':
+                prefix += '/'  # append slash for dir-only template
+        else:
+            dirname = os.path.dirname(prefix)
+            if dirname:
+                mkdir_p(dirname)
+
+        best_X_name = '%s_best_X.jpg' % prefix
+        best_Xpm_name = '%s_best_Xpm.jpg' % prefix
+        majority_X_name = '%s_majority_X.jpg' % prefix
+        majority_Xpm_name = '%s_majority_Xpm.jpg' % prefix
+        info_name = '%s_info.txt' % prefix
+        info_pkl_name = '%s_info.pkl' % prefix
+        info_big_pkl_name = '%s_info_big.pkl' % prefix
+        return [best_X_name, best_Xpm_name, majority_X_name, majority_Xpm_name, info_name, info_pkl_name, info_big_pkl_name]
+
     def save_results(self, params, results, prefix_template, brave = False, skipbig = False, skipsmall = False):
         if prefix_template is None:
             return
 
         for batch_index in range(params.batch_size):
 
-            results_and_params = combine_dicts((('p.', params.__dict__),
-                                                ('r.', results[batch_index].__dict__)))
-            prefix = prefix_template % results_and_params
-
-            if os.path.isdir(prefix):
-                if prefix[-1] != '/':
-                    prefix += '/'   # append slash for dir-only template
-            else:
-                dirname = os.path.dirname(prefix)
-                if dirname:
-                    mkdir_p(dirname)
+            [best_X_name, best_Xpm_name, majority_X_name, majority_Xpm_name, info_name, info_pkl_name, info_big_pkl_name] = \
+                self.generate_output_names(batch_index, params, results, prefix_template)
 
             # Don't overwrite previous results
-            if os.path.exists('%sinfo.txt' % prefix) and not brave:
-                raise Exception('Cowardly refusing to overwrite ' + '%sinfo.txt' % prefix)
+            if os.path.exists(info_name) and not brave:
+                raise Exception('Cowardly refusing to overwrite ' + info_name)
 
             output_majority = False
             if output_majority:
                 # NOTE: this section wasn't tested after changes to code, so some minor index tweaking are in order
                 if results[batch_index].majority_xx is not None:
                     asimg = results[batch_index].majority_xx[self.channel_swap_to_rgb].transpose((1,2,0))
-                    saveimagescc('%smajority_X.jpg' % prefix, asimg, 0)
-                    saveimagesc('%smajority_Xpm.jpg' % prefix, asimg + self._data_mean_rgb_img)  # PlusMean
+                    saveimagescc(majority_X_name, asimg, 0)
+                    saveimagesc(majority_Xpm_name, asimg + self._data_mean_rgb_img)  # PlusMean
 
             if results[batch_index].best_xx is not None:
                 # results[batch_index].best_xx.shape is (6,224,224)
@@ -466,7 +484,7 @@ class GradientOptimizer(object):
 
                 save_output(out_arr,
                             channel_swap_to_rgb=self.channel_swap_to_rgb[[0, 1, 2]],
-                            best_X_image_name='%sbest_X.jpg' % prefix)
+                            best_X_image_name=best_X_name)
 
                 if self.settings.optimize_image_generate_plus_mean:
                     out_arr_pm = extract_patch_from_image(results[batch_index].best_xx + self.batched_data_mean, self.net, selected_input_index, self.settings,
@@ -475,16 +493,17 @@ class GradientOptimizer(object):
 
                     save_output(out_arr_pm,
                                 channel_swap_to_rgb=self.channel_swap_to_rgb[[0, 1, 2]],
-                                best_X_image_name='%sbest_Xpm.jpg' % prefix)
+                                best_X_image_name=best_Xpm_name)
 
-            with open('%sinfo.txt' % prefix, 'w') as ff:
+            with open(info_name, 'w') as ff:
                 print >>ff, params
                 print >>ff
                 print >>ff, results[batch_index]
             if not skipbig:
-                with open('%sinfo_big.pkl' % prefix, 'w') as ff:
+                with open(info_big_pkl_name, 'w') as ff:
                     pickle.dump((params, results[batch_index]), ff, protocol=-1)
-            results[batch_index].trim_arrays()
             if not skipsmall:
-                with open('%sinfo.pkl' % prefix, 'w') as ff:
+                results[batch_index].trim_arrays()
+                with open(info_pkl_name, 'w') as ff:
                     pickle.dump((params, results[batch_index]), ff, protocol=-1)
+

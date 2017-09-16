@@ -7,12 +7,14 @@ import cv2
 import numpy as np
 import time
 import StringIO
+import glob
 
 from misc import WithTimer
 from numpy_cache import FIFOLimitedArrayCache
 from app_base import BaseApp
 from image_misc import norm01, norm01c, norm0255, tile_images_normalize, ensure_float01, tile_images_make_tiles, \
-    ensure_uint255_and_resize_to_fit, get_tiles_height_width, get_tiles_height_width_ratio, resize_without_fit
+    ensure_uint255_and_resize_to_fit, get_tiles_height_width, get_tiles_height_width_ratio, resize_without_fit, \
+    cv2_read_file_rgb, caffe_load_image
 from image_misc import FormattedString, cv2_typeset_text, to_255
 from caffe_proc_thread import CaffeProcThread
 from jpg_vis_loading_thread import JPGVisLoadingThread
@@ -378,46 +380,17 @@ class CaffeVisApp(BaseApp):
         if self.state.pattern_mode:
             # Show desired patterns loaded from disk
 
-            load_layer = default_layer_name
+            if self.settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image':
 
-            if self.settings.caffevis_jpgvis_remap and load_layer in self.settings.caffevis_jpgvis_remap:
-                load_layer = self.settings.caffevis_jpgvis_remap[load_layer]
+                display_3D, display_3D_highres = self.load_pattern_images_original_format(default_layer_name,
+                                                                                          layer_dat_3D, n_tiles, pane,
+                                                                                          tile_cols, tile_rows)
 
-            if self.settings.caffevis_jpgvis_layers and load_layer in self.settings.caffevis_jpgvis_layers:
-                jpg_path = os.path.join(self.settings.caffevis_unit_jpg_dir,
-                                        'regularized_opt', load_layer, 'whole_layer.jpg')
+            elif self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
 
-                # Get highres version
-                #cache_before = str(self.img_cache)
-                display_3D_highres = self.img_cache.get((jpg_path, 'whole'), None)
-                #else:
-                #    display_3D_highres = None
-
-                if display_3D_highres is None:
-                    try:
-                        with WithTimer('CaffeVisApp:load_sprite_image', quiet = self.debug_level < 1):
-                            display_3D_highres = load_square_sprite_image(jpg_path, n_sprites = n_tiles)
-                    except IOError:
-                        # File does not exist, so just display disabled.
-                        pass
-                    else:
-                        self.img_cache.set((jpg_path, 'whole'), display_3D_highres)
-                #cache_after = str(self.img_cache)
-                #print 'Cache was / is:\n  %s\n  %s' % (cache_before, cache_after)
-
-            if display_3D_highres is not None:
-                # Get lowres version, maybe. Assume we want at least one pixel for selection border.
-                row_downsamp_factor = int(np.ceil(float(display_3D_highres.shape[1]) / (pane.data.shape[0] / tile_rows - 2)))
-                col_downsamp_factor = int(np.ceil(float(display_3D_highres.shape[2]) / (pane.data.shape[1] / tile_cols - 2)))
-                ds = max(row_downsamp_factor, col_downsamp_factor)
-                if ds > 1:
-                    #print 'Downsampling by', ds
-                    display_3D = display_3D_highres[:,::ds,::ds,:]
-                else:
-                    display_3D = display_3D_highres
-            else:
-                display_3D = layer_dat_3D * 0  # nothing to show
-
+                display_3D, display_3D_highres = self.load_pattern_images_optimizer_format(default_layer_name,
+                                                                                          layer_dat_3D, n_tiles, pane,
+                                                                                          tile_cols, tile_rows)
         else:
 
             # Show data from network (activations or diffs)
@@ -501,6 +474,116 @@ class CaffeVisApp(BaseApp):
             cv2_typeset_text(pane.data, lines, loc_base)
             
         return display_3D_highres
+
+    def load_pattern_images_original_format(self, default_layer_name, layer_dat_3D, n_tiles, pane,
+                                            tile_cols, tile_rows):
+        display_3D_highres = None
+        load_layer = default_layer_name
+        if self.settings.caffevis_jpgvis_remap and load_layer in self.settings.caffevis_jpgvis_remap:
+            load_layer = self.settings.caffevis_jpgvis_remap[load_layer]
+        if self.settings.caffevis_jpgvis_layers and load_layer in self.settings.caffevis_jpgvis_layers:
+            jpg_path = os.path.join(self.settings.caffevis_unit_jpg_dir,
+                                    'regularized_opt', load_layer, 'whole_layer.jpg')
+
+            # Get highres version
+            # cache_before = str(self.img_cache)
+            display_3D_highres = self.img_cache.get((jpg_path, 'whole'), None)
+            # else:
+            #    display_3D_highres = None
+
+            if display_3D_highres is None:
+                try:
+                    with WithTimer('CaffeVisApp:load_sprite_image', quiet=self.debug_level < 1):
+                        display_3D_highres = load_square_sprite_image(jpg_path, n_sprites=n_tiles)
+                except IOError:
+                    # File does not exist, so just display disabled.
+                    pass
+                else:
+                    if display_3D_highres is not None:
+                        self.img_cache.set((jpg_path, 'whole'), display_3D_highres)
+                    # cache_after = str(self.img_cache)
+                    # print 'Cache was / is:\n  %s\n  %s' % (cache_before, cache_after)
+
+        display_3D = self.downsample_display_3d(display_3D_highres, layer_dat_3D, pane, tile_cols, tile_rows)
+        return display_3D, display_3D_highres
+
+    def load_pattern_images_optimizer_format(self, default_layer_name, layer_dat_3D, n_tiles, pane,
+                                            tile_cols, tile_rows):
+        display_3D_highres = None
+        load_layer = default_layer_name
+        if self.settings.caffevis_jpgvis_remap and load_layer in self.settings.caffevis_jpgvis_remap:
+            load_layer = self.settings.caffevis_jpgvis_remap[load_layer]
+        if self.settings.caffevis_jpgvis_layers and load_layer in self.settings.caffevis_jpgvis_layers:
+
+            # get number of units
+            units_num = layer_dat_3D.shape[0]
+
+            pattern_image_key = (self.settings.caffevis_unit_jpg_dir, load_layer, "unit_%04d", units_num, 'opt*.jpg')
+
+            # Get highres version
+            display_3D_highres = self.img_cache.get(pattern_image_key, None)
+
+            if display_3D_highres is None:
+                try:
+                    with WithTimer('CaffeVisApp:load_first_image_per_unit', quiet=self.debug_level < 1):
+                        display_3D_highres = self.load_first_image_per_unit(display_3D_highres, load_layer, units_num)
+
+                except IOError:
+                    # File does not exist, so just display disabled.
+                    pass
+                else:
+                    if display_3D_highres is not None:
+                        self.img_cache.set(pattern_image_key, display_3D_highres)
+
+        display_3D = self.downsample_display_3d(display_3D_highres, layer_dat_3D, pane, tile_cols, tile_rows)
+        return display_3D, display_3D_highres
+
+    def load_first_image_per_unit(self, display_3D_highres, load_layer, units_num):
+        # for each neuron in layer
+        for unit_id in range(0, units_num):
+
+            # load first image for neuron
+            unit_folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, load_layer,
+                                            "unit_%04d" % (unit_id), 'opt*.jpg')
+
+            try:
+
+                # load first image for unit
+                unit_first_image_path = sorted(glob.glob(unit_folder_path))[0]
+                unit_first_image = caffe_load_image(unit_first_image_path, color=True, as_uint=True)
+
+                # handle first generation of results container
+                if display_3D_highres is None:
+                    unit_first_image_shape = unit_first_image.shape
+                    display_3D_highres = np.zeros((units_num, unit_first_image_shape[0],
+                                                   unit_first_image_shape[1],
+                                                   unit_first_image_shape[2]), dtype=np.uint8)
+
+                # set in result
+                display_3D_highres[unit_id, :, ::] = unit_first_image
+
+            except:
+                print '\nAttempted to load file from %s but failed. To supress this warning, remove layer "%s" from settings.caffevis_jpgvis_layers' % \
+                      (unit_folder_path, load_layer)
+                pass
+        return display_3D_highres
+
+    def downsample_display_3d(self, display_3D_highres, layer_dat_3D, pane, tile_cols, tile_rows):
+        if display_3D_highres is not None:
+            # Get lowres version, maybe. Assume we want at least one pixel for selection border.
+            row_downsamp_factor = int(
+                np.ceil(float(display_3D_highres.shape[1]) / (pane.data.shape[0] / tile_rows - 2)))
+            col_downsamp_factor = int(
+                np.ceil(float(display_3D_highres.shape[2]) / (pane.data.shape[1] / tile_cols - 2)))
+            ds = max(row_downsamp_factor, col_downsamp_factor)
+            if ds > 1:
+                # print 'Downsampling by', ds
+                display_3D = display_3D_highres[:, ::ds, ::ds, :]
+            else:
+                display_3D = display_3D_highres
+        else:
+            display_3D = layer_dat_3D * 0  # nothing to show
+        return display_3D
 
     def _draw_aux_pane(self, pane, layer_data_normalized):
         pane.data[:] = to_255(self.settings.window_background)

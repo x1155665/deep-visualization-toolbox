@@ -417,13 +417,16 @@ optimize_image_lr_params = locals().get('optimize_image_lr_params', '{"lr": 1}')
 optimize_image_max_iters = locals().get('optimize_image_max_iters', [500])
 
 # output-prefix parameter for optimize_image.py
-optimize_image_output_prefix = locals().get('optimize_image_output_prefix', 'optimize_results/opt')
+optimize_image_output_prefix = locals().get('optimize_image_output_prefix', 'outputs/%(p.push_layer)s/unit_%(p.push_channel)04d/opt_%(r.batch_index)03d')
 
 # parameter which marks whether we should generate also the plus mean image of the optmized image
 optimize_image_generate_plus_mean = locals().get('optimize_image_generate_plus_mean', False)
 
 # batch size used in optimize_image.py
 optimize_image_batch_size = locals().get('optimize_image_batch_size', 9)
+
+# channels to generate in optimize_image.py, if list is empty we generate all the channels in the layer
+optimize_image_channels = locals().get('optimize_image_channels', [])
 
 ####################################
 #

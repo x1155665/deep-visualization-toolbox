@@ -42,8 +42,10 @@ class JPGVisLoadingThread(CodependentThread):
             images[image_index_to_set] = ensure_uint255_and_resize_without_fit(img, resize_shape)
 
         except IOError:
-            print '\nAttempted to load file %s but failed. To supress this warning, remove layer "%s" from settings.caffevis_jpgvis_layers' % (
-            jpg_path, state_layer)
+            print '\nAttempted to load file %s but failed. To supress this warning, remove layer "%s" from settings.caffevis_jpgvis_layers' % \
+                  (jpg_path, state_layer)
+            # set black image as place holder
+            images[image_index_to_set] = np.zeros((resize_shape[0], resize_shape[1], 3), dtype=np.uint8)
             pass
 
     def load_image_into_pane_max_tracker_format(self, state_layer, state_selected_unit, resize_shape, images,
@@ -59,8 +61,7 @@ class JPGVisLoadingThread(CodependentThread):
             unit_images_path = sorted(glob.glob(unit_folder_path))
 
             # load all images
-            # unit_images = [caffe_load_image(unit_image_path, color=True) for unit_image_path in unit_images_path]
-            unit_images = [cv2_read_file_rgb(unit_image_path) for unit_image_path in unit_images_path]
+            unit_images = [caffe_load_image(unit_image_path, color=True, as_uint=True) for unit_image_path in unit_images_path]
 
             if should_crop_to_corner:
                 unit_images = [crop_to_corner(img, 2) for img in unit_images]
@@ -72,11 +73,11 @@ class JPGVisLoadingThread(CodependentThread):
             padding_pixel = 1
             mega_image_height = images_per_axis * (image_height + 2*padding_pixel)
             mega_image_width = images_per_axis * (image_width + 2*padding_pixel)
-            mega_image = np.zeros((mega_image_height,mega_image_width,channels))
+            mega_image = np.zeros((mega_image_height,mega_image_width,channels), dtype=np.uint8)
 
             for i in range(num_images):
-                cell_row = i % images_per_axis
-                cell_col = i / images_per_axis
+                cell_row = i / images_per_axis
+                cell_col = i % images_per_axis
                 mega_image_height_start = 1 + cell_row * (image_height + 2*padding_pixel)
                 mega_image_height_end = mega_image_height_start + image_height
                 mega_image_width_start = 1 + cell_col * (image_width + 2*padding_pixel)
@@ -86,8 +87,10 @@ class JPGVisLoadingThread(CodependentThread):
             images[image_index_to_set] = ensure_uint255_and_resize_without_fit(mega_image, resize_shape)
 
         except:
-            print '\nAttempted to load files from %s but failed. To supress this warning, remove layer "%s" from settings.caffevis_jpgvis_layers' % (
-                unit_folder_path, state_layer)
+            print '\nAttempted to load files from %s but failed. To supress this warning, remove layer "%s" from settings.caffevis_jpgvis_layers' % \
+                  (unit_folder_path, state_layer)
+            # set black image as place holder
+            images[image_index_to_set] = np.zeros((resize_shape[0], resize_shape[1], 3), dtype=np.uint8)
             pass
 
 
@@ -139,12 +142,9 @@ class JPGVisLoadingThread(CodependentThread):
                                                           should_crop_to_corner=True)
 
             elif self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
-                # self.load_image_into_pane_max_tracker_format(state_layer, state_selected_unit, resize_shape, images,
-                #                                              file_search_pattern='regularized_opt*.png',
-                #                                              image_index_to_set=0,
-                #                                              should_crop_to_corner=True)
-                # black image until we test it
-                images[0] = np.zeros((resize_shape[0],resize_shape[1],3))
+                self.load_image_into_pane_max_tracker_format(state_layer, state_selected_unit, resize_shape, images,
+                                                             file_search_pattern='opt*.jpg',
+                                                             image_index_to_set=0)
 
             if self.settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image':
 

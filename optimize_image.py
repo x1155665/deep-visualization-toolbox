@@ -76,10 +76,7 @@ def get_parser():
 
     # Where to save results
     parser.add_argument('--output-prefix', type = str, default = settings.optimize_image_output_prefix,
-                        help = 'Output path and filename prefix (default: optimize_results/opt)')
-    parser.add_argument('--output-template', type = str, default = '%(p.push_layer)s_unit%(p.push_channel)04d_seed%(p.rand_seed)d_iter%(p.max_iter)04d_batch%(r.batch_index)d',
-                        help = 'Output filename template; see code for details (default: "%%(p.push_layer)s_%%(p.push_channel)04d_%%(p.rand_seed)d"). '
-                        'The default output-prefix and output-template produce filenames like "optimize_results/opt_prob_0278_0_best_X.jpg"')
+                        help = 'Output path and filename prefix (default: outputs/%(p.push_layer)s/unit_%(p.push_channel)04d/opt_%(r.batch_index)03d)')
     parser.add_argument('--brave', action = 'store_true', default=True, help = 'Allow overwriting existing results files. Default: off, i.e. cowardly refuse to overwrite existing files.')
     parser.add_argument('--skipbig', action = 'store_true', default=True, help = 'Skip outputting large *info_big.pkl files (contains pickled version of x0, last x, best x, first x that attained max on the specified layer.')
     parser.add_argument('--skipsmall', action = 'store_true', default=True, help = 'Skip outputting small *info.pkl files (contains pickled version of..')
@@ -241,8 +238,14 @@ def main():
             channels = output[2]
             push_spatial = (filter[0]/2, filter[1]/2)
 
+        # if channels defined in settings file, use them
+        if settings.optimize_image_channels:
+            channels_list = settings.optimize_image_channels
+        else:
+            channels_list = range(channels)
+
         # go over channels
-        for current_channel in range(channels):
+        for current_channel in channels_list:
             params = FindParams(
                 start_at = args.start_at,
                 rand_seed = args.rand_seed,
@@ -264,9 +267,8 @@ def main():
                 layer_is_conv=(type == 'Convolution'),
             )
 
-            prefix_template = '%s_%s_' % (args.output_prefix, args.output_template)
-            im = optimizer.run_optimize(params, prefix_template = prefix_template,
-                                        brave = args.brave, skipbig = args.skipbig, skipsmall = args.skipsmall)
+            optimizer.run_optimize(params, prefix_template = args.output_prefix,
+                                   brave = args.brave, skipbig = args.skipbig, skipsmall = args.skipsmall)
 
 
 if __name__ == '__main__':
