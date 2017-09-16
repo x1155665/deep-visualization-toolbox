@@ -1,6 +1,5 @@
 import numpy as np
 import os
-import caffe
 
 from image_misc import get_tiles_height_width, caffe_load_image
 
@@ -134,6 +133,7 @@ def load_mean(data_mean_file):
     elif file_extension == ".binaryproto":
 
         # load mean from binary protobuf file
+        import caffe
         blob = caffe.proto.caffe_pb2.BlobProto()
         data = open(data_mean_file, 'rb').read()
         blob.ParseFromString(data)
