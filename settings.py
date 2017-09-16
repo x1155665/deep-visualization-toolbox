@@ -396,7 +396,7 @@ siamese_layers_list = locals().get('siamese_layers_list', [])
 optimize_image_rand_seed = locals().get('optimize_image_rand_seed', 0)
 
 # push-layer parameter for optimize_image.py
-optimize_image_push_layer = locals().get('optimize_image_push_layer', 'fc8')
+optimize_image_push_layers = locals().get('optimize_image_push_layers', ['fc8'])
 
 # decay parameter for optimize_image.py
 optimize_image_decay = locals().get('optimize_image_decay', 0)
