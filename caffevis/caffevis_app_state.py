@@ -37,6 +37,7 @@ class CaffeVisAppState(object):
         self.extra_msg = ''
         self.back_stale = True       # back becomes stale whenever the last back diffs were not computed using the current backprop unit and method (bprop or deconv)
         self.next_frame = None
+        self.next_label = None
         self.jpgvis_to_load_key = None
         self.last_key_at = 0
         self.quit = False
@@ -86,6 +87,7 @@ class CaffeVisAppState(object):
 
     def _reset_user_state(self):
         self.siamese_input_mode = SiameseInputMode.BOTH_IMAGES
+        self.show_maximal_score = False
         self.layer_idx = 0
         self._update_layer_name()
         self.layer_boost_indiv_idx = self.settings.caffevis_boost_indiv_default_idx
@@ -260,6 +262,9 @@ class CaffeVisAppState(object):
 
             elif tag == 'siamese_input_mode':
                 self.siamese_input_mode = (self.siamese_input_mode + 1) % SiameseInputMode.NUMBER_OF_MODES
+
+            elif tag == 'show_maximal_score':
+                self.show_maximal_score = not self.show_maximal_score
 
             else:
                 key_handled = False

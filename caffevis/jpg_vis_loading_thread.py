@@ -12,6 +12,9 @@ from image_misc import caffe_load_image, ensure_uint255_and_resize_to_fit, cv2_r
 from caffevis_helper import crop_to_corner, get_image_from_files
 
 
+
+
+
 class JPGVisLoadingThread(CodependentThread):
     '''Loads JPGs necessary for caffevis_jpgvis pane in separate
     thread and inserts them into the cache.
@@ -47,17 +50,35 @@ class JPGVisLoadingThread(CodependentThread):
             images[image_index_to_set] = np.zeros((resize_shape[0], resize_shape[1], 3), dtype=np.uint8)
             pass
 
+    def prepare_score_captions_for_max_input_images(self, state_layer, state_selected_unit):
 
+        info_file_path = os.path.join(self.settings.caffevis_unit_jpg_dir, state_layer,
+                                        "unit_%04d" % (state_selected_unit),
+                                        "info.txt")
 
+        # open file
+        with open(info_file_path, 'r') as info_file:
+            lines = info_file.readlines()
+
+            # skip first line
+            lines = lines[1:]
+
+            # take second word from each line, and convert to float
+            second_column = [float(line.split(' ')[1]) for line in lines]
+
+            # convert to string with 2 decimal digits
+            captions = [('%.2f' % value) for value in second_column]
+
+        return captions
 
     def load_image_into_pane_max_tracker_format(self, state_layer, state_selected_unit, resize_shape, images,
-                                                file_search_pattern, image_index_to_set, should_crop_to_corner=False, first_only = False):
+                                                file_search_pattern, image_index_to_set, should_crop_to_corner=False, first_only = False, captions = []):
 
         unit_folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, state_layer,
                                         "unit_%04d" % (state_selected_unit),
                                         file_search_pattern)
 
-        images[image_index_to_set] = get_image_from_files(unit_folder_path, should_crop_to_corner, resize_shape, first_only)
+        images[image_index_to_set] = get_image_from_files(self.settings, unit_folder_path, should_crop_to_corner, resize_shape, first_only, captions)
         return
 
     def run(self):
@@ -80,7 +101,7 @@ class JPGVisLoadingThread(CodependentThread):
                 time.sleep(self.loop_sleep)
                 continue
 
-            state_layer, state_selected_unit, data_shape = jpgvis_to_load_key
+            state_layer, state_selected_unit, data_shape, show_maximal_score = jpgvis_to_load_key
 
             # Load three images:
             images = [None] * 3
@@ -121,9 +142,14 @@ class JPGVisLoadingThread(CodependentThread):
                                                           image_index_to_set=1)
 
             elif self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
+
+                if self.state.show_maximal_score:
+                    captions = self.prepare_score_captions_for_max_input_images(state_layer, state_selected_unit)
+                else:
+                    captions = []
                 self.load_image_into_pane_max_tracker_format(state_layer, state_selected_unit, resize_shape, images,
                                                              file_search_pattern='maxim*.png',
-                                                             image_index_to_set=1)
+                                                             image_index_to_set=1, captions=captions)
 
 
             if self.settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image':

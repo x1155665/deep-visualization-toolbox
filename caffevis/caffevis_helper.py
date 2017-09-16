@@ -1,7 +1,10 @@
+#! /usr/bin/env python
+
 import numpy as np
 import os
 
-from image_misc import get_tiles_height_width, caffe_load_image, ensure_uint255_and_resize_without_fit
+from image_misc import get_tiles_height_width, caffe_load_image, ensure_uint255_and_resize_without_fit, FormattedString, \
+    cv2_typeset_text, to_255
 import glob
 
 
@@ -19,6 +22,17 @@ def net_preproc_forward(settings, net, img, data_hw):
     data_blob = net.transformer.preprocess('data', img)                # e.g. (3, 227, 227), mean subtracted and scaled to [0,255]
     data_blob = data_blob[np.newaxis,:,:,:]                   # e.g. (1, 3, 227, 227)
     output = net.forward(data=data_blob)
+
+    # DEBUG CODE
+    if False:
+        print "*** hidden1.weights.shape:", net.params['linear_logits'][0].data.shape
+        print "*** hidden1.weights.data:\n", net.params['linear_logits'][0].data
+        print "*** hidden1.bias.shape:", net.params['linear_logits'][1].data.shape
+        print "*** hidden1.bias.data:\n", net.params['linear_logits'][1].data
+        print "*** hidden1.shape:", net.blobs['hidden1'].data.shape
+        print "*** hidden1.data:\n", net.blobs['hidden1'].data
+        print "*** calculated prediction:", (np.dot(net.params['linear_logits'][0].data, net.blobs['hidden1'].data.transpose()) + net.params['linear_logits'][1].data)
+
     return output
 
 
@@ -150,15 +164,17 @@ def load_mean(data_mean_file):
     return data_mean
 
 
-def get_image_from_files(unit_folder_path, should_crop_to_corner, resize_shape, first_only):
+def get_image_from_files(settings, unit_folder_path, should_crop_to_corner, resize_shape, first_only, captions = []):
     try:
 
         # list unit images
         unit_images_path = sorted(glob.glob(unit_folder_path))
 
+        mega_image = np.zeros((resize_shape[0], resize_shape[1], 3), dtype=np.uint8)
+
         # if no images
         if not unit_images_path:
-            return np.zeros((resize_shape[0], resize_shape[1], 3), dtype=np.uint8)
+            return mega_image
 
         if first_only:
             unit_images_path = [unit_images_path[0]]
@@ -170,25 +186,41 @@ def get_image_from_files(unit_folder_path, should_crop_to_corner, resize_shape, 
         if should_crop_to_corner:
             unit_images = [crop_to_corner(img, 2) for img in unit_images]
 
-        # build mega image
-        (image_height, image_width, channels) = unit_images[0].shape
         num_images = len(unit_images)
         images_per_axis = int(np.math.ceil(np.math.sqrt(num_images)))
         padding_pixel = 1
-        mega_image_height = images_per_axis * (image_height + 2 * padding_pixel)
-        mega_image_width = images_per_axis * (image_width + 2 * padding_pixel)
-        mega_image = np.zeros((mega_image_height, mega_image_width, channels), dtype=np.uint8)
+
+        if first_only:
+            single_resized_image_shape = (resize_shape[0] - 2*padding_pixel, resize_shape[1] - 2*padding_pixel)
+        else:
+            single_resized_image_shape = ((resize_shape[0] / images_per_axis) - 2*padding_pixel, (resize_shape[1] / images_per_axis) - 2*padding_pixel)
+        unit_images = [ensure_uint255_and_resize_without_fit(unit_image, single_resized_image_shape) for unit_image in unit_images]
+
+        # build mega image
+
+        should_add_caption = (len(captions) == num_images)
+        defaults = {'face': settings.caffevis_score_face,
+                    'fsize': settings.caffevis_score_fsize,
+                    'clr': to_255(settings.caffevis_score_clr),
+                    'thick': settings.caffevis_score_thick}
 
         for i in range(num_images):
+
+            # add caption if we have exactly one for each image
+            if should_add_caption:
+                loc = settings.caffevis_score_loc[::-1]   # Reverse to OpenCV c,r order
+                fs = FormattedString(captions[i], defaults)
+                cv2_typeset_text(unit_images[i], [[fs]], loc)
+
             cell_row = i / images_per_axis
             cell_col = i % images_per_axis
-            mega_image_height_start = 1 + cell_row * (image_height + 2 * padding_pixel)
-            mega_image_height_end = mega_image_height_start + image_height
-            mega_image_width_start = 1 + cell_col * (image_width + 2 * padding_pixel)
-            mega_image_width_end = mega_image_width_start + image_width
+            mega_image_height_start = 1 + cell_row * (single_resized_image_shape[0] + 2 * padding_pixel)
+            mega_image_height_end = mega_image_height_start + single_resized_image_shape[0]
+            mega_image_width_start = 1 + cell_col * (single_resized_image_shape[1] + 2 * padding_pixel)
+            mega_image_width_end = mega_image_width_start + single_resized_image_shape[1]
             mega_image[mega_image_height_start:mega_image_height_end, mega_image_width_start:mega_image_width_end,:] = unit_images[i]
 
-        return ensure_uint255_and_resize_without_fit(mega_image, resize_shape)
+        return mega_image
 
     except:
         print '\nAttempted to load files from %s but failed. ' % unit_folder_path

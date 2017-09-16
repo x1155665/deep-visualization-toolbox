@@ -188,11 +188,12 @@ class LiveVis(object):
                 redraw_needed |= app.redraw_needed()
 
             # Grab latest frame from input_updater thread
-            fr_idx,fr_data = self.input_updater.get_frame()
+            fr_idx,fr_data,fr_label = self.input_updater.get_frame()
             is_new_frame = (fr_idx != latest_frame_idx and fr_data is not None)
             if is_new_frame:
                 latest_frame_idx = fr_idx
                 latest_frame_data = fr_data
+                latest_label = fr_label
                 frame_for_apps = fr_data
 
             if is_new_frame:
@@ -206,7 +207,7 @@ class LiveVis(object):
                 # Pass frame to apps for processing
                 for app_name, app in self.apps.iteritems():
                     with WithTimer('%s:handle_input' % app_name, quiet = self.debug_level < 1):
-                        app.handle_input(latest_frame_data, self.panes)
+                        app.handle_input(latest_frame_data, latest_label, self.panes)
                 frame_for_apps = None
 
             # Tell each app to draw

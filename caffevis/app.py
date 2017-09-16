@@ -175,7 +175,7 @@ class CaffeVisApp(BaseApp):
     def _can_skip_all(self, panes):
         return ('caffevis_layers' not in panes.keys())
         
-    def handle_input(self, input_image, panes):
+    def handle_input(self, input_image, input_label, panes):
         if self.debug_level > 1:
             print 'handle_input: frame number', self.handled_frames, 'is', 'None' if input_image is None else 'Available'
         self.handled_frames += 1
@@ -186,6 +186,7 @@ class CaffeVisApp(BaseApp):
             if self.debug_level > 1:
                 print 'CaffeVisApp.handle_input: pushed frame'
             self.state.next_frame = input_image
+            self.state.next_label = input_label
             if self.debug_level > 1:
                 print 'CaffeVisApp.handle_input: caffe_net_state is:', self.state.caffe_net_state
     
@@ -326,6 +327,9 @@ class CaffeVisApp(BaseApp):
 
             if fps > 0:
                 print >>status, '| FPS: %.01f' % fps
+
+            if self.state.next_label:
+                print >> status, '| GT Label: %s' % self.state.next_label
 
             if self.state.extra_msg:
                 print >>status, '|', self.state.extra_msg
@@ -482,14 +486,18 @@ class CaffeVisApp(BaseApp):
         pane.data[:] = to_255(self.settings.window_background)
         pane.data[0:display_2D_resize.shape[0], 0:display_2D_resize.shape[1], :] = display_2D_resize
         
-        if self.settings.caffevis_label_layers and default_layer_name in self.settings.caffevis_label_layers and self.labels and self.state.cursor_area == 'bottom':
+        if self.settings.caffevis_label_layers and default_layer_name in self.settings.caffevis_label_layers and self.state.cursor_area == 'bottom':
             # Display label annotation atop layers pane (e.g. for fc8/prob)
             defaults = {'face':  getattr(cv2, self.settings.caffevis_label_face),
                         'fsize': self.settings.caffevis_label_fsize,
                         'clr':   to_255(self.settings.caffevis_label_clr),
                         'thick': self.settings.caffevis_label_thick}
             loc_base = self.settings.caffevis_label_loc[::-1]   # Reverse to OpenCV c,r order
-            lines = [FormattedString(self.labels[self.state.selected_unit], defaults)]
+
+            if self.labels:
+                lines = [FormattedString(self.labels[self.state.selected_unit], defaults)]
+            else:
+                lines = [FormattedString(str(self.net.blobs[default_layer_name].data[0,self.state.selected_unit]), defaults)]
             cv2_typeset_text(pane.data, lines, loc_base)
             
         return display_3D_highres
@@ -567,7 +575,7 @@ class CaffeVisApp(BaseApp):
 
             try:
 
-                unit_first_image = get_image_from_files(unit_folder_path, False, resize_shape, first_only)
+                unit_first_image = get_image_from_files(self.settings, unit_folder_path, False, resize_shape, first_only)
 
                 # handle first generation of results container
                 if display_3D_highres is None:
@@ -743,7 +751,7 @@ class CaffeVisApp(BaseApp):
             img_key_layer = state_layer
 
         if self.settings.caffevis_jpgvis_layers and img_key_layer in self.settings.caffevis_jpgvis_layers and cursor_area == 'bottom' and show_unit_jpgs:
-            img_key = (img_key_layer, state_selected_unit, pane.data.shape)
+            img_key = (img_key_layer, state_selected_unit, pane.data.shape, self.state.show_maximal_score)
             img_resize = self.img_cache.get(img_key, None)
             if img_resize is None:
                 # If img_resize is None, loading has not yet been attempted, so show stale image and request load by JPGVisLoadingThread
@@ -812,7 +820,7 @@ class CaffeVisApp(BaseApp):
             
         for tag in ('sel_layer_left', 'sel_layer_right', 'zoom_mode', 'next_pattern_mode','pattern_first_only',
                     'ez_back_mode_loop', 'freeze_back_unit', 'show_back', 'back_mode', 'back_filt_mode',
-                    'boost_gamma', 'boost_individual', 'reset_state', 'siamese_input_mode'):
+                    'boost_gamma', 'boost_individual', 'reset_state', 'siamese_input_mode', 'show_maximal_score'):
             key_strings, help_string = self.bindings.get_key_help(tag)
             label = '%10s:' % (','.join(key_strings))
             lines.append([FormattedString(label, defaults, width=120, align='right'),

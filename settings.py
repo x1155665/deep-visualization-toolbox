@@ -317,6 +317,13 @@ caffevis_label_clr = locals().get('caffevis_label_clr', (.8,.8,.8))
 caffevis_label_fsize = locals().get('caffevis_label_fsize', 1.0 * global_font_size)
 caffevis_label_thick = locals().get('caffevis_label_thick', 1)
 
+# Font settings for score overlay text (shown on maximal images on rightmost pane)
+caffevis_score_face = locals().get('caffevis_score_face', 5) # this is a hacky way to use FONT_HERSHEY_COMPLEX_SMALL
+caffevis_score_loc = locals().get('caffevis_score_loc', (20,10))   # r,c order
+caffevis_score_clr = locals().get('caffevis_score_clr', (.5,1,.5))
+caffevis_score_fsize = locals().get('caffevis_score_fsize', 1.0 * global_font_size)
+caffevis_score_thick = locals().get('caffevis_score_thick', 1)
+
 # caffe net parameter - channel swap
 caffe_net_channel_swap = locals().get('caffe_net_channel_swap', (2,1,0))
 

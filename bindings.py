@@ -131,5 +131,8 @@ _.add('toggle_unit_jpgs', '9',
 _.add('siamese_input_mode', 'v',
         'Cycle between siamese input modes {first image, second image, both images}')
 
+_.add('show_maximal_score', 'r',
+        'Toggle showing maximal score overlays {on, off}')
+
 
 bindings = _

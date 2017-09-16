@@ -45,6 +45,9 @@ class InputImageFetcher(CodependentThread):
         # latest loaded image frame, holds the pixels and used to force reloading
         self.latest_static_frame = None
 
+        # latest label for loaded image
+        self.latest_label = None
+
         # keeps current index of loaded file, doesn't seem important
         self.static_file_idx = None
 
@@ -100,6 +103,7 @@ class InputImageFetcher(CodependentThread):
             if not self.static_file_stretch_mode:
                 self.static_file_stretch_mode = True
                 self.latest_static_frame = None   # Force reload
+                self.latest_label = None
                 #self.latest_frame_is_from_cam = True  # Force reload
         
     def set_mode_stretch_off(self):
@@ -107,6 +111,7 @@ class InputImageFetcher(CodependentThread):
             if self.static_file_stretch_mode:
                 self.static_file_stretch_mode = False
                 self.latest_static_frame = None   # Force reload
+                self.latest_label = None
                 #self.latest_frame_is_from_cam = True  # Force reload
         
     def toggle_stretch_mode(self):
@@ -157,7 +162,7 @@ class InputImageFetcher(CodependentThread):
         is not valid.
         '''
         with self.lock:
-            return (self.latest_frame_idx, self.latest_frame_data)
+            return (self.latest_frame_idx, self.latest_frame_data, self.latest_label)
 
     def increment_static_file_idx(self, amount = 1):
         with self.lock:
@@ -184,6 +189,7 @@ class InputImageFetcher(CodependentThread):
             # available_files - local list of files
             if self.settings.static_files_input_mode == "directory":
                 available_files = get_files_from_directory(self.settings)
+                labels = None
             elif (self.settings.static_files_input_mode == "image_list") and (not self.settings.is_siamese):
                 available_files, labels = get_files_from_image_list(self.settings)
             elif (self.settings.static_files_input_mode == "image_list") and (self.settings.is_siamese):
@@ -220,4 +226,8 @@ class InputImageFetcher(CodependentThread):
                         im = crop_to_square(im)
 
                 self.latest_static_frame = im
+
+                # if we have labels, keep it
+                if labels:
+                    self.latest_label = labels[self.static_file_idx]
             self._increment_and_set_frame(self.latest_static_frame, False)
