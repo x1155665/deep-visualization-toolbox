@@ -151,10 +151,6 @@ def main():
     lr_params = parse_and_validate_lr_params(parser, args.lr_policy, args.lr_params)
     push_spatial = parse_and_validate_push_spatial(parser, args.push_spatial)
 
-    net_channel_swap = settings.caffe_net_channel_swap
-
-    range_scale = settings.caffe_net_raw_scale
-            
     # Load network
     sys.path.insert(0, os.path.join(args.caffe_root, 'python'))
     import caffe
@@ -168,9 +164,9 @@ def main():
     net = caffe.Classifier(
         args.deploy_proto,
         args.net_weights,
-        mean=None,  # Set to None for now, assign later         # self._data_mean,
-        channel_swap=net_channel_swap,
-        raw_scale=range_scale,
+        mean=None,  # Set to None for now, assign later self._data_mean
+        channel_swap=settings.caffe_net_channel_swap,
+        raw_scale=settings.caffe_net_raw_scale,
         image_dims=settings.caffe_net_image_dims,
     )
 
@@ -221,7 +217,7 @@ def main():
     batched_data_mean = np.repeat(data_mean[np.newaxis, :, :, :], args.batch_size, axis=0)
     optimizer = GradientOptimizer(settings, net, batched_data_mean, labels = labels,
                                   label_layers = settings.caffevis_label_layers,
-                                  channel_swap_to_rgb = net_channel_swap)
+                                  channel_swap_to_rgb = settings.caffe_net_channel_swap)
 
     # go over push layers
     for count, push_layer in enumerate(args.push_layers):

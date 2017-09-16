@@ -164,6 +164,12 @@ def load_mean(data_mean_file):
     return data_mean
 
 
+def load_imagenet_mean(settings):
+    imagenet_mean = np.load(settings.caffevis_caffe_root + 'python/caffe/imagenet/ilsvrc_2012_mean.npy')
+    imagenet_mean = imagenet_mean[:, 14:14+227, 14:14+227]    # (3,256,256) -> (3,227,227) Crop to center 227x227 section
+    return imagenet_mean
+
+
 def get_image_from_files(settings, unit_folder_path, should_crop_to_corner, resize_shape, first_only, captions = []):
     try:
 

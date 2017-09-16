@@ -4,45 +4,16 @@ import errno
 import os
 import sys
 from datetime import datetime
+import cv2
 
 import numpy as np
+from image_misc import cv2_read_file_rgb
 from caffe_misc import RegionComputer, save_caffe_image, get_max_data_extent, extract_patch_from_image, \
     compute_data_layer_focus_area
 from misc import get_files_from_image_list
 from misc import get_files_from_siamese_image_list
 
 from jby_misc import WithTimer
-from loaders import load_imagenet_mean, load_labels
-
-
-def hardcoded_get(settings):
-    prototxt = '/home/jyosinsk/results/140311_234854_afadfd3_priv_netbase_upgraded/deploy_1.prototxt'
-    weights = '/home/jyosinsk/results/140311_234854_afadfd3_priv_netbase_upgraded/caffe_imagenet_train_iter_450000'
-    datadir = '/home/jyosinsk/imagenet2012/val'
-    filelist = 'mini_valid.txt'
-
-    imagenet_mean = load_imagenet_mean(settings)
-    sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
-    import caffe
-
-    if settings.caffevis_mode_gpu:
-        caffe.set_mode_gpu()
-        print 'CaffeVisApp mode (in main thread):     GPU'
-    else:
-        caffe.set_mode_cpu()
-        print 'CaffeVisApp mode (in main thread):     CPU'
-
-    net = caffe.Classifier(prototxt, weights,
-                           mean=imagenet_mean,
-                           channel_swap=(2,1,0),
-                           raw_scale=255,
-                           image_dims=(256, 256))
-    net.set_phase_test()
-    net.set_mode_cpu()
-    labels = load_labels(settings)
-
-    return net, imagenet_mean, labels, datadir, filelist
-
 
 
 def mkdir_p(path):
@@ -217,7 +188,7 @@ def scan_images_for_maxes(settings, net, datadir, n_top):
         if do_print:
             print '%s   Image %d/%d' % (datetime.now().ctime(), image_idx, len(image_filenames))
         with WithTimer('Load image', quiet = not do_print):
-            im = caffe.io.load_image(os.path.join(datadir, filename))
+            im = cv2_read_file_rgb(os.path.join(datadir, filename))
         with WithTimer('Predict   ', quiet = not do_print):
             net.predict([im], oversample = False)   # Just take center crop
         with WithTimer('Update    ', quiet = not do_print):
@@ -248,12 +219,12 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top):
         if do_print:
             print '%s   Pair %d/%d' % (datetime.now().ctime(), image_idx, len(image_filenames))
         with WithTimer('Load image', quiet=not do_print):
-            im1 = caffe.io.load_image(os.path.join(datadir, filename1))
-            im2 = caffe.io.load_image(os.path.join(datadir, filename2))
+            im1 = cv2_read_file_rgb(os.path.join(datadir, filename1))
+            im2 = cv2_read_file_rgb(os.path.join(datadir, filename2))
 
             net_input_dims = net.blobs['data'].data.shape[2:4]
-            im1 = caffe.io.resize_image(im1, net_input_dims)
-            im2 = caffe.io.resize_image(im2, net_input_dims)
+            im1 = cv2.resize(im1, net_input_dims)
+            im2 = cv2.resize(im2, net_input_dims)
 
             im = np.concatenate((im1, im2), axis=2)
 
@@ -288,7 +259,7 @@ def save_representations(settings, net, datadir, filelist, layer, first_N = None
         if do_print:
             print '%s   Image %d/%d' % (datetime.now().ctime(), image_idx, len(image_indices))
         with WithTimer('Load image', quiet = not do_print):
-            im = caffe.io.load_image(os.path.join(datadir, filename))
+            im = cv2_read_file_rgb(os.path.join(datadir, filename))
         with WithTimer('Predict   ', quiet = not do_print):
             net.predict([im], oversample = False)   # Just take center crop
         with WithTimer('Store     ', quiet = not do_print):
@@ -352,7 +323,7 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
             filename = image_filenames[im_idx]
             do_print = (max_idx_0 == 0)
             if do_print:
-                print '%s   Output file/image(s) %d/%d' % (datetime.now().ctime(), cc * num_top, n_total_images)
+                print '%s   Output file/image(s) %d/%d   layer %s channel %d' % (datetime.now().ctime(), cc * num_top, n_total_images, layer,channel_idx)
 
             [out_ii_start, out_ii_end, out_jj_start, out_jj_end, data_ii_start, data_ii_end, data_jj_start, data_jj_end] = \
                 compute_data_layer_focus_area(mt.is_conv, ii, jj, rc, layer, size_ii, size_jj, data_size_ii, data_size_jj)
@@ -376,18 +347,18 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
                     filename2 = filename[1]
 
                     # load both images
-                    im1 = caffe.io.load_image(os.path.join(datadir, filename1))
-                    im2 = caffe.io.load_image(os.path.join(datadir, filename2))
+                    im1 = cv2_read_file_rgb(os.path.join(datadir, filename1))
+                    im2 = cv2_read_file_rgb(os.path.join(datadir, filename2))
 
                     # resize images according to input dimension
                     net_input_dims = net.blobs['data'].data.shape[2:4]
-                    im1 = caffe.io.resize_image(im1, net_input_dims)
-                    im2 = caffe.io.resize_image(im2, net_input_dims)
+                    im1 = cv2.resize(im1, net_input_dims)
+                    im2 = cv2.resize(im2, net_input_dims)
 
                     # concatenate channelwise
                     im = np.concatenate((im1, im2), axis=2)
                 else:
-                    im = caffe.io.load_image(os.path.join(datadir, filename))
+                    im = cv2_read_file_rgb(os.path.join(datadir, filename))
 
             with WithTimer('Predict   ', quiet = not do_print):
                 net.predict([im], oversample = False)

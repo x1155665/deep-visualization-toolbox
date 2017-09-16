@@ -40,8 +40,6 @@ class CaffeVisApp(BaseApp):
         else:
             self._net_channel_swap_inv = tuple([self._net_channel_swap.index(ii) for ii in range(len(self._net_channel_swap))])
 
-        self._range_scale = settings.caffe_net_raw_scale
-
         # Set the mode to CPU or GPU. Note: in the latest Caffe
         # versions, there is one Caffe object *per thread*, so the
         # mode must be set per thread! Here we set the mode for the
@@ -57,9 +55,9 @@ class CaffeVisApp(BaseApp):
         self.net = caffe.Classifier(
             settings.caffevis_deploy_prototxt,
             settings.caffevis_network_weights,
-            mean = None,                                 # Set to None for now, assign later         # self._data_mean,
+            mean = None, # Set to None for now, assign later self._data_mean
             channel_swap = self._net_channel_swap,
-            raw_scale = self._range_scale,
+            raw_scale = settings.caffe_net_raw_scale,
             image_dims=settings.caffe_net_image_dims,
         )
 

@@ -12,8 +12,7 @@ import cPickle as pickle
 
 import settings
 
-from caffevis.caffevis_helper import load_mean
-from loaders import load_imagenet_mean, load_labels
+from caffevis.caffevis_helper import load_mean, load_imagenet_mean
 from jby_misc import WithTimer
 from max_tracker import scan_images_for_maxes, scan_pairs_for_maxes
 
