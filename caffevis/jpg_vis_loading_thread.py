@@ -9,8 +9,7 @@ import math
 from codependent_thread import CodependentThread
 from image_misc import caffe_load_image, ensure_uint255_and_resize_to_fit, cv2_read_file_rgb, \
     ensure_uint255_and_resize_without_fit
-from caffevis_helper import crop_to_corner
-
+from caffevis_helper import crop_to_corner, get_image_from_files
 
 
 class JPGVisLoadingThread(CodependentThread):
@@ -48,51 +47,18 @@ class JPGVisLoadingThread(CodependentThread):
             images[image_index_to_set] = np.zeros((resize_shape[0], resize_shape[1], 3), dtype=np.uint8)
             pass
 
+
+
+
     def load_image_into_pane_max_tracker_format(self, state_layer, state_selected_unit, resize_shape, images,
-                                                file_search_pattern, image_index_to_set, should_crop_to_corner=False):
+                                                file_search_pattern, image_index_to_set, should_crop_to_corner=False, first_only = False):
 
         unit_folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, state_layer,
                                         "unit_%04d" % (state_selected_unit),
                                         file_search_pattern)
 
-        try:
-
-            # list unit images
-            unit_images_path = sorted(glob.glob(unit_folder_path))
-
-            # load all images
-            unit_images = [caffe_load_image(unit_image_path, color=True, as_uint=True) for unit_image_path in unit_images_path]
-
-            if should_crop_to_corner:
-                unit_images = [crop_to_corner(img, 2) for img in unit_images]
-
-            # build mega image
-            (image_height, image_width, channels) = unit_images[0].shape
-            num_images = len(unit_images)
-            images_per_axis = int(math.ceil(math.sqrt(num_images)))
-            padding_pixel = 1
-            mega_image_height = images_per_axis * (image_height + 2*padding_pixel)
-            mega_image_width = images_per_axis * (image_width + 2*padding_pixel)
-            mega_image = np.zeros((mega_image_height,mega_image_width,channels), dtype=np.uint8)
-
-            for i in range(num_images):
-                cell_row = i / images_per_axis
-                cell_col = i % images_per_axis
-                mega_image_height_start = 1 + cell_row * (image_height + 2*padding_pixel)
-                mega_image_height_end = mega_image_height_start + image_height
-                mega_image_width_start = 1 + cell_col * (image_width + 2*padding_pixel)
-                mega_image_width_end = mega_image_width_start + image_width
-                mega_image[mega_image_height_start:mega_image_height_end,mega_image_width_start:mega_image_width_end,:] = unit_images[i]
-
-            images[image_index_to_set] = ensure_uint255_and_resize_without_fit(mega_image, resize_shape)
-
-        except:
-            print '\nAttempted to load files from %s but failed. To supress this warning, remove layer "%s" from settings.caffevis_jpgvis_layers' % \
-                  (unit_folder_path, state_layer)
-            # set black image as place holder
-            images[image_index_to_set] = np.zeros((resize_shape[0], resize_shape[1], 3), dtype=np.uint8)
-            pass
-
+        images[image_index_to_set] = get_image_from_files(unit_folder_path, should_crop_to_corner, resize_shape, first_only)
+        return
 
     def run(self):
         print 'JPGVisLoadingThread.run called'

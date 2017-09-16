@@ -18,9 +18,9 @@ from image_misc import norm01, norm01c, norm0255, tile_images_normalize, ensure_
 from image_misc import FormattedString, cv2_typeset_text, to_255
 from caffe_proc_thread import CaffeProcThread
 from jpg_vis_loading_thread import JPGVisLoadingThread
-from caffevis_app_state import CaffeVisAppState, SiameseInputMode
+from caffevis_app_state import CaffeVisAppState, SiameseInputMode, PatternMode
 from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, \
-    check_force_backward_true, load_mean
+    check_force_backward_true, load_mean, get_image_from_files
 
 
 class CaffeVisApp(BaseApp):
@@ -309,7 +309,10 @@ class CaffeVisApp(BaseApp):
         status = StringIO.StringIO()
         fps = self.proc_thread.approx_fps()
         with self.state.lock:
-            print >>status, 'pattern' if self.state.pattern_mode else ('back' if self.state.layers_show_back else 'fwd'),
+            pattern_first_mode = "first" if self.state.pattern_first_only else "all"
+            print >>status, 'pattern(' + pattern_first_mode + ' optimized max)' if self.state.pattern_mode == PatternMode.MAXIMAL_OPTIMIZED_IMAGE else \
+                ('pattern(' + pattern_first_mode + ' input max)' if self.state.pattern_mode == PatternMode.MAXIMAL_INPUT_IMAGE else
+                ('back' if self.state.layers_show_back else 'fwd')),
             print >>status, '%s:%d |' % (self.state.get_default_layer_name(), self.state.selected_unit),
             if not self.state.back_enabled:
                 print >>status, 'Back: off',
@@ -377,20 +380,36 @@ class CaffeVisApp(BaseApp):
         tile_rows, tile_cols = self.net_layer_info[default_layer_name]['tiles_rc']
 
         display_3D_highres = None
-        if self.state.pattern_mode:
+        if self.state.pattern_mode != PatternMode.OFF:
             # Show desired patterns loaded from disk
 
-            if self.settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image':
+            if self.state.pattern_mode == PatternMode.MAXIMAL_OPTIMIZED_IMAGE:
 
-                display_3D, display_3D_highres = self.load_pattern_images_original_format(default_layer_name,
-                                                                                          layer_dat_3D, n_tiles, pane,
-                                                                                          tile_cols, tile_rows)
+                if self.settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image':
 
-            elif self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
+                    display_3D, display_3D_highres = self.load_pattern_images_original_format(default_layer_name,
+                                                                                              layer_dat_3D, n_tiles, pane,
+                                                                                              tile_cols, tile_rows)
 
-                display_3D, display_3D_highres = self.load_pattern_images_optimizer_format(default_layer_name,
-                                                                                          layer_dat_3D, n_tiles, pane,
-                                                                                          tile_cols, tile_rows)
+                elif self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
+
+                    display_3D, display_3D_highres = self.load_pattern_images_optimizer_format(default_layer_name,
+                                                                                              layer_dat_3D, n_tiles, pane,
+                                                                                              tile_cols, tile_rows, self.state.pattern_first_only,
+                                                                                              file_search_pattern='opt*.jpg')
+            elif self.state.pattern_mode == PatternMode.MAXIMAL_INPUT_IMAGE:
+
+                # do something
+                if self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
+                    display_3D, display_3D_highres = self.load_pattern_images_optimizer_format(default_layer_name,
+                                                                                               layer_dat_3D, n_tiles,
+                                                                                               pane,
+                                                                                               tile_cols, tile_rows, self.state.pattern_first_only,
+                                                                                               file_search_pattern='maxim*.png')
+
+
+            else:
+                raise Exception("Invalid value of pattern mode: %d" % self.state.pattern_mode)
         else:
 
             # Show data from network (activations or diffs)
@@ -429,7 +448,7 @@ class CaffeVisApp(BaseApp):
         #   e.g. (1000,1,2,3) -> (1000,2,2,3)
         if (display_3D.shape[1] == 1) and (display_3D.shape[2] == 2):
             display_3D = np.tile(display_3D, (1, 2, 1, 1))
-        if self.state.layers_show_back and not self.state.pattern_mode:
+        if self.state.layers_show_back and self.state.pattern_mode == PatternMode.OFF:
             padval = self.settings.caffevis_layer_clr_back_background
         else:
             padval = self.settings.window_background
@@ -508,7 +527,7 @@ class CaffeVisApp(BaseApp):
         return display_3D, display_3D_highres
 
     def load_pattern_images_optimizer_format(self, default_layer_name, layer_dat_3D, n_tiles, pane,
-                                            tile_cols, tile_rows):
+                                            tile_cols, tile_rows, first_only, file_search_pattern):
         display_3D_highres = None
         load_layer = default_layer_name
         if self.settings.caffevis_jpgvis_remap and load_layer in self.settings.caffevis_jpgvis_remap:
@@ -518,7 +537,7 @@ class CaffeVisApp(BaseApp):
             # get number of units
             units_num = layer_dat_3D.shape[0]
 
-            pattern_image_key = (self.settings.caffevis_unit_jpg_dir, load_layer, "unit_%04d", units_num, 'opt*.jpg')
+            pattern_image_key = (self.settings.caffevis_unit_jpg_dir, load_layer, "unit_%04d", units_num, file_search_pattern, first_only)
 
             # Get highres version
             display_3D_highres = self.img_cache.get(pattern_image_key, None)
@@ -526,7 +545,8 @@ class CaffeVisApp(BaseApp):
             if display_3D_highres is None:
                 try:
                     with WithTimer('CaffeVisApp:load_first_image_per_unit', quiet=self.debug_level < 1):
-                        display_3D_highres = self.load_first_image_per_unit(display_3D_highres, load_layer, units_num)
+                        resize_shape = pane.data.shape
+                        display_3D_highres = self.load_image_per_unit(display_3D_highres, load_layer, units_num, first_only, resize_shape, file_search_pattern)
 
                 except IOError:
                     # File does not exist, so just display disabled.
@@ -538,19 +558,16 @@ class CaffeVisApp(BaseApp):
         display_3D = self.downsample_display_3d(display_3D_highres, layer_dat_3D, pane, tile_cols, tile_rows)
         return display_3D, display_3D_highres
 
-    def load_first_image_per_unit(self, display_3D_highres, load_layer, units_num):
+    def load_image_per_unit(self, display_3D_highres, load_layer, units_num, first_only, resize_shape, file_search_pattern):
         # for each neuron in layer
         for unit_id in range(0, units_num):
 
-            # load first image for neuron
             unit_folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, load_layer,
-                                            "unit_%04d" % (unit_id), 'opt*.jpg')
+                                            "unit_%04d" % (unit_id), file_search_pattern)
 
             try:
 
-                # load first image for unit
-                unit_first_image_path = sorted(glob.glob(unit_folder_path))[0]
-                unit_first_image = caffe_load_image(unit_first_image_path, color=True, as_uint=True)
+                unit_first_image = get_image_from_files(unit_folder_path, False, resize_shape, first_only)
 
                 # handle first generation of results container
                 if display_3D_highres is None:
@@ -793,7 +810,7 @@ class CaffeVisApp(BaseApp):
         lines.append([FormattedString('', defaults, width=120, align='right'),
                       FormattedString(nav_string, defaults)])
             
-        for tag in ('sel_layer_left', 'sel_layer_right', 'zoom_mode', 'pattern_mode',
+        for tag in ('sel_layer_left', 'sel_layer_right', 'zoom_mode', 'next_pattern_mode','pattern_first_only',
                     'ez_back_mode_loop', 'freeze_back_unit', 'show_back', 'back_mode', 'back_filt_mode',
                     'boost_gamma', 'boost_individual', 'reset_state', 'siamese_input_mode'):
             key_strings, help_string = self.bindings.get_key_help(tag)
