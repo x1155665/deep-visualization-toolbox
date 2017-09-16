@@ -398,12 +398,6 @@ optimize_image_rand_seed = locals().get('optimize_image_rand_seed', 0)
 # push-layer parameter for optimize_image.py
 optimize_image_push_layer = locals().get('optimize_image_push_layer', 'fc8')
 
-# push-channel parameter for optimize_image.py
-optimize_image_push_channel = locals().get('optimize_image_push_channel', '130')
-
-# push-spatial parameter for optimize_image.py
-optimize_image_push_spatial = locals().get('optimize_image_push_spatial', 'None')
-
 # decay parameter for optimize_image.py
 optimize_image_decay = locals().get('optimize_image_decay', 0)
 

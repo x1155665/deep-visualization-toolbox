@@ -41,9 +41,9 @@ def get_parser():
     # What to optimize
     parser.add_argument('--push-layer', type = str, default = settings.optimize_image_push_layer,
                         help = 'Name of layer that contains the desired neuron whose value is optimized.')
-    parser.add_argument('--push-channel', type = int, default = settings.optimize_image_push_channel,
+    parser.add_argument('--push-channel', type = int, default = '130',
                         help = 'Channel number for desired neuron whose value is optimized (channel for conv, neuron index for FC).')
-    parser.add_argument('--push-spatial', type = str, default = settings.optimize_image_push_spatial,
+    parser.add_argument('--push-spatial', type = str, default = 'None',
                         help = 'Which spatial location to push for conv layers. For FC layers, set this to None. For conv layers, set it to a tuple, e.g. when using `--push-layer conv5` on AlexNet, --push-spatial (6,6) will maximize the center unit of the 13x13 spatial grid.')
     parser.add_argument('--push-dir', type = float, default = 1,
                         help = 'Which direction to push the activation of the selected neuron, that is, the value used to begin backprop. For example, use 1 to maximize the selected neuron activation and  -1 to minimize it.')
@@ -127,6 +127,20 @@ def parse_and_validate_push_spatial(parser, push_spatial):
     return push_spatial
 
 
+def get_layer_info(settings, layer_name):
+    '''
+        get layer info (name, type, input, output, filter, stride, pad) from settings
+
+    :param settings: contains script settings
+    :param layer_name: name of layer
+    :return: (name, type, input, output, filter, stride, pad)
+    '''
+
+    # go over layers
+    for (name, type, input, output, filter, stride, pad) in settings.max_tracker_layers_list:
+        if name == layer_name:
+            return (name, type, input, output, filter, stride, pad)
+
 
 def main():
     parser = get_parser()
@@ -202,29 +216,44 @@ def main():
     optimizer = GradientOptimizer(settings, net, data_mean, labels = labels,
                                   label_layers = settings.caffevis_label_layers,
                                   channel_swap_to_rgb = net_channel_swap)
-    
-    params = FindParams(
-        start_at = args.start_at,
-        rand_seed = args.rand_seed,
-        push_layer = args.push_layer,
-        push_channel = args.push_channel,
-        push_spatial = push_spatial,
-        push_dir = args.push_dir,
-        decay = args.decay,
-        blur_radius = args.blur_radius,
-        blur_every = args.blur_every,
-        small_val_percentile = args.small_val_percentile,
-        small_norm_percentile = args.small_norm_percentile,
-        px_benefit_percentile = args.px_benefit_percentile,
-        px_abs_benefit_percentile = args.px_abs_benefit_percentile,
-        lr_policy = args.lr_policy,
-        lr_params = lr_params,
-        max_iter = args.max_iter,
-    )
 
-    prefix_template = '%s_%s_' % (args.output_prefix, args.output_template)
-    im = optimizer.run_optimize(params, prefix_template = prefix_template,
-                                brave = args.brave, skipbig = args.skipbig)
+    # get layer type
+    (name, type, input, output, filter, stride, pad) = get_layer_info(settings, args.push_layer)
+
+    if type == 'FullyConnected':
+        # get number of units
+        channels = output
+        push_spatial = (0, 0)
+    elif type == 'Convolution':
+        # get number of channels
+        channels = output[2]
+        push_spatial = (filter[0]/2, filter[1]/2)
+
+    # go over channels
+    for current_channel in range(channels):
+
+        params = FindParams(
+            start_at = args.start_at,
+            rand_seed = args.rand_seed,
+            push_layer = args.push_layer,
+            push_channel = current_channel,
+            push_spatial = push_spatial,
+            push_dir = args.push_dir,
+            decay = args.decay,
+            blur_radius = args.blur_radius,
+            blur_every = args.blur_every,
+            small_val_percentile = args.small_val_percentile,
+            small_norm_percentile = args.small_norm_percentile,
+            px_benefit_percentile = args.px_benefit_percentile,
+            px_abs_benefit_percentile = args.px_abs_benefit_percentile,
+            lr_policy = args.lr_policy,
+            lr_params = lr_params,
+            max_iter = args.max_iter,
+        )
+
+        prefix_template = '%s_%s_' % (args.output_prefix, args.output_template)
+        im = optimizer.run_optimize(params, prefix_template = prefix_template,
+                                    brave = args.brave, skipbig = args.skipbig)
 
 
 

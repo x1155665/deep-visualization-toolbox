@@ -92,9 +92,9 @@ class RegionComputer(object):
             if type == 'Input':
                 _tmp.append((name, None))
             elif type == 'Convolution':
-                _tmp.append((name, get_conv_converter(input, output, filter, stride, pad)))
+                _tmp.append((name, get_conv_converter(input[0:1], output[0:1], filter, stride, pad)))
             elif type == 'Pooling':
-                _tmp.append((name, get_pool_converter(input, output, filter, stride, pad)))
+                _tmp.append((name, get_pool_converter(input[0:1], output[0:1], filter, stride, pad)))
             else:
                 continue # skip adding layer
 
