@@ -12,40 +12,20 @@ from misc import WithTimer
 from numpy_cache import FIFOLimitedArrayCache
 from app_base import BaseApp
 from image_misc import norm01, norm01c, norm0255, tile_images_normalize, ensure_float01, tile_images_make_tiles, \
-    ensure_uint255_and_resize_to_fit, get_tiles_height_width, get_tiles_height_width_ratio
+    ensure_uint255_and_resize_to_fit, get_tiles_height_width, get_tiles_height_width_ratio, resize_without_fit
 from image_misc import FormattedString, cv2_typeset_text, to_255
 from caffe_proc_thread import CaffeProcThread
 from jpg_vis_loading_thread import JPGVisLoadingThread
-from caffevis_app_state import CaffeVisAppState
+from caffevis_app_state import CaffeVisAppState, SiameseInputMode
 from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, \
     check_force_backward_true, load_mean
 
-
-def process_settings(settings):
-
-    # convert layers_list_to_show to layer_to_selected_image, only relevant in siamese networks
-    if settings.is_siamese:
-        settings.siamese_layer_to_selected_image = dict()
-        for item in settings.siamese_layers_list:
-
-            # if simple layer name, selected both images
-            if type(item) is str:
-                settings.siamese_layer_to_selected_image[item] = -1
-
-            # if item is pair of layers
-            elif (type(item) is tuple) and (len(item) == 2):
-                settings.siamese_layer_to_selected_image[item[0]] = 0
-                settings.siamese_layer_to_selected_image[item[1]] = 1
-
-    return
 
 class CaffeVisApp(BaseApp):
     '''App to visualize using caffe.'''
 
     def __init__(self, settings, key_bindings):
         super(CaffeVisApp, self).__init__(settings, key_bindings)
-
-        process_settings(settings)
 
         print 'Got settings', settings
         self.settings = settings
@@ -151,7 +131,7 @@ class CaffeVisApp(BaseApp):
     def start(self):
         self.state = CaffeVisAppState(self.net, self.settings, self.bindings, self.net_layer_info)
         self.state.drawing_stale = True
-        self.layer_print_names = [get_pretty_layer_name(self.settings, nn) for nn in self.state._layers]
+        self.header_print_names = [get_pretty_layer_name(self.settings, nn) for nn in self.state._headers]
 
         if self.proc_thread is None or not self.proc_thread.is_alive():
             # Start thread if it's not already running
@@ -295,13 +275,13 @@ class CaffeVisApp(BaseApp):
                     'clr':   to_255(self.settings.caffevis_control_clr),
                     'thick': self.settings.caffevis_control_thick}
 
-        for ii in range(len(self.layer_print_names)):
-            fs = FormattedString(self.layer_print_names[ii], defaults)
-            this_layer = self.state._layers[ii]
+        for ii in range(len(self.header_print_names)):
+            fs = FormattedString(self.header_print_names[ii], defaults)
+            this_layer = self.state._headers[ii]
             if self.state.backprop_selection_frozen and this_layer == self.state.backprop_layer:
                 fs.clr   = to_255(self.settings.caffevis_control_clr_bp)
                 fs.thick = self.settings.caffevis_control_thick_bp
-            if this_layer == self.state.layer:
+            if this_layer == self.state._headers[self.state.layer_idx]:
                 if self.state.cursor_area == 'top':
                     fs.clr = to_255(self.settings.caffevis_control_clr_cursor)
                     fs.thick = self.settings.caffevis_control_thick_cursor
@@ -328,7 +308,7 @@ class CaffeVisApp(BaseApp):
         fps = self.proc_thread.approx_fps()
         with self.state.lock:
             print >>status, 'pattern' if self.state.pattern_mode else ('back' if self.state.layers_show_back else 'fwd'),
-            print >>status, '%s:%d |' % (self.state.layer, self.state.selected_unit),
+            print >>status, '%s:%d |' % (self.state.get_default_layer_name(), self.state.selected_unit),
             if not self.state.back_enabled:
                 print >>status, 'Back: off',
             else:
@@ -353,27 +333,56 @@ class CaffeVisApp(BaseApp):
     
     def _draw_layer_pane(self, pane):
         '''Returns the data shown in highres format, b01c order.'''
-        
-        if self.state.layers_show_back:
-            layer_dat_3D = self.net.blobs[self.state.layer].diff[0]
+
+        default_layer_name = self.state.get_default_layer_name()
+
+        if self.state.siamese_input_mode_has_two_images(self.state.layer):
+
+            if self.state.layers_show_back:
+                layer_dat_3D_0 = self.net.blobs[self.state.layer[0]].diff[0]
+                layer_dat_3D_1 = self.net.blobs[self.state.layer[1]].diff[0]
+            else:
+                layer_dat_3D_0 = self.net.blobs[self.state.layer[0]].data[0]
+                layer_dat_3D_1 = self.net.blobs[self.state.layer[1]].data[0]
+
+            # Promote FC layers with shape (n) to have shape (n,1,1)
+            if len(layer_dat_3D_0.shape) == 1:
+                layer_dat_3D_0 = layer_dat_3D_0[:, np.newaxis, np.newaxis]
+                layer_dat_3D_1 = layer_dat_3D_1[:, np.newaxis, np.newaxis]
+
+                # we don't resize the images to half the size since there is no point in doing that in FC layers
+            else:
+                # resize images to half the size
+                half_pane_shape = (layer_dat_3D_0.shape[1], layer_dat_3D_0.shape[2] / 2)
+                layer_dat_3D_0 = resize_without_fit(layer_dat_3D_0.transpose((1, 2, 0)), half_pane_shape).transpose((2, 0, 1))
+                layer_dat_3D_1 = resize_without_fit(layer_dat_3D_1.transpose((1, 2, 0)), half_pane_shape).transpose((2, 0, 1))
+
+            # concatenate images side-by-side
+            layer_dat_3D = np.concatenate((layer_dat_3D_0, layer_dat_3D_1), axis=2)
+
         else:
-            layer_dat_3D = self.net.blobs[self.state.layer].data[0]
+            if self.state.layers_show_back:
+                layer_dat_3D = self.net.blobs[default_layer_name].diff[0]
+            else:
+                layer_dat_3D = self.net.blobs[default_layer_name].data[0]
+
         # Promote FC layers with shape (n) to have shape (n,1,1)
         if len(layer_dat_3D.shape) == 1:
-            layer_dat_3D = layer_dat_3D[:,np.newaxis,np.newaxis]
+            layer_dat_3D = layer_dat_3D[:, np.newaxis, np.newaxis]
 
         n_tiles = layer_dat_3D.shape[0]
-        tile_rows,tile_cols = self.net_layer_info[self.state.layer]['tiles_rc']
+
+        tile_rows, tile_cols = self.net_layer_info[default_layer_name]['tiles_rc']
 
         display_3D_highres = None
         if self.state.pattern_mode:
             # Show desired patterns loaded from disk
 
-            load_layer = self.state.layer
-            if self.settings.caffevis_jpgvis_remap and self.state.layer in self.settings.caffevis_jpgvis_remap:
-                load_layer = self.settings.caffevis_jpgvis_remap[self.state.layer]
+            load_layer = default_layer_name
 
-            
+            if self.settings.caffevis_jpgvis_remap and load_layer in self.settings.caffevis_jpgvis_remap:
+                load_layer = self.settings.caffevis_jpgvis_remap[load_layer]
+
             if self.settings.caffevis_jpgvis_layers and load_layer in self.settings.caffevis_jpgvis_layers:
                 jpg_path = os.path.join(self.settings.caffevis_unit_jpg_dir,
                                         'regularized_opt', load_layer, 'whole_layer.jpg')
@@ -441,8 +450,12 @@ class CaffeVisApp(BaseApp):
             display_3D = np.tile(display_3D, (1, 1, 1, 3))
         # Upsample unit length tiles to give a more sane tile / highlight ratio
         #   e.g. (1000,1,1,3) -> (1000,3,3,3)
-        if display_3D.shape[1] == 1:
+        if (display_3D.shape[1] == 1) and (display_3D.shape[2] == 1):
             display_3D = np.tile(display_3D, (1, 3, 3, 1))
+        # Upsample pair of unit length tiles to give a more sane tile / highlight ratio (occurs on siamese FC layers)
+        #   e.g. (1000,1,2,3) -> (1000,2,2,3)
+        if (display_3D.shape[1] == 1) and (display_3D.shape[2] == 2):
+            display_3D = np.tile(display_3D, (1, 2, 1, 1))
         if self.state.layers_show_back and not self.state.pattern_mode:
             padval = self.settings.caffevis_layer_clr_back_background
         else:
@@ -452,7 +465,7 @@ class CaffeVisApp(BaseApp):
         with self.state.lock:
             if self.state.cursor_area == 'bottom':
                 highlights[self.state.selected_unit] = self.settings.caffevis_layer_clr_cursor  # in [0,1] range
-            if self.state.backprop_selection_frozen and self.state.layer == self.state.backprop_layer:
+            if self.state.backprop_selection_frozen and default_layer_name == self.state.backprop_layer:
                 highlights[self.state.backprop_unit] = self.settings.caffevis_layer_clr_back_sel  # in [0,1] range
 
         _, display_2D = tile_images_make_tiles(display_3D, hw = (tile_rows,tile_cols), padval = padval, highlights = highlights)
@@ -477,7 +490,7 @@ class CaffeVisApp(BaseApp):
         pane.data[:] = to_255(self.settings.window_background)
         pane.data[0:display_2D_resize.shape[0], 0:display_2D_resize.shape[1], :] = display_2D_resize
         
-        if self.settings.caffevis_label_layers and self.state.layer in self.settings.caffevis_label_layers and self.labels and self.state.cursor_area == 'bottom':
+        if self.settings.caffevis_label_layers and default_layer_name in self.settings.caffevis_label_layers and self.labels and self.state.cursor_area == 'bottom':
             # Display label annotation atop layers pane (e.g. for fc8/prob)
             defaults = {'face':  getattr(cv2, self.settings.caffevis_label_face),
                         'fsize': self.settings.caffevis_label_fsize,
@@ -539,51 +552,74 @@ class CaffeVisApp(BaseApp):
             # Mode-specific processing
             assert back_mode in ('grad', 'deconv')
             assert back_filt_mode in ('raw', 'gray', 'norm', 'normblur')
+
+            # define helper function ro run processing once or twice, in case of siamese network
+            def run_processing_once_or_twice(image, process_image_fn):
+
+                # if siamese network, run processing twice
+                if self.settings.is_siamese:
+
+                    # split image to image0 and image1
+                    image0 = image[:, :, 0:3]
+                    image1 = image[:, :, 3:6]
+
+                    # combine image0 and image1
+                    if self.state.siamese_input_mode == SiameseInputMode.FIRST_IMAGE:
+                        # run processing on image0
+                        return process_image_fn(image0)
+
+                    elif self.state.siamese_input_mode == SiameseInputMode.SECOND_IMAGE:
+                        # run processing on image1
+                        return process_image_fn(image1)
+
+                    elif self.state.siamese_input_mode == SiameseInputMode.BOTH_IMAGES:
+
+                        # run processing on both image0 and image1
+                        image0 = process_image_fn(image0)
+                        image1 = process_image_fn(image1)
+
+                        # resize each gradient image to half the pane size
+                        half_pane_shape = (image.shape[1] / 2, image.shape[0])
+                        # half_pane_shape = (pane.data.shape[1] / 2, pane.data.shape[0])
+
+                        image0 = cv2.resize(image0[:], half_pane_shape)
+                        image1 = cv2.resize(image1[:], half_pane_shape)
+
+                        # generate the pane image by concatenating both images
+                        return np.concatenate((image0, image1), axis=1)
+
+                # else, normal network, run processing once
+                else:
+                    # run processing on image
+                    return process_image_fn(image)
+
+                raise Exception("flow should not arrive here")
+
+
             if back_filt_mode == 'raw':
-                grad_img = norm01c(grad_img, 0)
+                grad_img = run_processing_once_or_twice(grad_img, lambda grad_img: norm01c(grad_img, 0))
+
             elif back_filt_mode == 'gray':
-                grad_img = grad_img.mean(axis=2)
-                grad_img = norm01c(grad_img, 0)
+                grad_img = run_processing_once_or_twice(grad_img, lambda grad_img: norm01c(grad_img.mean(axis=2), 0))
+
             elif back_filt_mode == 'norm':
-                grad_img = np.linalg.norm(grad_img, axis=2)
-                grad_img = norm01(grad_img)
+                grad_img = run_processing_once_or_twice(grad_img, lambda grad_img: norm01(np.linalg.norm(grad_img, axis=2)))
+
+            elif back_filt_mode == 'normblur':
+                def do_norm_blur(grad_img):
+                    grad_img = np.linalg.norm(grad_img, axis=2)
+                    cv2.GaussianBlur(grad_img, (0, 0), self.settings.caffevis_grad_norm_blur_radius, grad_img)
+                    return norm01(grad_img)
+                grad_img = run_processing_once_or_twice(grad_img, do_norm_blur)
+
             else:
-                grad_img = np.linalg.norm(grad_img, axis=2)
-                cv2.GaussianBlur(grad_img, (0,0), self.settings.caffevis_grad_norm_blur_radius, grad_img)
-                grad_img = norm01(grad_img)
+                raise Exception('Invalid option for back_filter_mode: %s' % (back_filt_mode))
 
             # If necessary, re-promote from grayscale to color
             if len(grad_img.shape) == 2:
                 grad_img = np.tile(grad_img[:,:,np.newaxis], 3)
 
-            if (self.settings.is_siamese) and (grad_img.shape[2] == 6):
-
-                selected_image = -1
-                if state_layer in self.settings.siamese_layer_to_selected_image:
-                    selected_image = self.settings.siamese_layer_to_selected_image[state_layer]
-
-                # split gradient into two images, by channels
-                grad_img1 = grad_img[:, :, 0:3]
-                grad_img2 = grad_img[:, :, 3:6]
-
-                # use both images
-                if selected_image == -1:
-                    # resize each gradient image to half the pane size
-                    half_pane_shape = (pane.data.shape[0] / 2, pane.data.shape[1])
-                    grad_img_disp1 = cv2.resize(grad_img1[:], half_pane_shape)
-                    grad_img_disp2 = cv2.resize(grad_img2[:], half_pane_shape)
-
-                    # generate the pane image by concatenating both images
-                    grad_img_disp = np.concatenate((grad_img_disp1, grad_img_disp2), axis=1)
-
-                elif selected_image == 0:
-                    grad_img_disp = grad_img1
-
-                elif selected_image == 1:
-                    grad_img_disp = grad_img2
-
-            else:
-                grad_img_disp = grad_img
+            grad_img_disp = grad_img
 
             grad_img_resize = ensure_uint255_and_resize_to_fit(grad_img_disp, pane.data.shape)
             pane.data[0:grad_img_resize.shape[0], 0:grad_img_resize.shape[1], :] = grad_img_resize
@@ -592,7 +628,7 @@ class CaffeVisApp(BaseApp):
         pane.data[:] = to_255(self.settings.window_background)
 
         with self.state.lock:
-            state_layer, state_selected_unit, cursor_area, show_unit_jpgs = self.state.layer, self.state.selected_unit, self.state.cursor_area, self.state.show_unit_jpgs
+            state_layer, state_selected_unit, cursor_area, show_unit_jpgs = self.state.get_default_layer_name(), self.state.selected_unit, self.state.cursor_area, self.state.show_unit_jpgs
 
         try:
             # Some may be missing this setting

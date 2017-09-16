@@ -325,7 +325,6 @@ class LiveVis(object):
             frame_disp1 = cv2.resize(frame1[:], half_pane_shape)
             frame_disp2 = cv2.resize(frame2[:], half_pane_shape)
             frame_disp = np.concatenate((frame_disp1, frame_disp2), axis=1)
-
         else:
             frame_disp = cv2.resize(frame[:], full_pane_shape)
 
