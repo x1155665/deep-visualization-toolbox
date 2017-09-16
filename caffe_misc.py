@@ -201,7 +201,6 @@ def compute_data_layer_focus_area(is_conv, ii, jj, region_computer, layer, size_
             out_jj_end = size_jj - jj_outside
 
     else:
-        ii, jj = 0, 0
         data_ii_start, out_ii_start, data_jj_start, out_jj_start = 0, 0, 0, 0
         data_ii_end, out_ii_end, data_jj_end, out_jj_end = size_ii, size_ii, size_jj, size_jj
 

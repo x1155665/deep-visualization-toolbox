@@ -347,6 +347,7 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
                 im_idx, im_class, selected_input_index, ii, jj = mt.max_locs[channel_idx, max_idx]
             else:
                 im_idx, im_class, selected_input_index = mt.max_locs[channel_idx, max_idx]
+                ii, jj = 0, 0
             recorded_val = mt.max_vals[channel_idx, max_idx]
             filename = image_filenames[im_idx]
             do_print = (max_idx_0 == 0)
