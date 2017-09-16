@@ -419,6 +419,8 @@ optimize_image_max_iter = locals().get('optimize_image_max_iter', 500)
 # output-prefix parameter for optimize_image.py
 optimize_image_output_prefix = locals().get('optimize_image_output_prefix', 'optimize_results/opt')
 
+# parameter which marks whether we should generate also the plus mean image of the optmized image
+optimize_image_generate_plus_mean = locals().get('optimize_image_generate_plus_mean', False)
 
 ####################################
 #

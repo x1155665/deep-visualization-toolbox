@@ -231,7 +231,6 @@ def main():
 
     # go over channels
     for current_channel in range(channels):
-
         params = FindParams(
             start_at = args.start_at,
             rand_seed = args.rand_seed,
@@ -249,12 +248,12 @@ def main():
             lr_policy = args.lr_policy,
             lr_params = lr_params,
             max_iter = args.max_iter,
+            layer_is_conv=(type == 'Convolution'),
         )
 
         prefix_template = '%s_%s_' % (args.output_prefix, args.output_template)
         im = optimizer.run_optimize(params, prefix_template = prefix_template,
                                     brave = args.brave, skipbig = args.skipbig)
-
 
 
 if __name__ == '__main__':

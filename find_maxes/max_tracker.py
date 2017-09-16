@@ -1,26 +1,37 @@
 #! /usr/bin/env python
 
-import os
-import ipdb as pdb
 import errno
+import os
+import sys
 from datetime import datetime
 
-#import caffe
-from loaders import load_imagenet_mean, load_labels, caffe
-from jby_misc import WithTimer
-from caffe_misc import shownet, RegionComputer, save_caffe_image
 import numpy as np
-
+from caffe_misc import RegionComputer, save_caffe_image, get_max_data_extent, extract_patch_from_image, \
+    compute_data_layer_focus_area
 from misc import get_files_from_image_list
 from misc import get_files_from_siamese_image_list
 
-def hardcoded_get():
+from jby_misc import WithTimer
+from loaders import load_imagenet_mean, load_labels
+
+
+def hardcoded_get(settings):
     prototxt = '/home/jyosinsk/results/140311_234854_afadfd3_priv_netbase_upgraded/deploy_1.prototxt'
     weights = '/home/jyosinsk/results/140311_234854_afadfd3_priv_netbase_upgraded/caffe_imagenet_train_iter_450000'
     datadir = '/home/jyosinsk/imagenet2012/val'
     filelist = 'mini_valid.txt'
 
-    imagenet_mean = load_imagenet_mean()
+    imagenet_mean = load_imagenet_mean(settings)
+    sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
+    import caffe
+
+    if settings.caffevis_mode_gpu:
+        caffe.set_mode_gpu()
+        print 'CaffeVisApp mode (in main thread):     GPU'
+    else:
+        caffe.set_mode_cpu()
+        print 'CaffeVisApp mode (in main thread):     CPU'
+
     net = caffe.Classifier(prototxt, weights,
                            mean=imagenet_mean,
                            channel_swap=(2,1,0),
@@ -28,7 +39,7 @@ def hardcoded_get():
                            image_dims=(256, 256))
     net.set_phase_test()
     net.set_mode_cpu()
-    labels = load_labels()
+    labels = load_labels(settings)
 
     return net, imagenet_mean, labels, datadir, filelist
 
@@ -193,6 +204,9 @@ def scan_images_for_maxes(settings, net, datadir, n_top):
     print 'Scanning %d files' % len(image_filenames)
     print '  First file', os.path.join(datadir, image_filenames[0])
 
+    sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
+    import caffe
+
     tracker = NetMaxTracker(settings, n_top = n_top, layers=settings.layers_for_max_tracker)
     for image_idx in xrange(len(image_filenames)):
 
@@ -218,6 +232,9 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top):
     image_filenames, image_labels = load_file_list(settings)
     print 'Scanning %d pairs' % len(image_filenames)
     print '  First pair', image_filenames[0]
+
+    sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
+    import caffe
 
     tracker = NetMaxTracker(settings, n_top=n_top, layers=settings.layers_for_max_tracker)
     for image_idx in xrange(len(image_filenames)):
@@ -249,7 +266,7 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top):
     return tracker
 
 
-def save_representations(net, datadir, filelist, layer, first_N = None):
+def save_representations(settings, net, datadir, filelist, layer, first_N = None):
     image_filenames, image_labels = load_file_list(filelist)
     if first_N is None:
         first_N = len(image_filenames)
@@ -258,6 +275,9 @@ def save_representations(net, datadir, filelist, layer, first_N = None):
     print 'Scanning %d files' % len(image_indices)
     assert len(image_indices) > 0
     print '  First file', os.path.join(datadir, image_filenames[image_indices[0]])
+
+    sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
+    import caffe
 
     indices = None
     rep = None
@@ -284,24 +304,12 @@ def save_representations(net, datadir, filelist, layer, first_N = None):
     return indices,rep
 
 
-
-def get_max_data_extent(net, layer, rc, is_conv):
-    '''Gets the maximum size of the data layer that can influence a unit on layer.'''
-    if is_conv:
-        top_name = net.top_names[layer][0]
-        conv_size = net.blobs[top_name].data.shape[2:4]        # e.g. (13,13) for conv5
-        layer_slice_middle = (conv_size[0]/2,conv_size[0]/2+1, conv_size[1]/2,conv_size[1]/2+1)   # e.g. (6,7,6,7,), the single center unit
-        data_slice = rc.convert_region(layer, 'data', layer_slice_middle)
-        return data_slice[1]-data_slice[0], data_slice[3]-data_slice[2]   # e.g. (163, 163) for conv5
-    else:
-        # Whole data region
-        return net.blobs['data'].data.shape[2:4]        # e.g. (227,227) for fc6,fc7,fc8,prop
-
-
-
 def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, num_top, datadir, filelist, outdir, do_which):
     do_maxes, do_deconv, do_deconv_norm, do_backprop, do_backprop_norm, do_info = do_which
     assert do_maxes or do_deconv or do_deconv_norm or do_backprop or do_backprop_norm or do_info, 'nothing to do'
+
+    sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
+    import caffe
 
     mt = max_tracker
     rc = RegionComputer(settings.max_tracker_layers_list)
@@ -345,42 +353,8 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
             if do_print:
                 print '%s   Output file/image(s) %d/%d' % (datetime.now().ctime(), cc * num_top, n_total_images)
 
-            if mt.is_conv:
-                # Compute the focus area of the data layer
-                layer_indices = (ii,ii+1,jj,jj+1)
-                data_indices = rc.convert_region(layer, 'data', layer_indices)
-                data_ii_start,data_ii_end,data_jj_start,data_jj_end = data_indices
-
-                # safe guard edges
-                data_ii_start = max(data_ii_start, 0)
-                data_jj_start = max(data_jj_start, 0)
-                data_ii_end = min(data_ii_end, data_size_ii)
-                data_jj_end = min(data_jj_end, data_size_jj)
-
-                touching_imin = (data_ii_start == 0)
-                touching_jmin = (data_jj_start == 0)
-
-                # Compute how much of the data slice falls outside the actual data [0,max] range
-                ii_outside = size_ii - (data_ii_end - data_ii_start)  # possibly 0
-                jj_outside = size_jj - (data_jj_end - data_jj_start)  # possibly 0
-
-                if touching_imin:
-                    out_ii_start = ii_outside
-                    out_ii_end   = size_ii
-                else:
-                    out_ii_start = 0
-                    out_ii_end   = size_ii - ii_outside
-                if touching_jmin:
-                    out_jj_start = jj_outside
-                    out_jj_end   = size_jj
-                else:
-                    out_jj_start = 0
-                    out_jj_end   = size_jj - jj_outside
-            else:
-                ii,jj = 0,0
-                data_ii_start, out_ii_start, data_jj_start, out_jj_start = 0,0,0,0
-                data_ii_end, out_ii_end, data_jj_end, out_jj_end = size_ii, size_ii, size_jj, size_jj
-
+            [out_ii_start, out_ii_end, out_jj_start, out_jj_end, data_ii_start, data_ii_end, data_jj_start, data_jj_end] = \
+                compute_data_layer_focus_area(mt.is_conv, ii, jj, rc, layer, size_ii, size_jj, data_size_ii, data_size_jj)
 
             if do_info:
                 print >>info_file, 1 if mt.is_conv else 0, '%.6f' % mt.max_vals[channel_idx, max_idx],
@@ -392,7 +366,6 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
 
             if not (do_maxes or do_deconv or do_deconv_norm or do_backprop or do_backprop_norm):
                 continue
-
 
             with WithTimer('Load image', quiet = not do_print):
 
@@ -418,9 +391,8 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
             with WithTimer('Predict   ', quiet = not do_print):
                 net.predict([im], oversample = False)
 
-
-            # in siamese network, we wish to return from the normalized layer name and selected input index to the denormalized layer name
-            # e.g. from "conv1_1" and selected_input_index=1 to "conv1_1_p"
+            # in siamese network, we wish to return from the normalized layer name and selected input index to the
+            # denormalized layer name, e.g. from "conv1_1" and selected_input_index=1 to "conv1_1_p"
             denormalized_layer_name = settings.denormalize_layer_name_for_max_tracker_fn(layer, selected_input_index)
             denormalized_top_name = net.top_names[denormalized_layer_name][0]
 
@@ -434,25 +406,9 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
             if do_maxes:
                 #grab image from data layer, not from im (to ensure preprocessing / center crop details match between image and deconv/backprop)
 
-                if settings.is_siamese:
-
-                    # input is first image so select first 3 channels
-                    if selected_input_index == 0:
-                        out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
-                        out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].data[0, 0:3, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
-                    # input is second image so select second 3 channels
-                    elif selected_input_index == 1:
-                        out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
-                        out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].data[0, 3:6, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
-                    # input is both images so select concatenate data horizontally
-                    elif selected_input_index == -1:
-                        out_arr = np.zeros((3, size_ii, size_jj*2), dtype='float32')
-                        out_arr[:, out_ii_start:out_ii_end, (0 + out_jj_start):(0 + out_jj_end)] = net.blobs['data'].data[0, 0:3, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
-                        out_arr[:, out_ii_start:out_ii_end, (size_jj + out_jj_start):(size_jj + out_jj_end)] = net.blobs['data'].data[0, 3:6, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
-                    else:
-                        print "Error: invalid value for selected_input_index (", selected_input_index, ")"
-                else:
-                    out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].data[0,:,data_ii_start:data_ii_end,data_jj_start:data_jj_end]
+                out_arr = extract_patch_from_image(net.blobs['data'].data[0], net, selected_input_index, settings,
+                                                   data_ii_end, data_ii_start, data_jj_end, data_jj_start,
+                                                   out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
 
                 with WithTimer('Save img  ', quiet = not do_print):
                     save_caffe_image(out_arr, os.path.join(unit_dir, 'maxim_%03d.png' % max_idx_0),
@@ -467,25 +423,9 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
                 with WithTimer('Deconv    ', quiet = not do_print):
                     net.deconv_from_layer(denormalized_layer_name, diffs)
 
-                if settings.is_siamese:
-
-                    # input is first image so select first 3 channels
-                    if selected_input_index == 0:
-                        out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
-                        out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0, 0:3, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
-                    # input is second image so select second 3 channels
-                    elif selected_input_index == 1:
-                        out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
-                        out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0, 3:6, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
-                    # input is both images so select concatenate data horizontally
-                    elif selected_input_index == -1:
-                        out_arr = np.zeros((3, size_ii, size_jj*2), dtype='float32')
-                        out_arr[:, out_ii_start:out_ii_end, (0 + out_jj_start):(0 + out_jj_end)] = net.blobs['data'].diff[0, 0:3, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
-                        out_arr[:, out_ii_start:out_ii_end, (size_jj + out_jj_start):(size_jj + out_jj_end)] = net.blobs['data'].diff[0, 3:6, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
-
-                else: # normal operation
-                    out_arr = np.zeros((3,size_ii,size_jj), dtype='float32')
-                    out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0,:,data_ii_start:data_ii_end,data_jj_start:data_jj_end]
+                out_arr = extract_patch_from_image(net.blobs['data'].diff[0], net, selected_input_index, settings,
+                                                   data_ii_end, data_ii_start, data_jj_end, data_jj_start,
+                                                   out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
 
                 if out_arr.max() == 0:
                     print 'Warning: Deconv out_arr in range', out_arr.min(), 'to', out_arr.max(), 'ensure force_backward: true in prototxt'
@@ -511,27 +451,9 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
                 with WithTimer('Backward  ', quiet = not do_print):
                     net.backward_from_layer(denormalized_layer_name, diffs)
 
-                if settings.is_siamese:
-
-                    # input is first image so select first 3 channels
-                    if selected_input_index == 0:
-                        out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
-                        out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0, 0:3, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
-
-                    # input is second image so select second 3 channels
-                    elif selected_input_index == 1:
-                        out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
-                        out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0, 3:6, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
-
-                    # input is both images so select concatenate data horizontally
-                    elif selected_input_index == -1:
-                        out_arr = np.zeros((3, size_ii, size_jj*2), dtype='float32')
-                        out_arr[:, out_ii_start:out_ii_end, (0 + out_jj_start):(0 + out_jj_end)] = net.blobs['data'].diff[0, 0:3, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
-                        out_arr[:, out_ii_start:out_ii_end, (size_jj + out_jj_start):(size_jj + out_jj_end)] = net.blobs['data'].diff[0, 3:6, data_ii_start:data_ii_end, data_jj_start:data_jj_end]
-
-                else: # normal operation
-                    out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
-                    out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = net.blobs['data'].diff[0,:,data_ii_start:data_ii_end,data_jj_start:data_jj_end]
+                out_arr = extract_patch_from_image(net.blobs['data'].diff[0], net, selected_input_index, settings,
+                                                   data_ii_end, data_ii_start, data_jj_end, data_jj_start,
+                                                   out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
 
                 if out_arr.max() == 0:
                     print 'Warning: Deconv out_arr in range', out_arr.min(), 'to', out_arr.max(), 'ensure force_backward: true in prototxt'
@@ -546,3 +468,4 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
 
         if do_info:
             info_file.close()
+

@@ -14,6 +14,7 @@ plt.rcParams['image.cmap'] = 'gray'
 from misc import mkdir_p, combine_dicts
 from image_misc import saveimagesc, saveimagescc
 
+from caffe_misc import RegionComputer, get_max_data_extent, compute_data_layer_focus_area, extract_patch_from_image
 
 
 class FindParams(object):
@@ -35,6 +36,7 @@ class FindParams(object):
             small_norm_percentile = None,
             px_benefit_percentile = None,
             px_abs_benefit_percentile = None,
+            layer_is_conv = False,
 
             lr_policy = 'constant',
             lr_params = {'lr': 10.0},
@@ -357,6 +359,25 @@ class GradientOptimizer(object):
 
         return xx, results
 
+    def find_selected_input_index(self, layer):
+
+        for item in self.settings.siamese_layers_list:
+
+            # if we have only a single layer, the header is the layer name
+            if type(item) is str and item == layer:
+                return -1
+
+            # if we got a pair of layers
+            elif (type(item) is tuple) and (len(item) == 2):
+
+                if item[0] == layer:
+                    return 0
+
+                if item[1] == layer:
+                    return 1
+
+        return -1
+
     def save_results(self, params, results, prefix_template, brave = False, skipbig = False):
         if prefix_template is None:
             return
@@ -387,21 +408,42 @@ class GradientOptimizer(object):
         if results.best_xx is not None:
             # results.best_xx.shape is (6,224,224)
 
-            if (self.settings.is_siamese) and (results.best_xx.shape[0] == 6):
-                asimg1 = results.best_xx[self.channel_swap_to_rgb[[0,1,2]]].transpose((1, 2, 0))
-                asimg2 = results.best_xx[self.channel_swap_to_rgb[[3,4,5]]].transpose((1, 2, 0))
+            def save_output(data, channel_swap_to_rgb, best_X_image_name):
+                            # , best_Xpm_image_name, data_mean_rgb_img):
+                asimg = data[channel_swap_to_rgb].transpose((1, 2, 0))
+                saveimagescc(best_X_image_name, asimg, 0)
+                # saveimagesc(best_Xpm_image_name, asimg + data_mean_rgb_img)  # PlusMean
 
-                saveimagescc('%sbest_X_A.jpg' % prefix, asimg1, 0)
-                saveimagescc('%sbest_X_B.jpg' % prefix, asimg2, 0)
+            # get center position, relative to layer, of best maximum
+            [temp_ii, temp_jj] = results.idxmax[results.best_ii][1:3]
 
-                saveimagesc('%sbest_Xpm_A.jpg' % prefix, asimg1 + self._data_mean_rgb_img[:,:,[0,1,2]])  # PlusMean
-                saveimagesc('%sbest_Xpm_B.jpg' % prefix, asimg2 + self._data_mean_rgb_img[:,:,[3,4,5]])  # PlusMean
+            is_conv = params.layer_is_conv
+            rc = RegionComputer(self.settings.max_tracker_layers_list)
+            layer = params.push_layer
+            size_ii, size_jj = get_max_data_extent(self.net, layer, rc, is_conv)
+            data_size_ii, data_size_jj = self.net.blobs['data'].data.shape[2:4]
 
+            [out_ii_start, out_ii_end, out_jj_start, out_jj_end, data_ii_start, data_ii_end, data_jj_start, data_jj_end] = \
+                compute_data_layer_focus_area(is_conv, temp_ii, temp_jj, rc, layer, size_ii, size_jj, data_size_ii, data_size_jj)
 
-            else:
-                asimg = results.best_xx[self.channel_swap_to_rgb].transpose((1,2,0))
-                saveimagescc('%sbest_X.jpg' % prefix, asimg, 0)
-                saveimagesc('%sbest_Xpm.jpg' % prefix, asimg + self._data_mean_rgb_img)  # PlusMean
+            selected_input_index = self.find_selected_input_index(layer)
+
+            out_arr = extract_patch_from_image(results.best_xx, self.net, selected_input_index, self.settings,
+                                               data_ii_end, data_ii_start, data_jj_end, data_jj_start,
+                                               out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
+
+            save_output(out_arr,
+                        channel_swap_to_rgb=self.channel_swap_to_rgb[[0, 1, 2]],
+                        best_X_image_name='%sbest_X.jpg' % prefix)
+
+            if self.settings.optimize_image_generate_plus_mean:
+                out_arr_pm = extract_patch_from_image(results.best_xx + self.data_mean, self.net, selected_input_index, self.settings,
+                                                   data_ii_end, data_ii_start, data_jj_end, data_jj_start,
+                                                   out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
+
+                save_output(out_arr_pm,
+                            channel_swap_to_rgb=self.channel_swap_to_rgb[[0, 1, 2]],
+                            best_X_image_name='%sbest_Xpm.jpg' % prefix)
 
         with open('%sinfo.txt' % prefix, 'w') as ff:
             print >>ff, params

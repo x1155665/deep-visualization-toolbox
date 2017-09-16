@@ -1,13 +1,19 @@
 #! /usr/bin/env python
 
+# add parent folder to search path, to enable import of core modules like settings
+import os,sys,inspect
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+sys.path.insert(0,parentdir)
+
 import argparse
-import ipdb as pdb
+#import ipdb as pdb
 import cPickle as pickle
 
 import settings
 
 from caffevis.caffevis_helper import load_mean
-from loaders import load_imagenet_mean, load_labels, caffe
+from loaders import load_imagenet_mean, load_labels
 from jby_misc import WithTimer
 from max_tracker import scan_images_for_maxes, scan_pairs_for_maxes
 
@@ -23,13 +29,20 @@ def main():
     parser.add_argument('--mean', type = str, default = settings.caffevis_data_mean, help = 'data mean to load')
     args = parser.parse_args()
 
+    sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
+    import caffe
+
     if args.gpu:
         caffe.set_mode_gpu()
+        print 'find_max_acts mode (in main thread):     GPU'
+
     else:
         caffe.set_mode_cpu()
+        print 'find_max_acts mode (in main thread):     CPU'
+
 
     if args.mean == "":
-        data_mean = load_imagenet_mean()
+        data_mean = load_imagenet_mean(settings)
     else:
         data_mean = load_mean(args.mean)
 
