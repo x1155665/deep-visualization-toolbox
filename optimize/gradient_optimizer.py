@@ -23,6 +23,7 @@ class FindParams(object):
             # Starting
             rand_seed = 0,
             start_at = 'mean_plus_rand',
+            batch_size = 9,
             
             # Optimization
             push_layer = 'prob',
@@ -81,7 +82,7 @@ class FindParams(object):
 
 
 class FindResults(object):
-    def __init__(self):
+    def __init__(self,batch_index):
         self.ii = []
         self.obj = []
         self.idxmax = []
@@ -97,6 +98,7 @@ class FindResults(object):
         self.last_obj = None
         self.last_xx = None
         self.meta_result = None
+        self.batch_index = batch_index
         
     def update(self, params, ii, acts, idxmax, xx, x0):
         assert params.push_dir > 0, 'push_dir < 0 not yet supported'
@@ -140,7 +142,7 @@ class FindResults(object):
 
     def __str__(self):
         ret = StringIO.StringIO()
-        print >>ret, 'FindResults:'
+        print >>ret, 'FindResults[%d]:' % self.batch_index
         for key in sorted(self.__dict__.keys()):
             val = self.__dict__[key]
             if isinstance(val, list) and len(val) > 4:
@@ -157,19 +159,20 @@ class FindResults(object):
 class GradientOptimizer(object):
     '''Finds images by gradient.'''
     
-    def __init__(self, settings, net, data_mean, labels = None, label_layers = None, channel_swap_to_rgb = None):
+    def __init__(self, settings, net, batched_data_mean, labels = None, label_layers = None, channel_swap_to_rgb = None):
         self.settings = settings
         self.net = net
-        self.data_mean = data_mean
+        self.batched_data_mean = batched_data_mean
         self.labels = labels if labels else ['labels not provided' for ii in range(1000)]
         self.label_layers = label_layers if label_layers else tuple()
         if channel_swap_to_rgb:
             self.channel_swap_to_rgb = array(channel_swap_to_rgb)
         else:
-            data_n_channels = self.data_mean.shape[0]
+            data_n_channels = self.batched_data_mean.shape[0]
             self.channel_swap_to_rgb = arange(data_n_channels)   # Don't change order
 
-        self._data_mean_rgb_img = self.data_mean[self.channel_swap_to_rgb].transpose((1,2,0))  # Store as (227,227,3) in RGB order.
+        # since we have a batch of same data mean images, we can just take the first
+        self._data_mean_rgb_img = self.batched_data_mean[0, self.channel_swap_to_rgb].transpose((1,2,0))  # Store as (227,227,3) in RGB order.
 
     def run_optimize(self, params, prefix_template = None, brave = False, skipbig = False, skipsmall = False):
         '''All images are in Caffe format, e.g. shape (3, 227, 227) in BGR order.'''
@@ -181,21 +184,21 @@ class GradientOptimizer(object):
         xx, results = self._optimize(params, x0)
         self.save_results(params, results, prefix_template, brave = brave, skipbig = skipbig, skipsmall = skipsmall)
 
-        print results.meta_result
+        print str([results[batch_index].meta_result for batch_index in range(params.batch_size)])
         
         return xx
 
     def _get_x0(self, params):
         '''Chooses a starting location'''
-        
+
         np.random.seed(params.rand_seed)
 
         if params.start_at == 'mean_plus_rand':
-            x0 = np.random.normal(0, 10, self.data_mean.shape)
+            x0 = np.random.normal(0, 10, self.batched_data_mean.shape)
         elif params.start_at == 'randu':
-            x0 = uniform(0, 255, self.data_mean.shape) - self.data_mean
+            x0 = uniform(0, 255, self.batched_data_mean.shape) - self.batched_data_mean
         elif params.start_at == 'mean':
-            x0 = zeros(self.data_mean.shape)
+            x0 = zeros(self.batched_data_mean.shape)
         else:
             raise Exception('Unknown start conditions: %s' % params.start_at)
 
@@ -203,9 +206,8 @@ class GradientOptimizer(object):
         
     def _optimize(self, params, x0):
         xx = x0.copy()
-        xx = xx[newaxis,:]      # Promote 3D -> 4D
 
-        results = FindResults()
+        results = [FindResults(i) for i in range(params.batch_size)]
 
         # Whether or not the unit being optimized corresponds to a label (e.g. one of the 1000 imagenet classes)
         is_labeled_unit = params.push_layer in self.label_layers
@@ -232,47 +234,54 @@ class GradientOptimizer(object):
             push_label = self.labels[params.push_unit[0]]
         else:
             push_label = None
-        
+
+        old_obj = np.zeros(params.batch_size)
         for ii in range(params.max_iter):
             # 0. Crop data
-            xx = minimum(255.0, maximum(0.0, xx + self.data_mean)) - self.data_mean     # Crop all values to [0,255]
+            xx = minimum(255.0, maximum(0.0, xx + self.batched_data_mean)) - self.batched_data_mean     # Crop all values to [0,255]
 
 
             # 1. Push data through net
             out = self.net.forward_all(data = xx)
             #shownet(net)
             top_name = self.net.top_names[params.push_layer][0]
-            acts = self.net.blobs[top_name].data[0]    # chop off batch dimension
+            acts = self.net.blobs[top_name].data
 
             if not is_conv:
-                # promote to 3D
-                acts = acts[:,np.newaxis,np.newaxis]
-            idxmax = unravel_index(acts.argmax(), acts.shape)
-            valmax = acts.max()
-            # idxmax for fc or prob layer will be like:  (278, 0, 0)
-            # idxmax for conv layer will be like:        (37, 4, 37)
-            obj = acts[params.push_unit]
+            #     promote to 3D
+                acts = np.reshape(acts, (params.batch_size, -1, 1, 1))
+            # else:
+            #     reshaped_acts = np.reshape(acts, (params.batch_size, -1))
 
-            
+            reshaped_acts = np.reshape(acts, (params.batch_size, -1))
+
+            idxmax = unravel_index(reshaped_acts.argmax(axis=1), acts.shape[1:])
+            valmax = reshaped_acts.max(axis=1)
+            # idxmax for fc or prob layer will be like:  (batch,278, 0, 0)
+            # idxmax for conv layer will be like:        (batch,37, 4, 37)
+            obj = acts[np.arange(params.batch_size), params.push_unit[0], params.push_unit[1], params.push_unit[2]]
+
             # 2. Update results
-            results.update(params, ii, acts, idxmax, xx[0], x0)
+            for batch_index in range(params.batch_size):
+                results[batch_index].update(params, ii, acts[batch_index], \
+                                            (idxmax[0][batch_index],idxmax[1][batch_index],idxmax[2][batch_index]), \
+                                            xx[batch_index], x0[batch_index])
 
-            
-            # 3. Print progress
-            if ii > 0:
-                if params.lr_policy == 'progress':
-                    print '%-4d  progress predicted: %g, actual: %g' % (ii, pred_prog, obj - old_obj)
+                # 3. Print progress
+                if ii > 0:
+                    if params.lr_policy == 'progress':
+                        print 'iter %-4d batch_index %d progress predicted: %g, actual: %g' % (ii, batch_index, pred_prog[batch_index], obj[batch_index] - old_obj[batch_index])
+                    else:
+                        print 'iter %-4d batch_index %d progress: %g' % (ii, batch_index, obj[batch_index] - old_obj[batch_index])
                 else:
-                    print '%-4d  progress: %g' % (ii, obj - old_obj)
-            else:
-                print '%d' % ii
-            old_obj = obj
+                    print 'iter %d batch_index %d' % (ii, batch_index)
+                old_obj[batch_index] = obj[batch_index]
 
-            push_label_str = ('(%s)' % push_label) if is_labeled_unit else ''
-            max_label_str  = ('(%s)' % self.labels[idxmax[0]]) if is_labeled_unit else ''
-            print '     push unit: %16s with value %g %s' % (params.push_unit, acts[params.push_unit], push_label_str)
-            print '       Max idx: %16s with value %g %s' % (idxmax, valmax, max_label_str)
-            print '             X:', xx.min(), xx.max(), norm(xx)
+                push_label_str = ('(%s)' % push_label) if is_labeled_unit else ''
+                max_label_str  = ('(%s)' % self.labels[idxmax[0][batch_index]]) if is_labeled_unit else ''
+                print '     push unit: %16s with value %g %s' % (params.push_unit, acts[batch_index][params.push_unit], push_label_str)
+                print '       Max idx: %16s with value %g %s' % ((idxmax[0][batch_index],idxmax[1][batch_index],idxmax[2][batch_index]), valmax[batch_index], max_label_str)
+                print '             X:', xx[batch_index].min(), xx[batch_index].max(), norm(xx[batch_index])
 
 
             # 4. Do backward pass to get gradient
@@ -281,84 +290,102 @@ class GradientOptimizer(object):
             if not is_conv:
                 # Promote bc -> bc01
                 diffs = diffs[:,:,np.newaxis,np.newaxis]
-            diffs[0][params.push_unit] = params.push_dir
+
+            diffs[np.arange(params.batch_size), params.push_unit[0], params.push_unit[1], params.push_unit[2]] = params.push_dir
             backout = self.net.backward_from_layer(params.push_layer, diffs if is_conv else diffs[:,:,0,0])
 
             grad = backout['data'].copy()
-            print '          grad:', grad.min(), grad.max(), norm(grad)
-            if norm(grad) == 0:
-                print 'Grad exactly 0, failed'
-                results.meta_result = 'Metaresult: grad 0 failure'
-                break
+            reshaped_grad = np.reshape(grad, (params.batch_size, -1))
+            norm_grad = np.linalg.norm(reshaped_grad, axis=1)
+            min_grad = np.amin(reshaped_grad, axis=1)
+            max_grad = np.amax(reshaped_grad, axis=1)
 
+            for batch_index in range(params.batch_size):
+                print ' batch_index: %d         min grad: %f, max grad: %f, norm grad: %f' % (batch_index, min_grad[batch_index], max_grad[batch_index], norm_grad[batch_index])
+                if norm_grad[batch_index] == 0:
+                    print ' batch_index: %d, Grad exactly 0, failed' % batch_index
+                    results[batch_index].meta_result = 'Metaresult: grad 0 failure'
+                    break
 
             # 5. Pick gradient update per learning policy
             if params.lr_policy == 'progress01':
                 # Useful for softmax layer optimization, taper off near 1
                 late_prog = params.lr_params['late_prog_mult'] * (1-obj)
-                desired_prog = min(params.lr_params['early_prog'], late_prog)
-                prog_lr = desired_prog / norm(grad)**2
-                lr = min(params.lr_params['max_lr'], prog_lr)
-                print '    desired progress:', desired_prog, 'prog_lr:', prog_lr, 'lr:', lr
-                pred_prog = lr * dot(grad.flatten(), grad.flatten())
+                desired_prog = np.amin(np.stack((np.repeat(params.lr_params['early_prog'], params.batch_size), late_prog), axis=1), axis=1)
+                prog_lr = desired_prog / np.square(norm_grad)
+                lr = np.amin(np.stack((np.repeat(params.lr_params['max_lr'], params.batch_size), prog_lr), axis=1), axis=1)
+                print '    entire batch, desired progress:', desired_prog, 'prog_lr:', prog_lr, 'lr:', lr
+                pred_prog = lr * np.sum(np.abs(reshaped_grad) ** 2, axis=-1)
             elif params.lr_policy == 'progress':
                 # straight progress-based lr
-                prog_lr = params.lr_params['desired_prog'] / norm(grad)**2
-                lr = min(params.lr_params['max_lr'], prog_lr)
-                print '    desired progress:', params.lr_params['desired_prog'], 'prog_lr:', prog_lr, 'lr:', lr
-                pred_prog = lr * dot(grad.flatten(), grad.flatten())
+                prog_lr = params.lr_params['desired_prog'] / (norm_grad**2)
+                lr = np.amin(np.stack((np.repeat(params.lr_params['max_lr'], params.batch_size), prog_lr), axis=1), axis=1)
+                print '    entire batch, desired progress:', params.lr_params['desired_prog'], 'prog_lr:', prog_lr, 'lr:', lr
+                pred_prog = lr * np.sum(np.abs(reshaped_grad) ** 2, axis=-1)
             elif params.lr_policy == 'constant':
                 # constant fixed learning rate
-                lr = params.lr_params['lr']
+                lr = np.repeat(params.lr_params['lr'], params.batch_size)
             else:
                 raise Exception('Unimplemented lr_policy')
 
-            
-            # 6. Apply gradient update and regularizations
-            if ii < params.max_iter-1:
-                # Skip gradient and regularizations on the very last step (so the above printed info is valid for the last step)
-                xx += lr * grad
-                xx *= (1 - params.decay)
+            for batch_index in range(params.batch_size):
 
-                if params.blur_every is not 0 and params.blur_radius > 0:
-                    if params.blur_radius < .3:
-                        print 'Warning: blur-radius of .3 or less works very poorly'
-                        #raise Exception('blur-radius of .3 or less works very poorly')
-                    if ii % params.blur_every == 0:
-                        for channel in range(3):
-                            cimg = gaussian_filter(xx[0,channel], params.blur_radius)
-                            xx[0,channel] = cimg
-                if params.small_val_percentile > 0:
-                    small_entries = (abs(xx) < percentile(abs(xx), params.small_val_percentile))
-                    xx = xx - xx*small_entries   # e.g. set smallest 50% of xx to zero
+                # 6. Apply gradient update and regularizations
+                if ii < params.max_iter-1:
+                    # Skip gradient and regularizations on the very last step (so the above printed info is valid for the last step)
+                    xx[batch_index] += lr[batch_index] * grad[batch_index]
+                    xx[batch_index] *= (1 - params.decay)
 
-                if params.small_norm_percentile > 0:
-                    pxnorms = norm(xx, axis=1)
-                    smallpx = pxnorms < percentile(pxnorms, params.small_norm_percentile)
-                    smallpx3 = tile(smallpx[:,newaxis,:,:], (1,3,1,1))
-                    xx = xx - xx*smallpx3
+                    if params.blur_every is not 0 and params.blur_radius > 0:
+                        if params.blur_radius < .3:
+                            print 'Warning: blur-radius of .3 or less works very poorly'
+                            #raise Exception('blur-radius of .3 or less works very poorly')
+                        if ii % params.blur_every == 0:
+                            channels = 6 if self.settings.is_siamese else 3
+                            for channel in range(channels):
+                                cimg = gaussian_filter(xx[batch_index,channel], params.blur_radius)
+                                xx[batch_index,channel] = cimg
+                    if params.small_val_percentile > 0:
+                        small_entries = (abs(xx[batch_index]) < percentile(abs(xx[batch_index]), params.small_val_percentile))
+                        xx[batch_index] = xx[batch_index] - xx[batch_index]*small_entries   # e.g. set smallest 50% of xx to zero
 
-                if params.px_benefit_percentile > 0:
-                    pred_0_benefit = grad * -xx
-                    px_benefit = pred_0_benefit.sum(1)   # sum over color channels
-                    smallben = px_benefit < percentile(px_benefit, params.px_benefit_percentile)
-                    smallben3 = tile(smallben[:,newaxis,:,:], (1,3,1,1))
-                    xx = xx - xx*smallben3
+                    if params.small_norm_percentile > 0:
+                        pxnorms = norm(xx[batch_index,np.newaxis,:,:,:], axis=1)
+                        smallpx = pxnorms < percentile(pxnorms, params.small_norm_percentile)
+                        if self.settings.is_siamese:
+                            smallpx3 = tile(smallpx[:,newaxis,:,:], (1,6,1,1))
+                        else:
+                            smallpx3 = tile(smallpx[:,newaxis,:,:], (1,3,1,1))
+                        xx[batch_index,:,:,:] = xx[batch_index,np.newaxis,:,:,:] - xx[batch_index,np.newaxis,:,:,:]*smallpx3
 
-                if params.px_abs_benefit_percentile > 0:
-                    pred_0_benefit = grad * -xx
-                    px_benefit = pred_0_benefit.sum(1)   # sum over color channels
-                    smallaben = abs(px_benefit) < percentile(abs(px_benefit), params.px_abs_benefit_percentile)
-                    smallaben3 = tile(smallaben[:,newaxis,:,:], (1,3,1,1))
-                    xx = xx - xx*smallaben3
+                    if params.px_benefit_percentile > 0:
+                        pred_0_benefit = grad[batch_index,np.newaxis,:,:,:] * -xx[batch_index,np.newaxis,:,:,:]
+                        px_benefit = pred_0_benefit.sum(1)   # sum over color channels
+                        smallben = px_benefit < percentile(px_benefit, params.px_benefit_percentile)
+                        if self.settings.is_siamese:
+                            smallben3 = tile(smallben[:,newaxis,:,:], (1,6,1,1))
+                        else:
+                            smallben3 = tile(smallben[:,newaxis,:,:], (1,3,1,1))
+                        xx[batch_index,:,:,:] = xx[batch_index,np.newaxis,:,:,:] - xx[batch_index,np.newaxis,:,:,:]*smallben3
+
+                    if params.px_abs_benefit_percentile > 0:
+                        pred_0_benefit = grad[batch_index,np.newaxis,:,:,:] * -xx[batch_index,np.newaxis,:,:,:]
+                        px_benefit = pred_0_benefit.sum(1)   # sum over color channels
+                        smallaben = abs(px_benefit) < percentile(abs(px_benefit), params.px_abs_benefit_percentile)
+                        if self.settings.is_siamese:
+                            smallaben3 = tile(smallaben[:,newaxis,:,:], (1,6,1,1))
+                        else:
+                            smallaben3 = tile(smallaben[:,newaxis,:,:], (1,3,1,1))
+                        xx[batch_index,:,:,:] = xx[batch_index,np.newaxis,:,:,:] - xx[batch_index,np.newaxis,:,:,:]*smallaben3
 
             print '     timestamp:', datetime.datetime.now()
 
-        if results.meta_result is None:
-            if results.majority_obj is not None:
-                results.meta_result = 'Metaresult: majority success'
-            else:
-                results.meta_result = 'Metaresult: majority failure'
+        for batch_index in range(params.batch_size):
+            if results[batch_index].meta_result is None:
+                if results[batch_index].majority_obj is not None:
+                    results[batch_index].meta_result = 'batch_index: %d, Metaresult: majority success' % batch_index
+                else:
+                    results[batch_index].meta_result = 'batch_index: %d, Metaresult: majority failure' % batch_index
 
         return xx, results
 
@@ -385,77 +412,79 @@ class GradientOptimizer(object):
         if prefix_template is None:
             return
 
-        results_and_params = combine_dicts((('p.', params.__dict__),
-                                            ('r.', results.__dict__)))
-        prefix = prefix_template % results_and_params
-        
-        if os.path.isdir(prefix):
-            if prefix[-1] != '/':
-                prefix += '/'   # append slash for dir-only template
-        else:
-            dirname = os.path.dirname(prefix)
-            if dirname:
-                mkdir_p(dirname)
+        for batch_index in range(params.batch_size):
 
-        # Don't overwrite previous results
-        if os.path.exists('%sinfo.txt' % prefix) and not brave:
-            raise Exception('Cowardly refusing to overwrite ' + '%sinfo.txt' % prefix)
+            results_and_params = combine_dicts((('p.', params.__dict__),
+                                                ('r.', results[batch_index].__dict__)))
+            prefix = prefix_template % results_and_params
 
-        output_majority = False
-        if output_majority:
-            if results.majority_xx is not None:
-                asimg = results.majority_xx[self.channel_swap_to_rgb].transpose((1,2,0))
-                saveimagescc('%smajority_X.jpg' % prefix, asimg, 0)
-                saveimagesc('%smajority_Xpm.jpg' % prefix, asimg + self._data_mean_rgb_img)  # PlusMean
+            if os.path.isdir(prefix):
+                if prefix[-1] != '/':
+                    prefix += '/'   # append slash for dir-only template
+            else:
+                dirname = os.path.dirname(prefix)
+                if dirname:
+                    mkdir_p(dirname)
 
-        if results.best_xx is not None:
-            # results.best_xx.shape is (6,224,224)
+            # Don't overwrite previous results
+            if os.path.exists('%sinfo.txt' % prefix) and not brave:
+                raise Exception('Cowardly refusing to overwrite ' + '%sinfo.txt' % prefix)
 
-            def save_output(data, channel_swap_to_rgb, best_X_image_name):
-                            # , best_Xpm_image_name, data_mean_rgb_img):
-                asimg = data[channel_swap_to_rgb].transpose((1, 2, 0))
-                saveimagescc(best_X_image_name, asimg, 0)
-                # saveimagesc(best_Xpm_image_name, asimg + data_mean_rgb_img)  # PlusMean
+            output_majority = False
+            if output_majority:
+                # NOTE: this section wasn't tested after changes to code, so some minor index tweaking are in order
+                if results[batch_index].majority_xx is not None:
+                    asimg = results[batch_index].majority_xx[self.channel_swap_to_rgb].transpose((1,2,0))
+                    saveimagescc('%smajority_X.jpg' % prefix, asimg, 0)
+                    saveimagesc('%smajority_Xpm.jpg' % prefix, asimg + self._data_mean_rgb_img)  # PlusMean
 
-            # get center position, relative to layer, of best maximum
-            [temp_ii, temp_jj] = results.idxmax[results.best_ii][1:3]
+            if results[batch_index].best_xx is not None:
+                # results[batch_index].best_xx.shape is (6,224,224)
 
-            is_conv = params.layer_is_conv
-            rc = RegionComputer(self.settings.max_tracker_layers_list)
-            layer = params.push_layer
-            size_ii, size_jj = get_max_data_extent(self.net, layer, rc, is_conv)
-            data_size_ii, data_size_jj = self.net.blobs['data'].data.shape[2:4]
+                def save_output(data, channel_swap_to_rgb, best_X_image_name):
+                                # , best_Xpm_image_name, data_mean_rgb_img):
+                    asimg = data[channel_swap_to_rgb].transpose((1, 2, 0))
+                    saveimagescc(best_X_image_name, asimg, 0)
 
-            [out_ii_start, out_ii_end, out_jj_start, out_jj_end, data_ii_start, data_ii_end, data_jj_start, data_jj_end] = \
-                compute_data_layer_focus_area(is_conv, temp_ii, temp_jj, rc, layer, size_ii, size_jj, data_size_ii, data_size_jj)
+                # get center position, relative to layer, of best maximum
+                [temp_ii, temp_jj] = results[batch_index].idxmax[results[batch_index].best_ii][1:3]
 
-            selected_input_index = self.find_selected_input_index(layer)
+                is_conv = params.layer_is_conv
+                rc = RegionComputer(self.settings.max_tracker_layers_list)
+                layer = params.push_layer
+                size_ii, size_jj = get_max_data_extent(self.net, layer, rc, is_conv)
+                data_size_ii, data_size_jj = self.net.blobs['data'].data.shape[2:4]
 
-            out_arr = extract_patch_from_image(results.best_xx, self.net, selected_input_index, self.settings,
-                                               data_ii_end, data_ii_start, data_jj_end, data_jj_start,
-                                               out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
+                [out_ii_start, out_ii_end, out_jj_start, out_jj_end, data_ii_start, data_ii_end, data_jj_start, data_jj_end] = \
+                    compute_data_layer_focus_area(is_conv, temp_ii, temp_jj, rc, layer, size_ii, size_jj, data_size_ii, data_size_jj)
 
-            save_output(out_arr,
-                        channel_swap_to_rgb=self.channel_swap_to_rgb[[0, 1, 2]],
-                        best_X_image_name='%sbest_X.jpg' % prefix)
+                selected_input_index = self.find_selected_input_index(layer)
 
-            if self.settings.optimize_image_generate_plus_mean:
-                out_arr_pm = extract_patch_from_image(results.best_xx + self.data_mean, self.net, selected_input_index, self.settings,
+                out_arr = extract_patch_from_image(results[batch_index].best_xx, self.net, selected_input_index, self.settings,
                                                    data_ii_end, data_ii_start, data_jj_end, data_jj_start,
                                                    out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
 
-                save_output(out_arr_pm,
+                save_output(out_arr,
                             channel_swap_to_rgb=self.channel_swap_to_rgb[[0, 1, 2]],
-                            best_X_image_name='%sbest_Xpm.jpg' % prefix)
+                            best_X_image_name='%sbest_X.jpg' % prefix)
 
-        with open('%sinfo.txt' % prefix, 'w') as ff:
-            print >>ff, params
-            print >>ff
-            print >>ff, results
-        if not skipbig:
-            with open('%sinfo_big.pkl' % prefix, 'w') as ff:
-                pickle.dump((params, results), ff, protocol=-1)
-        results.trim_arrays()
-        if not skipsmall:
-            with open('%sinfo.pkl' % prefix, 'w') as ff:
-                pickle.dump((params, results), ff, protocol=-1)
+                if self.settings.optimize_image_generate_plus_mean:
+                    out_arr_pm = extract_patch_from_image(results[batch_index].best_xx + self.batched_data_mean, self.net, selected_input_index, self.settings,
+                                                       data_ii_end, data_ii_start, data_jj_end, data_jj_start,
+                                                       out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
+
+                    save_output(out_arr_pm,
+                                channel_swap_to_rgb=self.channel_swap_to_rgb[[0, 1, 2]],
+                                best_X_image_name='%sbest_Xpm.jpg' % prefix)
+
+            with open('%sinfo.txt' % prefix, 'w') as ff:
+                print >>ff, params
+                print >>ff
+                print >>ff, results[batch_index]
+            if not skipbig:
+                with open('%sinfo_big.pkl' % prefix, 'w') as ff:
+                    pickle.dump((params, results[batch_index]), ff, protocol=-1)
+            results[batch_index].trim_arrays()
+            if not skipsmall:
+                with open('%sinfo.pkl' % prefix, 'w') as ff:
+                    pickle.dump((params, results[batch_index]), ff, protocol=-1)

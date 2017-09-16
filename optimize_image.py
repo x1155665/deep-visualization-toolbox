@@ -37,9 +37,11 @@ def get_parser():
                         help = 'How to generate x0, the initial point used in optimization.')
     parser.add_argument('--rand-seed', type = int, default = settings.optimize_image_rand_seed,
                         help = 'Random seed used for generating the start-at image (use different seeds to generate different images).')
+    parser.add_argument('--batch-size', type=int, default=settings.optimize_image_batch_size,
+                        help = 'Batch size used for generating several images, each index will be used as random seed')
 
     # What to optimize
-    parser.add_argument('--push-layers', type = str, default = settings.optimize_image_push_layers,
+    parser.add_argument('--push-layers', type = list, default = settings.optimize_image_push_layers,
                         help = 'Name of layers that contains the desired neuron whose value is optimized.')
     parser.add_argument('--push-channel', type = int, default = '130',
                         help = 'Channel number for desired neuron whose value is optimized (channel for conv, neuron index for FC).')
@@ -69,13 +71,13 @@ def get_parser():
                         help = 'Learning rate policy. See description in lr-params.')
     parser.add_argument('--lr-params', type = str, default = settings.optimize_image_lr_params,
                         help = 'Learning rate params, specified as a string that evalutes to a Python dict. Params that must be provided dependon which lr-policy is selected. The "constant" policy requires the "lr" key and uses the constant given learning rate. The "progress" policy requires the "max_lr" and "desired_prog" keys and scales the learning rate such that the objective function will change by an amount equal to DESIRED_PROG under a linear objective assumption, except the LR is limited to MAX_LR. The "progress01" policy requires the "max_lr", "early_prog", and "late_prog_mult" keys and is tuned for optimizing neurons with outputs in the [0,1] range, e.g. neurons on a softmax layer. Under this policy optimization slows down as the output approaches 1 (see code for details).')
-    parser.add_argument('--max-iter', type = int, default = settings.optimize_image_max_iter,
-                        help = 'Number of iterations of the optimization loop.')
+    parser.add_argument('--max-iters', type = list, default = settings.optimize_image_max_iters,
+                        help = 'List of number of iterations of the optimization loop.')
 
     # Where to save results
     parser.add_argument('--output-prefix', type = str, default = settings.optimize_image_output_prefix,
                         help = 'Output path and filename prefix (default: optimize_results/opt)')
-    parser.add_argument('--output-template', type = str, default = '%(p.push_layer)s_%(p.push_channel)04d_%(p.rand_seed)d',
+    parser.add_argument('--output-template', type = str, default = '%(p.push_layer)s_unit%(p.push_channel)04d_seed%(p.rand_seed)d_iter%(p.max_iter)04d_batch%(r.batch_index)d',
                         help = 'Output filename template; see code for details (default: "%%(p.push_layer)s_%%(p.push_channel)04d_%%(p.rand_seed)d"). '
                         'The default output-prefix and output-template produce filenames like "optimize_results/opt_prob_0278_0_best_X.jpg"')
     parser.add_argument('--brave', action = 'store_true', default=True, help = 'Allow overwriting existing results files. Default: off, i.e. cowardly refuse to overwrite existing files.')
@@ -203,23 +205,29 @@ def main():
         while len(data_mean.shape) < 3:
             data_mean = np.expand_dims(data_mean, -1)
 
-    print 'Using mean:', repr(data_mean)
+    print 'Using mean with shape:', data_mean.shape
 
     if data_mean is not None:
         net.transformer.set_mean(net.inputs[0], data_mean)
 
     check_force_backward_true(settings.caffevis_deploy_prototxt)
 
+    current_data_shape = net.blobs['data'].shape
+    net.blobs['data'].reshape(args.batch_size, current_data_shape[1], current_data_shape[2], current_data_shape[3])
+    net.reshape()
+
     labels = None
     if settings.caffevis_labels:
         labels = read_label_file(settings.caffevis_labels)
 
-    optimizer = GradientOptimizer(settings, net, data_mean, labels = labels,
+
+    batched_data_mean = np.repeat(data_mean[np.newaxis, :, :, :], args.batch_size, axis=0)
+    optimizer = GradientOptimizer(settings, net, batched_data_mean, labels = labels,
                                   label_layers = settings.caffevis_label_layers,
                                   channel_swap_to_rgb = net_channel_swap)
 
     # go over push layers
-    for push_layer in args.push_layers:
+    for count, push_layer in enumerate(args.push_layers):
 
         # get layer type
         (name, type, input, output, filter, stride, pad) = get_layer_info(settings, push_layer)
@@ -238,6 +246,7 @@ def main():
             params = FindParams(
                 start_at = args.start_at,
                 rand_seed = args.rand_seed,
+                batch_size = args.batch_size,
                 push_layer = push_layer,
                 push_channel = current_channel,
                 push_spatial = push_spatial,
@@ -251,7 +260,7 @@ def main():
                 px_abs_benefit_percentile = args.px_abs_benefit_percentile,
                 lr_policy = args.lr_policy,
                 lr_params = lr_params,
-                max_iter = args.max_iter,
+                max_iter = args.max_iters[count % len(args.max_iters)],
                 layer_is_conv=(type == 'Convolution'),
             )
 
