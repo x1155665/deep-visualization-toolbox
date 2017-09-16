@@ -80,6 +80,7 @@ def get_parser():
                         'The default output-prefix and output-template produce filenames like "optimize_results/opt_prob_0278_0_best_X.jpg"')
     parser.add_argument('--brave', action = 'store_true', default=True, help = 'Allow overwriting existing results files. Default: off, i.e. cowardly refuse to overwrite existing files.')
     parser.add_argument('--skipbig', action = 'store_true', default=True, help = 'Skip outputting large *info_big.pkl files (contains pickled version of x0, last x, best x, first x that attained max on the specified layer.')
+    parser.add_argument('--skipsmall', action = 'store_true', default=True, help = 'Skip outputting small *info.pkl files (contains pickled version of..')
 
     return parser
 
@@ -256,7 +257,7 @@ def main():
 
             prefix_template = '%s_%s_' % (args.output_prefix, args.output_template)
             im = optimizer.run_optimize(params, prefix_template = prefix_template,
-                                        brave = args.brave, skipbig = args.skipbig)
+                                        brave = args.brave, skipbig = args.skipbig, skipsmall = args.skipsmall)
 
 
 if __name__ == '__main__':

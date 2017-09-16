@@ -171,7 +171,7 @@ class GradientOptimizer(object):
 
         self._data_mean_rgb_img = self.data_mean[self.channel_swap_to_rgb].transpose((1,2,0))  # Store as (227,227,3) in RGB order.
 
-    def run_optimize(self, params, prefix_template = None, brave = False, skipbig = False):
+    def run_optimize(self, params, prefix_template = None, brave = False, skipbig = False, skipsmall = False):
         '''All images are in Caffe format, e.g. shape (3, 227, 227) in BGR order.'''
 
         print '\n\nStarting optimization with the following parameters:'
@@ -179,7 +179,7 @@ class GradientOptimizer(object):
         
         x0 = self._get_x0(params)
         xx, results = self._optimize(params, x0)
-        self.save_results(params, results, prefix_template, brave = brave, skipbig = skipbig)
+        self.save_results(params, results, prefix_template, brave = brave, skipbig = skipbig, skipsmall = skipsmall)
 
         print results.meta_result
         
@@ -381,7 +381,7 @@ class GradientOptimizer(object):
 
         return -1
 
-    def save_results(self, params, results, prefix_template, brave = False, skipbig = False):
+    def save_results(self, params, results, prefix_template, brave = False, skipbig = False, skipsmall = False):
         if prefix_template is None:
             return
 
@@ -456,5 +456,6 @@ class GradientOptimizer(object):
             with open('%sinfo_big.pkl' % prefix, 'w') as ff:
                 pickle.dump((params, results), ff, protocol=-1)
         results.trim_arrays()
-        with open('%sinfo.pkl' % prefix, 'w') as ff:
-            pickle.dump((params, results), ff, protocol=-1)
+        if not skipsmall:
+            with open('%sinfo.pkl' % prefix, 'w') as ff:
+                pickle.dump((params, results), ff, protocol=-1)
