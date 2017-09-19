@@ -20,7 +20,7 @@ from caffe_proc_thread import CaffeProcThread
 from jpg_vis_loading_thread import JPGVisLoadingThread
 from caffevis_app_state import CaffeVisAppState, SiameseInputMode, PatternMode
 from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, \
-    check_force_backward_true, load_mean, get_image_from_files
+    check_force_backward_true, set_mean, get_image_from_files
 
 
 class CaffeVisApp(BaseApp):
@@ -55,46 +55,14 @@ class CaffeVisApp(BaseApp):
         self.net = caffe.Classifier(
             settings.caffevis_deploy_prototxt,
             settings.caffevis_network_weights,
-            mean = None, # Set to None for now, assign later self._data_mean
+            mean = None, # Set to None for now, assign later
             channel_swap = self._net_channel_swap,
             raw_scale = settings.caffe_net_raw_scale,
             image_dims=settings.caffe_net_image_dims,
         )
 
-        if isinstance(settings.caffevis_data_mean, basestring):
-            # If the mean is given as a filename, load the file
-            try:
-                self._data_mean = load_mean(settings.caffevis_data_mean)
+        self._data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, self.net)
 
-            except IOError:
-                print '\n\nCound not load mean file:', settings.caffevis_data_mean
-                print 'Ensure that the values in settings.py point to a valid model weights file, network'
-                print 'definition prototxt, and mean. To fetch a default model and mean file, use:\n'
-                print '$ cd models/caffenet-yos/'
-                print '$ ./fetch.sh\n\n'
-                raise
-            input_shape = self.net.blobs[self.net.inputs[0]].data.shape[-2:]   # e.g. 227x227
-            # Crop center region (e.g. 227x227) if mean is larger (e.g. 256x256)
-            excess_h = self._data_mean.shape[1] - input_shape[0]
-            excess_w = self._data_mean.shape[2] - input_shape[1]
-            assert excess_h >= 0 and excess_w >= 0, 'mean should be at least as large as %s' % repr(input_shape)
-            self._data_mean = self._data_mean[:, (excess_h/2):(excess_h/2+input_shape[0]),
-                                              (excess_w/2):(excess_w/2+input_shape[1])]
-        elif settings.caffevis_data_mean is None:
-            self._data_mean = None
-        else:
-            # The mean has been given as a value or a tuple of values
-            self._data_mean = np.array(settings.caffevis_data_mean)
-            # Promote to shape C,1,1
-            while len(self._data_mean.shape) < 1:
-                self._data_mean = np.expand_dims(self._data_mean, -1)
-            
-            #if not isinstance(self._data_mean, tuple):
-            #    # If given as int/float: promote to tuple
-            #    self._data_mean = tuple(self._data_mean)
-        if self._data_mean is not None:
-            self.net.transformer.set_mean(self.net.inputs[0], self._data_mean)
-        
         check_force_backward_true(settings.caffevis_deploy_prototxt)
 
         self.labels = None
@@ -654,7 +622,7 @@ class CaffeVisApp(BaseApp):
                 grad_img = grad_blob[:, :, :]  # do nothing
             else:
                 grad_img = grad_blob[:, :, self._net_channel_swap_inv]  # e.g. BGR -> RGB
-                
+
             # Mode-specific processing
             assert back_mode in ('grad', 'deconv')
             assert back_filt_mode in ('raw', 'gray', 'norm', 'normblur')

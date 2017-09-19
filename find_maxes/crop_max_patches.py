@@ -11,7 +11,7 @@ import argparse
 import cPickle as pickle
 
 import settings
-from caffevis.caffevis_helper import load_mean, load_imagenet_mean
+from caffevis.caffevis_helper import set_mean
 
 from jby_misc import WithTimer
 from max_tracker import output_max_patches
@@ -37,7 +37,6 @@ def main():
     parser.add_argument('--datadir',      type = str, default = settings.static_files_dir, help = 'directory to look for files in')
     parser.add_argument('--filelist',     type = str, default = settings.static_files_input_file, help = 'List of image files to consider, one per line. Must be the same filelist used to produce the NetMaxTracker!')
     parser.add_argument('--outdir',       type = str, default = settings.max_tracker_output_dir, help = 'Which output directory to use. Files are output into outdir/layer/unit_%%04d/{maxes,deconv,backprop}_%%03d.png')
-    parser.add_argument('--mean',         type = str, default = settings.caffevis_data_mean, help = 'data mean to load')
     args = parser.parse_args()
 
     sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
@@ -51,11 +50,6 @@ def main():
         caffe.set_mode_cpu()
         print 'crop_max_patches mode (in main thread):     CPU'
 
-    if args.mean == "":
-        data_mean = load_imagenet_mean(settings)
-    else:
-        data_mean = load_mean(args.mean)
-
     net = caffe.Classifier(args.net_prototxt,
                            args.net_weights,
                            mean=None,
@@ -63,8 +57,7 @@ def main():
                            raw_scale=settings.caffe_net_raw_scale,
                            image_dims=settings.caffe_net_image_dims)
 
-    if data_mean is not None:
-        net.transformer.set_mean(net.inputs[0], data_mean)
+    data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
 
     assert args.do_maxes or args.do_deconv or args.do_deconv_norm or args.do_backprop or args.do_backprop_norm or args.do_info, 'Specify at least one do_* option to output.'
 

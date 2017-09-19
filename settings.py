@@ -176,8 +176,8 @@ caffevis_mode_gpu = locals().get('caffevis_mode_gpu', True)
 # channel or None.
 caffevis_data_mean = locals().get('caffevis_data_mean', None)
 
-# should we calculate the channelwise average of the input mean file
-channelwise_mean = locals().get('channelwise_mean', False)
+# should we generate the channelwise average of the input mean file
+generate_channelwise_mean = locals().get('generate_channelwise_mean', False)
 
 # Path to file listing labels in order, one per line, used for the
 # below two features. None to disable.

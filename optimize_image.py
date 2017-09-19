@@ -7,7 +7,7 @@ import numpy as np
 
 import settings
 from optimize.gradient_optimizer import GradientOptimizer, FindParams
-from caffevis.caffevis_helper import check_force_backward_true, read_label_file, load_mean
+from caffevis.caffevis_helper import check_force_backward_true, read_label_file, set_mean
 
 LR_POLICY_CHOICES = ('constant', 'progress', 'progress01')
 
@@ -164,44 +164,13 @@ def main():
     net = caffe.Classifier(
         args.deploy_proto,
         args.net_weights,
-        mean=None,  # Set to None for now, assign later self._data_mean
+        mean=None,  # Set to None for now, assign later
         channel_swap=settings.caffe_net_channel_swap,
         raw_scale=settings.caffe_net_raw_scale,
         image_dims=settings.caffe_net_image_dims,
     )
 
-    if isinstance(settings.caffevis_data_mean, basestring):
-        # If the mean is given as a filename, load the file
-        try:
-            data_mean = load_mean(settings.caffevis_data_mean)
-        except IOError:
-            print '\n\nCound not load mean file:', data_mean
-            print 'To fetch a default model and mean file, use:\n'
-            print '  $ cd models/caffenet-yos/'
-            print '  $ cp ./fetch.sh\n\n'
-            print 'Or to use your own mean, change caffevis_data_mean in settings_local.py or override by running with `--mean MEAN_FILE` (see --help).\n'
-            raise
-        input_shape = net.blobs[net.inputs[0]].data.shape[-2:]  # e.g. 227x227
-
-        # Crop center region (e.g. 227x227) if mean is larger (e.g. 256x256)
-        excess_h = data_mean.shape[1] - input_shape[0]
-        excess_w = data_mean.shape[2] - input_shape[1]
-        assert excess_h >= 0 and excess_w >= 0, 'mean should be at least as large as %s' % repr(input_shape)
-        data_mean = data_mean[:, (excess_h / 2):(excess_h / 2 + input_shape[0]),
-                    (excess_w / 2):(excess_w / 2 + input_shape[1])]
-    elif args.data_mean is None:
-        pass
-    else:
-        # The mean has been given as a value or a tuple of values
-        data_mean = np.array(settings.caffevis_data_mean)
-        # Promote to shape C,1,1
-        while len(data_mean.shape) < 3:
-            data_mean = np.expand_dims(data_mean, -1)
-
-    print 'Using mean with shape:', data_mean.shape
-
-    if data_mean is not None:
-        net.transformer.set_mean(net.inputs[0], data_mean)
+    data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
 
     check_force_backward_true(settings.caffevis_deploy_prototxt)
 
