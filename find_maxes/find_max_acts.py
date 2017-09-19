@@ -26,6 +26,7 @@ def main():
     parser.add_argument('--datadir', type = str, default = settings.static_files_dir, help = 'directory to look for files in')
     parser.add_argument('--outfile', type=str, default = settings.find_max_acts_output_file, help='output filename for pkl')
     parser.add_argument('--mean', type = str, default = settings.caffevis_data_mean, help = 'data mean to load')
+    parser.add_argument('--channelwise_mean', action = 'store_true', default = settings.channelwise_mean, help = 'should we calculate the channelwise average of the input mean file')
     args = parser.parse_args()
 
     sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
@@ -45,12 +46,16 @@ def main():
     else:
         data_mean = load_mean(args.mean)
 
+    if args.channelwise_mean:
+        data_mean = data_mean.mean(1).mean(1)
+
     net = caffe.Classifier(args.net_prototxt,
                            args.net_weights,
                            mean=None,
                            channel_swap=settings.caffe_net_channel_swap,
                            raw_scale=settings.caffe_net_raw_scale,
                            image_dims=settings.caffe_net_image_dims)
+
 
     if data_mean is not None:
         net.transformer.set_mean(net.inputs[0], data_mean)
