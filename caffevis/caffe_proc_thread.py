@@ -6,7 +6,7 @@ from codependent_thread import CodependentThread
 from misc import WithTimer
 from caffevis_helper import net_preproc_forward
 from caffevis_app_state import SiameseInputMode
-
+from caffe_misc import get_top_to_layer_dict
 
 class CaffeProcThread(CodependentThread):
     '''Runs Caffe in separate thread.'''
@@ -27,6 +27,8 @@ class CaffeProcThread(CodependentThread):
         self.mode_gpu = mode_gpu      # Needed so the mode can be set again in the spawned thread, because there is a separate Caffe object per thread.
 
         self.settings = settings
+
+        self.top_to_layer_dict = get_top_to_layer_dict(self.net)
 
 
     def run(self):
@@ -113,16 +115,19 @@ class CaffeProcThread(CodependentThread):
                             if self.state.siamese_input_mode_has_two_images(backprop_layer):
                                 diffs0 = self.net.blobs[backprop_layer[0]].diff * 0
                                 diffs0[0][backprop_unit] = self.net.blobs[backprop_layer[0]].data[0, backprop_unit]
-                                self.net.backward_from_layer(backprop_layer[0], diffs0, zero_higher = True)
+                                backprop_layer_name = self.top_to_layer_dict[backprop_layer[0]]
+                                self.net.backward_from_layer(backprop_layer_name, diffs0, zero_higher = True)
 
                                 diffs1 = self.net.blobs[backprop_layer[1]].diff * 0
                                 diffs1[0][backprop_unit] = self.net.blobs[backprop_layer[1]].data[0, backprop_unit]
-                                self.net.backward_from_layer(backprop_layer[1], diffs1, zero_higher=True)
+                                backprop_layer_name = self.top_to_layer_dict[backprop_layer[1]]
+                                self.net.backward_from_layer(backprop_layer_name, diffs1, zero_higher=True)
 
                             else:
                                 diffs = self.net.blobs[default_backprop_layer].diff * 0
                                 diffs[0][backprop_unit] = self.net.blobs[default_backprop_layer].data[0, backprop_unit]
-                                self.net.backward_from_layer(default_backprop_layer, diffs, zero_higher = True)
+                                backprop_layer_name = self.top_to_layer_dict[default_backprop_layer]
+                                self.net.backward_from_layer(backprop_layer_name, diffs, zero_higher = True)
                         except AttributeError:
                             print 'ERROR: required bindings (backward_from_layer) not found! Try using the deconv-deep-vis-toolbox branch as described here: https://github.com/yosinski/deep-visualization-toolbox'
                             raise
@@ -137,16 +142,19 @@ class CaffeProcThread(CodependentThread):
                             if self.state.siamese_input_mode_has_two_images(backprop_layer):
                                 diffs0 = self.net.blobs[backprop_layer[0]].diff * 0
                                 diffs0[0][backprop_unit] = self.net.blobs[backprop_layer[0]].data[0, backprop_unit]
-                                self.net.deconv_from_layer(backprop_layer[0], diffs0, zero_higher=True)
+                                backprop_layer_name = self.top_to_layer_dict[backprop_layer[0]]
+                                self.net.deconv_from_layer(backprop_layer_name, diffs0, zero_higher=True)
 
                                 diffs1 = self.net.blobs[backprop_layer[1]].diff * 0
                                 diffs1[0][backprop_unit] = self.net.blobs[backprop_layer[1]].data[0, backprop_unit]
-                                self.net.deconv_from_layer(backprop_layer[1], diffs1, zero_higher=True)
+                                backprop_layer_name = self.top_to_layer_dict[backprop_layer[1]]
+                                self.net.deconv_from_layer(backprop_layer_name, diffs1, zero_higher=True)
 
                             else:
                                 diffs = self.net.blobs[default_backprop_layer].diff * 0
                                 diffs[0][backprop_unit] = self.net.blobs[default_backprop_layer].data[0, backprop_unit]
-                                self.net.deconv_from_layer(default_backprop_layer, diffs, zero_higher = True)
+                                backprop_layer_name = self.top_to_layer_dict[default_backprop_layer]
+                                self.net.deconv_from_layer(backprop_layer_name, diffs, zero_higher = True)
                         except AttributeError:
                             print 'ERROR: required bindings (deconv_from_layer) not found! Try using the deconv-deep-vis-toolbox branch as described here: https://github.com/yosinski/deep-visualization-toolbox'
                             raise

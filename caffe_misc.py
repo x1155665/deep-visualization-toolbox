@@ -241,3 +241,21 @@ def extract_patch_from_image(data, net, selected_input_index, settings,
                                                                        data_ii_start:data_ii_end,
                                                                        data_jj_start:data_jj_end]
     return out_arr
+
+
+def get_top_to_layer_dict(net):
+
+    top_to_layer = dict()
+
+    # go over layers
+    for layer in list(net._layer_names):
+
+        if len(net.top_names[layer]) == 1 and len(net.bottom_names[layer]) == 1 and net.top_names[layer][0] == net.bottom_names[layer][0]:
+            # skip inplace layers
+            continue
+
+        # go over tops
+        for top_name in net.top_names[layer]:
+            top_to_layer[top_name] = layer
+
+    return top_to_layer
