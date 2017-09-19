@@ -792,7 +792,7 @@ class CaffeVisApp(BaseApp):
                       FormattedString(nav_string, defaults)])
             
         for tag in ('sel_layer_left', 'sel_layer_right', 'zoom_mode', 'next_pattern_mode','pattern_first_only',
-                    'ez_back_mode_loop', 'freeze_back_unit', 'show_back', 'back_mode', 'back_filt_mode',
+                    'next_ez_back_mode_loop', 'freeze_back_unit', 'show_back', 'back_mode', 'back_filt_mode',
                     'boost_gamma', 'boost_individual', 'reset_state', 'siamese_input_mode', 'show_maximal_score'):
             key_strings, help_string = self.bindings.get_key_help(tag)
             label = '%10s:' % (','.join(key_strings))

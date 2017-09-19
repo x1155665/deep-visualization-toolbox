@@ -108,7 +108,9 @@ _.add('prev_pattern_mode', 'S',
 _.add('pattern_first_only', '1',
        'Toggle pattern loading first image only or loading all available images')
 
-_.add('ez_back_mode_loop', 'b',
+_.add('next_ez_back_mode_loop', 'b',
+       'Cycle through a few common backprop/deconv modes')
+_.add('prev_ez_back_mode_loop', 'B',
        'Cycle through a few common backprop/deconv modes')
 _.add('freeze_back_unit', 'd',
        'Freeze the bprop/deconv origin to be the currently selected unit')

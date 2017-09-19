@@ -225,7 +225,7 @@ class CaffeVisAppState(object):
                         self.back_filt_mode = 'normblur'
                     else:
                         self.back_filt_mode = 'raw'
-            elif tag == 'ez_back_mode_loop':
+            elif tag == 'next_ez_back_mode_loop':
                 # Cycle:
                 # off -> grad (raw) -> grad(gray) -> grad(norm) -> grad(normblur) -> deconv
                 if not self.back_enabled:
@@ -241,6 +241,22 @@ class CaffeVisAppState(object):
                     self.back_stale = True
                 else:
                     self.back_enabled = False
+            elif tag == 'prev_ez_back_mode_loop':
+                    # Cycle:
+                    # off -> grad (raw) -> grad(gray) -> grad(norm) -> grad(normblur) -> deconv
+                    if not self.back_enabled:
+                        self.back_enabled = True
+                        self.back_mode = 'deconv'
+                        self.back_filt_mode = 'raw'
+                        self.back_stale = True
+                    elif self.back_mode == 'deconv':
+                        self.back_mode = 'grad'
+                        self.back_filt_mode = 'norm'
+                        self.back_stale = True
+                    elif self.back_mode == 'grad' and self.back_filt_mode == 'norm':
+                        self.back_filt_mode = 'raw'
+                    else:
+                        self.back_enabled = False
             elif tag == 'freeze_back_unit':
                 # Freeze selected layer/unit as backprop unit
                 self.backprop_selection_frozen = not self.backprop_selection_frozen
