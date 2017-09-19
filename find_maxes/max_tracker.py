@@ -99,6 +99,9 @@ def prepare_histogram(layer_name, n_channels, channel_to_histogram_values, proce
     percent_dead = np.zeros((n_channels), dtype=np.float32)
     for channel_idx in xrange(n_channels):
 
+        if channel_idx % 100 == 0:
+            print "calculating histogram for channel %d our of %d" % (channel_idx, n_channels)
+
         hist, bin_edges = channel_to_histogram_values(channel_idx)
 
         # generate histogram image file
@@ -364,7 +367,9 @@ class NetMaxTracker(object):
 
     def run_post_processing(self, outdir, do_histograms):
 
+        print "run_post_processing on network"
         for layer_name in self.layers:
+            print "run_post_processing on layer %s" % layer_name
 
             # normalize layer name, this is used for siamese networks where we want layers "conv_1" and "conv_1_p" to
             # count as the same layer in terms of activations
