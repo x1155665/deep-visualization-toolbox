@@ -15,7 +15,7 @@ from find_maxes.find_max_acts import load_max_tracker_from_file
 import find_maxes.max_tracker
 sys.modules['max_tracker'] = find_maxes.max_tracker
 
-from misc import WithTimer
+from misc import WithTimer, mkdir_p
 from numpy_cache import FIFOLimitedArrayCache
 from app_base import BaseApp
 from image_misc import norm01, norm01c, norm0255, tile_images_normalize, ensure_float01, tile_images_make_tiles, \
@@ -698,8 +698,9 @@ class CaffeVisApp(BaseApp):
         if display_3D_highres is None or display_2D is None:
             pane_shape = pane.data.shape
 
-            cache_layer_weights_histogram_image_path = os.path.join(self.settings.caffevis_unit_jpg_dir, layer_name, 'layer_weights_histogram.png')
-            cache_details_weights_histogram_image_path = os.path.join(self.settings.caffevis_unit_jpg_dir, layer_name, 'details_weights_histogram.png')
+            folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, layer_name)
+            cache_layer_weights_histogram_image_path = os.path.join(folder_path, 'layer_weights_histogram.png')
+            cache_details_weights_histogram_image_path = os.path.join(folder_path, 'details_weights_histogram.png')
 
             # plotting objects needed for
             # 1. calculating size of results array
@@ -835,6 +836,7 @@ class CaffeVisApp(BaseApp):
                         display_2D = display_3D_highres[0]
                         is_layer_summary_loaded = True
 
+                        mkdir_p(folder_path)
                         save_caffe_image(display_2D.astype(np.float32).transpose((2,0,1)), cache_layer_weights_histogram_image_path)
 
                     else:
@@ -849,6 +851,7 @@ class CaffeVisApp(BaseApp):
                         display_2D = self.prepare_tile_image(display_3D, False, n_channels, tile_rows, tile_cols)
 
                         # save histogram image to cache
+                        mkdir_p(folder_path)
                         save_caffe_image(display_2D.astype(np.float32).transpose((2,0,1)), cache_details_weights_histogram_image_path)
 
                         # generate empty highlights

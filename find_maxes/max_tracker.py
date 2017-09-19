@@ -7,6 +7,7 @@ from datetime import datetime
 import cv2
 
 import numpy as np
+from misc import mkdir_p
 from image_misc import cv2_read_file_rgb, resize_without_fit
 from caffe_misc import RegionComputer, save_caffe_image, get_max_data_extent, extract_patch_from_image, \
     compute_data_layer_focus_area, layer_name_to_top_name
@@ -73,17 +74,6 @@ class InfoFileMetadata(object):
     def __init__(self, info_file = None, ref_count = None):
         self.info_file = info_file
         self.ref_count = ref_count
-
-
-def mkdir_p(path):
-    # From https://stackoverflow.com/questions/600268/mkdir-p-functionality-in-python
-    try:
-        os.makedirs(path)
-    except OSError as exc: # Python >2.5
-        if exc.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        else:
-            raise
 
 
 def prepare_max_histogram(layer_name, n_channels, channel_to_histogram_values, process_channel_figure, process_layer_figure):
