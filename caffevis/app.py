@@ -666,6 +666,11 @@ class CaffeVisApp(BaseApp):
                 if not net_max_tracker.max_trackers.has_key(default_layer_name):
                     return display_3D_highres, display_3D
 
+                # check if
+                if not hasattr(net_max_tracker.max_trackers[default_layer_name], 'channel_to_histogram'):
+                    print "ERROR: file %s is missing the field channel_to_histogram, try rerun find_max_acts to generate it" % (self.settings.caffevis_maximum_activation_histogram_data_file)
+                    return display_3D_highres, display_3D
+
                 channel_to_histogram = net_max_tracker.max_trackers[default_layer_name].channel_to_histogram
 
                 def channel_to_histogram_values(channel_idx):
