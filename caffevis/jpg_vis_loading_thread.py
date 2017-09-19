@@ -50,7 +50,7 @@ class JPGVisLoadingThread(CodependentThread):
             images[image_index_to_set] = np.zeros((resize_shape[0], resize_shape[1], 3), dtype=np.uint8)
             pass
 
-    def prepare_score_captions_for_max_input_images(self, state_layer_name, state_selected_unit):
+    def get_score_values_for_max_input_images(self, state_layer_name, state_selected_unit):
 
         info_file_path = os.path.join(self.settings.caffevis_unit_jpg_dir, state_layer_name,
                                         "unit_%04d" % (state_selected_unit),
@@ -64,21 +64,18 @@ class JPGVisLoadingThread(CodependentThread):
             lines = lines[1:]
 
             # take second word from each line, and convert to float
-            second_column = [float(line.split(' ')[1]) for line in lines]
+            values = [float(line.split(' ')[1]) for line in lines]
 
-            # convert to string with 2 decimal digits
-            captions = [('%.2f' % value) for value in second_column]
-
-        return captions
+        return values
 
     def load_image_into_pane_max_tracker_format(self, state_layer_name, state_selected_unit, resize_shape, images,
-                                                file_search_pattern, image_index_to_set, should_crop_to_corner=False, first_only = False, captions = []):
+                                                file_search_pattern, image_index_to_set, should_crop_to_corner=False, first_only = False, captions = [], values = []):
 
         unit_folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, state_layer_name,
                                         "unit_%04d" % (state_selected_unit),
                                         file_search_pattern)
 
-        images[image_index_to_set] = get_image_from_files(self.settings, unit_folder_path, should_crop_to_corner, resize_shape, first_only, captions)
+        images[image_index_to_set] = get_image_from_files(self.settings, unit_folder_path, should_crop_to_corner, resize_shape, first_only, captions, values)
         return
 
     def run(self):
@@ -143,13 +140,16 @@ class JPGVisLoadingThread(CodependentThread):
 
             elif self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
 
+                # convert to string with 2 decimal digits
+                values = self.get_score_values_for_max_input_images(state_layer_name, state_selected_unit)
+
                 if self.state.show_maximal_score:
-                    captions = self.prepare_score_captions_for_max_input_images(state_layer_name, state_selected_unit)
+                    captions = [('%.2f' % value) for value in values]
                 else:
                     captions = []
                 self.load_image_into_pane_max_tracker_format(state_layer_name, state_selected_unit, resize_shape, images,
                                                              file_search_pattern='maxim*.png',
-                                                             image_index_to_set=1, captions=captions)
+                                                             image_index_to_set=1, captions=captions, values=values)
 
 
             if self.settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image':
@@ -161,9 +161,12 @@ class JPGVisLoadingThread(CodependentThread):
                                                           image_index_to_set=2)
 
             elif self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
+                # convert to string with 2 decimal digits
+                values = self.get_score_values_for_max_input_images(state_layer_name, state_selected_unit)
+
                 self.load_image_into_pane_max_tracker_format(state_layer_name, state_selected_unit, resize_shape, images,
                                                              file_search_pattern='deconv*.png',
-                                                             image_index_to_set=2)
+                                                             image_index_to_set=2, values=values)
 
             # Prune images that were not found:
             images = [im for im in images if im is not None]

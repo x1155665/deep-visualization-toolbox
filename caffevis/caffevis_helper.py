@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+from sys import float_info
 
 import numpy as np
 import os
@@ -203,7 +204,7 @@ def set_mean(caffevis_data_mean, generate_channelwise_mean, net):
     return data_mean
 
 
-def get_image_from_files(settings, unit_folder_path, should_crop_to_corner, resize_shape, first_only, captions = []):
+def get_image_from_files(settings, unit_folder_path, should_crop_to_corner, resize_shape, first_only, captions = [], values = []):
     try:
 
         # list unit images
@@ -221,6 +222,12 @@ def get_image_from_files(settings, unit_folder_path, should_crop_to_corner, resi
         # load all images
         unit_images = [caffe_load_image(unit_image_path, color=True, as_uint=True) for unit_image_path in
                        unit_images_path]
+
+        # clear images with 0 value
+        if values:
+            for i in range(len(values)):
+                if values[i] < float_info.epsilon:
+                    unit_images[i] *= 0
 
         if should_crop_to_corner:
             unit_images = [crop_to_corner(img, 2) for img in unit_images]
