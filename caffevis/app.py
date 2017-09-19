@@ -369,8 +369,15 @@ class CaffeVisApp(BaseApp):
                                                                                               file_search_pattern='opt*.jpg')
             elif self.state.pattern_mode == PatternMode.MAXIMAL_INPUT_IMAGE:
 
-                # do something
-                if self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
+                if self.settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image':
+                    # maximal input image patterns is not implemented in original format
+                    display_3D_highres = np.zeros((layer_dat_3D.shape[0], pane.data.shape[0],
+                                                   pane.data.shape[1],
+                                                   pane.data.shape[2]), dtype=np.uint8)
+                    display_3D = self.downsample_display_3d(display_3D_highres, layer_dat_3D, pane, tile_cols, tile_rows)
+                    print "ERROR: patterns view with maximal input images is not implemented when settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image'"
+
+                elif self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
                     display_3D, display_3D_highres = self.load_pattern_images_optimizer_format(default_layer_name,
                                                                                                layer_dat_3D, n_tiles,
                                                                                                pane,
