@@ -1,20 +1,26 @@
 #! /usr/bin/env python
 # -*- coding: utf-8
 
-import sys
-import os
+# add parent folder to search path, to enable import of core modules like settings
+import os,sys,inspect
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+sys.path.insert(0,parentdir)
+
 import cv2
 import numpy as np
-import time
 import StringIO
-import glob
+
+from find_maxes.find_max_acts import load_max_tracker_from_file
+import find_maxes.max_tracker
+sys.modules['max_tracker'] = find_maxes.max_tracker
 
 from misc import WithTimer
 from numpy_cache import FIFOLimitedArrayCache
 from app_base import BaseApp
 from image_misc import norm01, norm01c, norm0255, tile_images_normalize, ensure_float01, tile_images_make_tiles, \
     ensure_uint255_and_resize_to_fit, get_tiles_height_width, get_tiles_height_width_ratio, resize_without_fit, \
-    cv2_read_file_rgb, caffe_load_image
+    cv2_read_file_rgb, caffe_load_image, ensure_uint255_and_resize_without_fit
 from image_misc import FormattedString, cv2_typeset_text, to_255
 from caffe_proc_thread import CaffeProcThread
 from jpg_vis_loading_thread import JPGVisLoadingThread
@@ -256,9 +262,17 @@ class CaffeVisApp(BaseApp):
         fps = self.proc_thread.approx_fps()
         with self.state.lock:
             pattern_first_mode = "first" if self.state.pattern_first_only else "all"
-            print >>status, 'pattern(' + pattern_first_mode + ' optimized max)' if self.state.pattern_mode == PatternMode.MAXIMAL_OPTIMIZED_IMAGE else \
-                ('pattern(' + pattern_first_mode + ' input max)' if self.state.pattern_mode == PatternMode.MAXIMAL_INPUT_IMAGE else
-                ('back' if self.state.layers_show_back else 'fwd')),
+            if self.state.pattern_mode == PatternMode.MAXIMAL_OPTIMIZED_IMAGE:
+                print >> status, 'pattern(' + pattern_first_mode + ' optimized max)'
+            elif self.state.pattern_mode == PatternMode.MAXIMAL_INPUT_IMAGE:
+                print >> status, 'pattern(' + pattern_first_mode + ' input max)'
+            elif self.state.pattern_mode == PatternMode.MAX_ACTIVATIONS_HISTOGRAM:
+                print >> status, 'histogram(maximal activations)'
+            elif self.state.layers_show_back:
+                print >> status, 'back'
+            else:
+                print >> status, 'fwd'
+
             default_layer_name = self.state.get_default_layer_name()
             print >>status, '%s:%d |' % (default_layer_name, self.state.selected_unit),
             if not self.state.back_enabled:
@@ -330,6 +344,7 @@ class CaffeVisApp(BaseApp):
         tile_rows, tile_cols = self.state.net_blob_info[top_name]['tiles_rc']
 
         display_3D_highres = None
+        is_layer_summary_loaded = False
         if self.state.pattern_mode != PatternMode.OFF:
             # Show desired patterns loaded from disk
 
@@ -363,6 +378,24 @@ class CaffeVisApp(BaseApp):
                                                                                                pane,
                                                                                                tile_cols, tile_rows, self.state.pattern_first_only,
                                                                                                file_search_pattern='maxim*.png')
+
+            elif self.state.pattern_mode == PatternMode.MAX_ACTIVATIONS_HISTOGRAM:
+
+                    if self.settings.caffevis_histograms_format == 'load_from_file':
+                        display_3D, display_3D_highres = self.load_pattern_images_optimizer_format(default_layer_name,
+                                                                                                  layer_dat_3D, n_tiles, pane,
+                                                                                                  tile_cols, tile_rows, True,
+                                                                                                  file_search_pattern='max_histogram.png',
+                                                                                                  show_layer_summary=self.state.cursor_area == 'top',
+                                                                                                  file_summary_pattern='layer_inactivity.png')
+
+                    elif self.settings.caffevis_histograms_format == 'calculate_in_realtime':
+                        display_3D, display_3D_highres = self.load_maximal_activations_histograms(default_layer_name,
+                                                                                                 layer_dat_3D, n_tiles, pane,
+                                                                                                 tile_cols, tile_rows,
+                                                                                                 show_layer_summary=self.state.cursor_area == 'top')
+
+                    is_layer_summary_loaded = display_3D_highres is not None and display_3D_highres.shape[0] == 1
 
 
             else:
@@ -417,7 +450,10 @@ class CaffeVisApp(BaseApp):
             if self.state.backprop_selection_frozen and self.state.get_current_layer_definition() == self.state.get_current_backprop_layer_definition():
                 highlights[self.state.backprop_unit] = self.settings.caffevis_layer_clr_back_sel  # in [0,1] range
 
-        _, display_2D = tile_images_make_tiles(display_3D, hw = (tile_rows,tile_cols), padval = padval, highlights = highlights)
+        if is_layer_summary_loaded:
+            display_2D = display_3D_highres[0]
+        else:
+            _, display_2D = tile_images_make_tiles(display_3D, hw = (tile_rows,tile_cols), padval = padval, highlights = highlights)
 
         if display_3D_highres is None:
             display_3D_highres = display_3D
@@ -504,7 +540,7 @@ class CaffeVisApp(BaseApp):
         return display_3D, display_3D_highres
 
     def load_pattern_images_optimizer_format(self, default_layer_name, layer_dat_3D, n_tiles, pane,
-                                            tile_cols, tile_rows, first_only, file_search_pattern):
+                                            tile_cols, tile_rows, first_only, file_search_pattern, show_layer_summary = False, file_summary_pattern = ""):
         display_3D_highres = None
         load_layer = default_layer_name
         if self.settings.caffevis_jpgvis_remap and load_layer in self.settings.caffevis_jpgvis_remap:
@@ -514,16 +550,28 @@ class CaffeVisApp(BaseApp):
             # get number of units
             units_num = layer_dat_3D.shape[0]
 
-            pattern_image_key = (self.settings.caffevis_unit_jpg_dir, load_layer, "unit_%04d", units_num, file_search_pattern, first_only)
+            pattern_image_key = (self.settings.caffevis_unit_jpg_dir, load_layer, "unit_%04d", units_num, file_search_pattern, first_only, show_layer_summary, file_summary_pattern)
 
             # Get highres version
             display_3D_highres = self.img_cache.get(pattern_image_key, None)
 
             if display_3D_highres is None:
                 try:
-                    with WithTimer('CaffeVisApp:load_first_image_per_unit', quiet=self.debug_level < 1):
-                        resize_shape = pane.data.shape
-                        display_3D_highres = self.load_image_per_unit(display_3D_highres, load_layer, units_num, first_only, resize_shape, file_search_pattern)
+
+                    resize_shape = pane.data.shape
+
+                    if show_layer_summary:
+                        # load layer summary image
+                        layer_summary_image_path = os.path.join(self.settings.caffevis_unit_jpg_dir, load_layer, file_summary_pattern)
+                        layer_summary_image = caffe_load_image(layer_summary_image_path, color=True, as_uint=True)
+                        layer_summary_image = ensure_uint255_and_resize_without_fit(layer_summary_image, resize_shape)
+                        display_3D_highres = layer_summary_image
+                        display_3D_highres = np.expand_dims(display_3D_highres, 0)
+
+                    else:
+                        with WithTimer('CaffeVisApp:load_image_per_unit', quiet=self.debug_level < 1):
+                            # load all images
+                            display_3D_highres = self.load_image_per_unit(display_3D_highres, load_layer, units_num, first_only, resize_shape, file_search_pattern)
 
                 except IOError:
                     # File does not exist, so just display disabled.
@@ -578,6 +626,96 @@ class CaffeVisApp(BaseApp):
         else:
             display_3D = layer_dat_3D * 0  # nothing to show
         return display_3D
+
+    def fig2data(self, fig):
+        """
+        @brief Convert a Matplotlib figure to a 3D numpy array with RGB channels and return it
+        @param fig a matplotlib figure
+        @return a numpy 3D array of RGB values
+        """
+        # draw the renderer
+        fig.canvas.draw()
+
+        # Get the RGB buffer from the figure
+        w, h = fig.canvas.get_width_height()
+        buf = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        buf.shape = (w, h, 3)
+
+        return buf
+
+    def load_maximal_activations_histograms(self, default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows, show_layer_summary):
+
+        display_3D_highres = layer_dat_3D * 0
+        display_3D = layer_dat_3D * 0
+
+        if not self.settings.caffevis_maximum_activation_histogram_data_file:
+            return display_3D_highres, display_3D
+
+        pattern_image_key = (self.settings.caffevis_maximum_activation_histogram_data_file, default_layer_name, "max histograms", show_layer_summary)
+
+        # Get highres version
+        display_3D_highres = self.img_cache.get(pattern_image_key, None)
+
+        pane_shape = pane.data.shape
+
+        if display_3D_highres is None:
+            try:
+                # load pickle file
+                net_max_tracker = load_max_tracker_from_file(self.settings.caffevis_maximum_activation_histogram_data_file)
+
+                if not net_max_tracker.max_trackers.has_key(default_layer_name):
+                    return display_3D_highres, display_3D
+
+                channel_to_histogram = net_max_tracker.max_trackers[default_layer_name].channel_to_histogram
+
+                def channel_to_histogram_values(channel_idx):
+
+                    # get channel data
+                    hist, bin_edges = channel_to_histogram[channel_idx]
+
+                    return hist, bin_edges
+
+                display_3D_highres_list = [display_3D_highres, display_3D_highres]
+
+                def process_channel_figure(channel_idx, fig):
+                    figure_buffer = self.fig2data(fig)
+
+                    # handle first generation of results container
+                    if display_3D_highres_list[0] is None:
+                        first_shape = figure_buffer.shape
+                        display_3D_highres_list[0] = np.zeros((len(channel_to_histogram), first_shape[0],
+                                                       first_shape[1],
+                                                       first_shape[2]), dtype=np.uint8)
+
+                    display_3D_highres_list[0][channel_idx, :, ::] = figure_buffer
+                    pass
+
+                def process_layer_figure(fig):
+                    figure_buffer = self.fig2data(fig)
+                    display_3D_highres_list[1] = ensure_uint255_and_resize_without_fit(figure_buffer, pane_shape)
+                    display_3D_highres_list[1] = np.expand_dims(display_3D_highres_list[1], 0)
+                    pass
+
+                n_channels = len(channel_to_histogram)
+                find_maxes.max_tracker.prepare_histogram(default_layer_name, n_channels, channel_to_histogram_values, process_channel_figure, process_layer_figure)
+
+                pattern_image_key_layer = (self.settings.caffevis_maximum_activation_histogram_data_file, default_layer_name, "max histograms",True)
+                pattern_image_key_details = (self.settings.caffevis_maximum_activation_histogram_data_file, default_layer_name, "max histograms",False)
+
+                self.img_cache.set(pattern_image_key_details, display_3D_highres_list[0])
+                self.img_cache.set(pattern_image_key_layer, display_3D_highres_list[1])
+
+                if show_layer_summary:
+                    display_3D_highres = display_3D_highres_list[1]
+                else:
+                    display_3D_highres = display_3D_highres_list[0]
+
+            except IOError:
+                # File does not exist, so just display disabled.
+                pass
+
+        display_3D = self.downsample_display_3d(display_3D_highres, layer_dat_3D, pane, tile_cols, tile_rows)
+        return display_3D, display_3D_highres
 
     def _draw_aux_pane(self, pane, layer_data_normalized):
         pane.data[:] = to_255(self.settings.window_background)

@@ -86,6 +86,69 @@ def mkdir_p(path):
             raise
 
 
+def prepare_histogram(layer_name, n_channels, channel_to_histogram_values, process_channel_figure, process_layer_figure):
+
+    from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+    from matplotlib.figure import Figure
+
+    fig = Figure(figsize=(10, 10))
+    canvas = FigureCanvas(fig)
+    ax = fig.add_subplot(111)
+
+    # for each channel
+    percent_dead = np.zeros((n_channels), dtype=np.float32)
+    for channel_idx in xrange(n_channels):
+
+        hist, bin_edges = channel_to_histogram_values(channel_idx)
+
+        # generate histogram image file
+        width = 0.7 * (bin_edges[1] - bin_edges[0])
+        center = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+        barlist = ax.bar(center, hist, align='center', width=width, color='g')
+
+        for i in range(len(hist)):
+            if 0 >= bin_edges[i] and 0 <= bin_edges[i+1]:
+                # mark dead bar in red
+                barlist[i].set_color('r')
+
+                # save percent dead
+                percent_dead[channel_idx] = 100.0 * hist[i] / sum(hist)
+
+                break
+
+        ax.xaxis.label.set_text('max activation value')
+        ax.yaxis.label.set_text('inputs count')
+
+        process_channel_figure(channel_idx, fig)
+
+        ax.cla()
+
+    # generate histogram for layer
+    num_bins = 20
+    hist, bin_edges = np.histogram(percent_dead, bins=num_bins, range=(0, 100))
+    width = 0.7 * (bin_edges[1] - bin_edges[0])
+    center = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+    bar_colors = [None] * num_bins
+    begin_color = np.array([0, 1.0, 0])
+    end_color = np.array([1.0, 0, 0])
+    color_step = (end_color - begin_color) / (num_bins - 1)
+    current_color = begin_color
+    for i in range(num_bins):
+        bar_colors[i] = tuple(current_color)
+        current_color += color_step
+
+    ax.bar(center, hist, align='center', width=width, color=bar_colors)
+
+    ax.xaxis.label.set_text('percent of inactivity')
+    ax.yaxis.label.set_text('channels count')
+
+    process_layer_figure(fig)
+
+    pass
+
+
 class MaxTracker(object):
 
     def __init__(self, is_conv, n_channels, n_top = 10, initial_val = -1e99, dtype = 'float32'):
@@ -100,6 +163,12 @@ class MaxTracker(object):
         # set of seen inputs, used to avoid updating on the same input twice
         self.seen_inputs = set()
 
+        # will hold a list of np array, each containing the max values of all the channels for one input
+        self.all_max_vals = list()
+
+        # keeps a map between channel index and histogram values
+        self.channel_to_histogram = [None] * n_channels
+
     def __getstate__(self):
         # Copy the object's state from self.__dict__ which contains
         # all our instance attributes. Always use the dict.copy()
@@ -107,6 +176,7 @@ class MaxTracker(object):
         state = self.__dict__.copy()
         # Remove the unpicklable entries.
         del state['seen_inputs']
+        del state['all_max_vals']
         return state
 
     def __setstate__(self, state):
@@ -114,12 +184,14 @@ class MaxTracker(object):
         self.__dict__.update(state)
 
         self.seen_inputs = None
+        self.all_max_vals = None
 
     def __repr__(self):
         return str(self.__dict__.copy())
 
     def update(self, data, image_idx, image_class, selected_input_index, layer_unique_input_source, layer_name):
 
+        # if unique_input_source already exist, we can skip the update since we've already seen it
         if layer_unique_input_source in self.seen_inputs:
             return
 
@@ -129,30 +201,74 @@ class MaxTracker(object):
         n_channels = data.shape[0]
         data_unroll = data.reshape((n_channels, -1))          # Note: no copy eg (96,3025). Does nothing if not is_conv
 
-        maxes = data_unroll.argmax(1)   # maxes for each channel, eg. (96,)
+        max_indexes = data_unroll.argmax(1)   # maxes for each channel, eg. (96,)
 
-        # if unique_input_source already exist, we can skip the update since we've already seen it
-
+        # add maxes for all channels to a list, bounded to avoid consuming too much memory
+        maxes = data_unroll[range(n_channels), max_indexes]
+        MAX_LIST_SIZE = 10000
+        if len(self.all_max_vals) < MAX_LIST_SIZE:
+            self.all_max_vals.append(maxes)
 
         #insertion_idx = zeros((n_channels,))
         #pdb.set_trace()
         for ii in xrange(n_channels):
 
-            idx = np.searchsorted(self.max_vals[ii], data_unroll[ii, maxes[ii]])
+            idx = np.searchsorted(self.max_vals[ii], data_unroll[ii, max_indexes[ii]])
             if idx == 0:
                 # Smaller than all 10
                 continue
             # Store new max in the proper order. Update both arrays:
             # self.max_vals:
             self.max_vals[ii,:idx-1] = self.max_vals[ii,1:idx]       # shift lower values
-            self.max_vals[ii,idx-1] = data_unroll[ii, maxes[ii]]     # store new max value
+            self.max_vals[ii,idx-1] = data_unroll[ii, max_indexes[ii]]     # store new max value
             # self.max_locs
             self.max_locs[ii,:idx-1] = self.max_locs[ii,1:idx]       # shift lower location data
             # store new location
             if self.is_conv:
-                self.max_locs[ii,idx-1] = (image_idx, image_class, selected_input_index) + np.unravel_index(maxes[ii], data.shape[1:])
+                self.max_locs[ii,idx-1] = (image_idx, image_class, selected_input_index) + np.unravel_index(max_indexes[ii], data.shape[1:])
             else:
                 self.max_locs[ii,idx-1] = (image_idx, image_class, selected_input_index)
+
+    def run_post_processing(self, layer_name, outdir, do_histograms):
+
+        if do_histograms:
+            self.calculate_histogram(layer_name, outdir)
+
+        pass
+
+    def calculate_histogram(self, layer_name, outdir):
+
+        # convert list of arrays to numpy array
+        all_max_array = np.vstack(self.all_max_vals)
+
+        def channel_to_histogram_values(channel_idx):
+            # get values
+            max_for_single_channel = all_max_array[:, channel_idx]
+
+            # create histogram
+            hist, bin_edges = np.histogram(max_for_single_channel, bins=50)
+
+            # save histogram values
+            self.channel_to_histogram[channel_idx] = (hist, bin_edges)
+
+            return hist, bin_edges
+
+        def process_channel_figure(channel_idx, fig):
+            unit_dir = os.path.join(outdir, layer_name, 'unit_%04d' % channel_idx)
+            mkdir_p(unit_dir)
+            filename = os.path.join(unit_dir, 'max_histogram.png')
+            fig.savefig(filename)
+            pass
+
+        def process_layer_figure(fig):
+            filename = os.path.join(outdir, layer_name, 'layer_inactivity.png')
+            fig.savefig(filename)
+            pass
+
+        n_channels = all_max_array.shape[1]
+        prepare_histogram(layer_name, n_channels, channel_to_histogram_values, process_channel_figure, process_layer_figure)
+
+        pass
 
 
 class NetMaxTracker(object):
@@ -194,7 +310,7 @@ class NetMaxTracker(object):
 
         for layer_name in self.layers:
 
-            print "processing layer %s" % layer_name
+            # print "processing layer %s" % layer_name
 
             top_name = layer_name_to_top_name(net, layer_name)
             blob = net.blobs[top_name].data
@@ -246,6 +362,17 @@ class NetMaxTracker(object):
 
         pass
 
+    def run_post_processing(self, outdir, do_histograms):
+
+        for layer_name in self.layers:
+
+            # normalize layer name, this is used for siamese networks where we want layers "conv_1" and "conv_1_p" to
+            # count as the same layer in terms of activations
+            normalized_layer_name = self.siamese_helper.normalize_layer_name_for_max_tracker(layer_name)
+
+            self.max_trackers[normalized_layer_name].run_post_processing(layer_name, outdir, do_histograms)
+
+        pass
 
     def __getstate__(self):
         # Copy the object's state from self.__dict__ which contains
@@ -279,7 +406,7 @@ def load_file_list(settings):
     return available_files, converted_labels
 
 
-def scan_images_for_maxes(settings, net, datadir, n_top):
+def scan_images_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
     image_filenames, image_labels = load_file_list(settings)
     print 'Scanning %d files' % len(image_filenames)
     print '  First file', os.path.join(datadir, image_filenames[0])
@@ -332,11 +459,13 @@ def scan_images_for_maxes(settings, net, datadir, n_top):
 
             batch_index = 0
 
+    tracker.run_post_processing(outdir, do_histograms)
+
     print 'done!'
     return tracker
 
 
-def scan_pairs_for_maxes(settings, net, datadir, n_top):
+def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
     image_filenames, image_labels = load_file_list(settings)
     print 'Scanning %d pairs' % len(image_filenames)
     print '  First pair', image_filenames[0]
@@ -389,6 +518,8 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top):
                     tracker.update(net, batch[i].image_idx, batch[i].image_class, net_unique_input_source=batch[i].images_pair, batch_index=i)
 
             batch_index = 0
+
+    tracker.run_post_processing(outdir, do_histograms)
 
     print 'done!'
     return tracker
@@ -666,7 +797,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                 if do_deconv or do_deconv_norm:
 
                     # TODO: we can improve performance by doing batch of deconv_from_layer, but only if we group
-                    # together instances which have the same selected_input_index, this can be done by holding to
+                    # together instances which have the same selected_input_index, this can be done by holding two
                     # separate batches
 
                     for i in range(0, batch_index):

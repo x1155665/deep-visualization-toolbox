@@ -9,7 +9,8 @@ class PatternMode:
     OFF = 0
     MAXIMAL_OPTIMIZED_IMAGE = 1
     MAXIMAL_INPUT_IMAGE = 2
-    NUMBER_OF_MODES = 3
+    MAX_ACTIVATIONS_HISTOGRAM = 3
+    NUMBER_OF_MODES = 4
 
 class CaffeVisAppState(object):
     '''State of CaffeVis app.'''
@@ -82,7 +83,7 @@ class CaffeVisAppState(object):
         self.back_enabled = False
         self.back_mode = 'grad'      # 'grad' or 'deconv'
         self.back_filt_mode = 'raw'  # 'raw', 'gray', 'norm', 'normblur'
-        self.pattern_mode = PatternMode.OFF    # type of patterns to show instead of activations in layers pane: maximal optimized image, maximal input image, off
+        self.pattern_mode = PatternMode.OFF    # type of patterns to show instead of activations in layers pane: maximal optimized image, maximal input image, maximal histogram, off
         self.pattern_first_only = True         # should we load only the first pattern image for each neuron, or all the relevant images per neuron
         self.layers_pane_zoom_mode = 0       # 0: off, 1: zoom selected (and show pref in small pane), 2: zoom backprop
         self.layers_show_back = False   # False: show forward activations. True: show backward diffs
@@ -141,14 +142,8 @@ class CaffeVisAppState(object):
                 self.layer_boost_gamma = self.layer_boost_gamma_choices[self.layer_boost_gamma_idx]
             elif tag == 'next_pattern_mode':
                 self.pattern_mode = (self.pattern_mode + 1) % PatternMode.NUMBER_OF_MODES
-                if self.pattern_mode != PatternMode.OFF and not hasattr(self.settings, 'caffevis_unit_jpg_dir'):
-                    print 'Cannot switch to pattern mode; caffevis_unit_jpg_dir not defined in settings.py.'
-                    self.pattern_mode = PatternMode.OFF
             elif tag == 'prev_pattern_mode':
                 self.pattern_mode = (self.pattern_mode - 1 + PatternMode.NUMBER_OF_MODES) % PatternMode.NUMBER_OF_MODES
-                if self.pattern_mode != PatternMode.OFF and not hasattr(self.settings, 'caffevis_unit_jpg_dir'):
-                    print 'Cannot switch to pattern mode; caffevis_unit_jpg_dir not defined in settings.py.'
-                    self.pattern_mode = PatternMode.OFF
             elif tag == 'pattern_first_only':
                 self.pattern_first_only = not self.pattern_first_only
             elif tag == 'show_back':

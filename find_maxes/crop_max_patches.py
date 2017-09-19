@@ -16,7 +16,7 @@ from siamese_helper import SiameseHelper
 
 from jby_misc import WithTimer
 from max_tracker import output_max_patches
-
+from find_max_acts import load_max_tracker_from_file
 
 
 def main():
@@ -75,8 +75,7 @@ def main():
 
     siamese_helper = SiameseHelper(settings.layers_list)
 
-    with open(args.nmt_pkl, 'rb') as ff:
-        nmt = pickle.load(ff)
+    nmt = load_max_tracker_from_file(args.nmt_pkl)
 
     for layer_name in settings.max_tracker_layers_to_output:
 

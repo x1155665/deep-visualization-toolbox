@@ -102,9 +102,9 @@ _.add_multikey('sel_layer_right', ['o', 'O'],
 _.add('zoom_mode', 'z',
        'Cycle zooming through {currently selected unit, backprop results, none}')
 _.add('next_pattern_mode', 's',
-       'Cycle overlay of preferred input pattern (opt image, max input, off)')
+       'Cycle channels overlay (max opt, max input, max hist, off)')
 _.add('prev_pattern_mode', 'S',
-       'Cycle overlay of preferred input pattern (opt image, max input, off)')
+       'Cycle channels overlay (max opt, max input, max hist, off)')
 _.add('pattern_first_only', '1',
        'Toggle pattern loading first image only or loading all available images')
 

@@ -208,6 +208,10 @@ caffevis_unit_jpg_dir = locals().get('caffevis_unit_jpg_dir', None)
 #   "max_tracker_output" - every unit has a list of images to be loaded
 caffevis_unit_jpg_dir_folder_format = locals().get('caffevis_unit_jpg_dir_folder_format', 'original_combined_single_image')
 
+# the location of the pickle data file which contains the information about the maximum activation histograms
+# usually named 'find_max_acts_output.pickle'
+caffevis_maximum_activation_histogram_data_file = locals().get('caffevis_maximum_activation_histogram_data_file', None)
+
 # List. For which layers should jpgs be loaded for
 # visualization? If a layer name (full name, not prettified) is given
 # here, we will try to load jpgs to visualize each unit. This is used
@@ -251,14 +255,14 @@ caffevis_jpg_load_sleep = locals().get('caffevis_jpg_load_sleep', .01)
 # CaffeProc thread dies after this many seconds without a
 # heartbeat. Useful during debugging to avoid other threads running
 # after main thread has crashed.
-caffevis_heartbeat_required = locals().get('caffevis_heartbeat_required', 150.0 if __debug__ else 15.0)
+caffevis_heartbeat_required = locals().get('caffevis_heartbeat_required', 150.0 if __debug__ else 30.0)
 
 # How far to move when using fast left/right/up/down keys
 caffevis_fast_move_dist = locals().get('caffevis_fast_move_dist', 3)
 # Size of jpg reading cache in bytes (default: 2GB)
 # Note: largest fc6/fc7 images are ~600MB. Cache smaller than this will be painfully slow when using patterns_mode for fc6 and fc7.
 # Cache use when all layers have been loaded is ~1.6GB
-caffevis_jpg_cache_size  = locals().get('caffevis_jpg_cache_size', 2000*1024**2)
+caffevis_jpg_cache_size  = locals().get('caffevis_jpg_cache_size', 4000*1024**2)
 
 caffevis_grad_norm_blur_radius = locals().get('caffevis_grad_norm_blur_radius', 4.0)
 
@@ -333,6 +337,9 @@ caffevis_score_clr = locals().get('caffevis_score_clr', (.5,1,.5))
 caffevis_score_fsize = locals().get('caffevis_score_fsize', 1.0 * global_font_size)
 caffevis_score_thick = locals().get('caffevis_score_thick', 1)
 
+# how should histograms be loaded: 'calculate_in_realtime' or 'load_from_file'
+caffevis_histograms_format = locals().get('caffevis_histograms_format','calculate_in_realtime')
+
 # caffe net parameter - channel swap
 caffe_net_channel_swap = locals().get('caffe_net_channel_swap', (2,1,0))
 
@@ -371,6 +378,9 @@ max_tracker_do_backprop_norm = locals().get('max_tracker_do_backprop_norm', Fals
 
 # default value for do_info parameter in max tracker
 max_tracker_do_info = locals().get('max_tracker_do_info', True)
+
+# default value for do_histograms parameter in max tracker
+max_tracker_do_histograms = locals().get('max_tracker_do_histograms', True)
 
 # default value for output_dir parameter in max tracker
 max_tracker_output_dir = locals().get('max_tracker_output_dir', './')
