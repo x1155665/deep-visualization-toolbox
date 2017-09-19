@@ -645,11 +645,10 @@ class CaffeVisApp(BaseApp):
 
     def load_maximal_activations_histograms(self, default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows, show_layer_summary):
 
-        display_3D_highres = layer_dat_3D * 0
-        display_3D = layer_dat_3D * 0
+        empty_display_3D = layer_dat_3D * 0
 
         if not self.settings.caffevis_maximum_activation_histogram_data_file:
-            return display_3D_highres, display_3D
+            return empty_display_3D, empty_display_3D
 
         pattern_image_key = (self.settings.caffevis_maximum_activation_histogram_data_file, default_layer_name, "max histograms", show_layer_summary)
 
@@ -664,12 +663,12 @@ class CaffeVisApp(BaseApp):
                 net_max_tracker = load_max_tracker_from_file(self.settings.caffevis_maximum_activation_histogram_data_file)
 
                 if not net_max_tracker.max_trackers.has_key(default_layer_name):
-                    return display_3D_highres, display_3D
+                    return empty_display_3D, empty_display_3D
 
                 # check if
                 if not hasattr(net_max_tracker.max_trackers[default_layer_name], 'channel_to_histogram'):
                     print "ERROR: file %s is missing the field channel_to_histogram, try rerun find_max_acts to generate it" % (self.settings.caffevis_maximum_activation_histogram_data_file)
-                    return display_3D_highres, display_3D
+                    return empty_display_3D, empty_display_3D
 
                 channel_to_histogram = net_max_tracker.max_trackers[default_layer_name].channel_to_histogram
 
@@ -716,6 +715,7 @@ class CaffeVisApp(BaseApp):
                     display_3D_highres = display_3D_highres_list[0]
 
             except IOError:
+                return empty_display_3D, empty_display_3D
                 # File does not exist, so just display disabled.
                 pass
 
