@@ -479,33 +479,45 @@ class CaffeVisApp(BaseApp):
                 display_2D_resize = ensure_uint255_and_resize_to_fit(display_2D, pane.data.shape)
             else:
                 display_2D_resize = ensure_uint255_and_resize_without_fit(display_2D, pane.data.shape)
-        elif state_layers_pane_zoom_mode == 1:
+
+        elif state_layers_pane_zoom_mode == 1 and not is_layer_summary_loaded:
             # Mode 1: zoomed selection
             unit_data = display_3D_highres[self.state.selected_unit]
             if self.settings.caffevis_keep_aspect_ratio:
                 display_2D_resize = ensure_uint255_and_resize_to_fit(unit_data, pane.data.shape)
             else:
                 display_2D_resize = ensure_uint255_and_resize_without_fit(unit_data, pane.data.shape)
-        else:
+
+        elif state_layers_pane_zoom_mode == 2 and not is_layer_summary_loaded:
             # Mode 2: zoomed backprop pane
             if self.settings.caffevis_keep_aspect_ratio:
                 display_2D_resize = ensure_uint255_and_resize_to_fit(display_2D, pane.data.shape) * 0
             else:
                 display_2D_resize = ensure_uint255_and_resize_without_fit(display_2D, pane.data.shape) * 0
 
+        else:   # any other case = zoom_mode + is_layer_summary_loaded
+            if self.settings.caffevis_keep_aspect_ratio:
+                display_2D_resize = ensure_uint255_and_resize_to_fit(display_2D, pane.data.shape)
+            else:
+                display_2D_resize = ensure_uint255_and_resize_without_fit(display_2D, pane.data.shape)
         pane.data[:] = to_255(self.settings.window_background)
         pane.data[0:display_2D_resize.shape[0], 0:display_2D_resize.shape[1], :] = display_2D_resize
 
+        self._add_label_or_score_overlay(default_layer_name, pane)
+            
+        return display_3D_highres
+
+    def _add_label_or_score_overlay(self, default_layer_name, pane):
         # check if label or score should be presented for the selected layer
         if (default_layer_name in self.settings.caffevis_label_layers and self.state.cursor_area == 'bottom') or \
-           (default_layer_name in self.settings.caffevis_score_layers and self.state.cursor_area == 'bottom'):
+                (default_layer_name in self.settings.caffevis_score_layers and self.state.cursor_area == 'bottom'):
 
             # Display label annotation atop layers pane (e.g. for fc8/prob)
-            defaults = {'face':  getattr(cv2, self.settings.caffevis_label_face),
+            defaults = {'face': getattr(cv2, self.settings.caffevis_label_face),
                         'fsize': self.settings.caffevis_label_fsize,
-                        'clr':   to_255(self.settings.caffevis_label_clr),
+                        'clr': to_255(self.settings.caffevis_label_clr),
                         'thick': self.settings.caffevis_label_thick}
-            loc_base = self.settings.caffevis_label_loc[::-1]   # Reverse to OpenCV c,r order
+            loc_base = self.settings.caffevis_label_loc[::-1]  # Reverse to OpenCV c,r order
 
             text_to_display = ""
             if (self.labels) and (default_layer_name in self.settings.caffevis_label_layers):
@@ -516,7 +528,7 @@ class CaffeVisApp(BaseApp):
                 if self.state.siamese_input_mode_has_two_images():
                     blob1, blob2 = self.state.get_siamese_selected_data_blobs(self.net)
                     value1, value2 = blob1[self.state.selected_unit], blob2[self.state.selected_unit]
-                    text_to_display += str(value1) + " " +  str(value2)
+                    text_to_display += str(value1) + " " + str(value2)
 
                 else:
                     blob = self.state.get_single_selected_data_blob(self.net)
@@ -525,8 +537,6 @@ class CaffeVisApp(BaseApp):
 
             lines = [FormattedString(text_to_display, defaults)]
             cv2_typeset_text(pane.data, lines, loc_base)
-            
-        return display_3D_highres
 
     def load_pattern_images_original_format(self, default_layer_name, layer_dat_3D, n_tiles, pane,
                                             tile_cols, tile_rows):
