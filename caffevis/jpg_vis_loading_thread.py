@@ -52,21 +52,27 @@ class JPGVisLoadingThread(CodependentThread):
 
     def get_score_values_for_max_input_images(self, state_layer_name, state_selected_unit):
 
-        info_file_path = os.path.join(self.settings.caffevis_unit_jpg_dir, state_layer_name,
-                                        "unit_%04d" % (state_selected_unit),
-                                        "info.txt")
+        try:
 
-        # open file
-        with open(info_file_path, 'r') as info_file:
-            lines = info_file.readlines()
+            info_file_path = os.path.join(self.settings.caffevis_unit_jpg_dir, state_layer_name,
+                                            "unit_%04d" % (state_selected_unit),
+                                            "info.txt")
 
-            # skip first line
-            lines = lines[1:]
+            # open file
+            with open(info_file_path, 'r') as info_file:
+                lines = info_file.readlines()
 
-            # take second word from each line, and convert to float
-            values = [float(line.split(' ')[1]) for line in lines]
+                # skip first line
+                lines = lines[1:]
 
-        return values
+                # take second word from each line, and convert to float
+                values = [float(line.split(' ')[1]) for line in lines]
+
+            return values
+
+        except IOError:
+            return []
+            pass
 
     def load_image_into_pane_max_tracker_format(self, state_layer_name, state_selected_unit, resize_shape, images,
                                                 file_search_pattern, image_index_to_set, should_crop_to_corner=False, first_only = False, captions = [], values = []):
