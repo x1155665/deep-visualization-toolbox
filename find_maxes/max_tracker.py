@@ -100,7 +100,7 @@ def prepare_histogram(layer_name, n_channels, channel_to_histogram_values, proce
     for channel_idx in xrange(n_channels):
 
         if channel_idx % 100 == 0:
-            print "calculating histogram for channel %d our of %d" % (channel_idx, n_channels)
+            print "calculating histogram for channel %d out of %d" % (channel_idx, n_channels)
 
         hist, bin_edges = channel_to_histogram_values(channel_idx)
 

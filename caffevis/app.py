@@ -463,14 +463,23 @@ class CaffeVisApp(BaseApp):
         assert state_layers_pane_zoom_mode in (0,1,2)
         if state_layers_pane_zoom_mode == 0:
             # Mode 0: normal display (activations or patterns)
-            display_2D_resize = ensure_uint255_and_resize_to_fit(display_2D, pane.data.shape)
+            if self.settings.caffevis_keep_aspect_ratio:
+                display_2D_resize = ensure_uint255_and_resize_to_fit(display_2D, pane.data.shape)
+            else:
+                display_2D_resize = ensure_uint255_and_resize_without_fit(display_2D, pane.data.shape)
         elif state_layers_pane_zoom_mode == 1:
             # Mode 1: zoomed selection
             unit_data = display_3D_highres[self.state.selected_unit]
-            display_2D_resize = ensure_uint255_and_resize_to_fit(unit_data, pane.data.shape)
+            if self.settings.caffevis_keep_aspect_ratio:
+                display_2D_resize = ensure_uint255_and_resize_to_fit(unit_data, pane.data.shape)
+            else:
+                display_2D_resize = ensure_uint255_and_resize_without_fit(unit_data, pane.data.shape)
         else:
             # Mode 2: zoomed backprop pane
-            display_2D_resize = ensure_uint255_and_resize_to_fit(display_2D, pane.data.shape) * 0
+            if self.settings.caffevis_keep_aspect_ratio:
+                display_2D_resize = ensure_uint255_and_resize_to_fit(display_2D, pane.data.shape) * 0
+            else:
+                display_2D_resize = ensure_uint255_and_resize_without_fit(display_2D, pane.data.shape) * 0
 
         pane.data[:] = to_255(self.settings.window_background)
         pane.data[0:display_2D_resize.shape[0], 0:display_2D_resize.shape[1], :] = display_2D_resize
@@ -734,7 +743,10 @@ class CaffeVisApp(BaseApp):
                 
         if mode == 'selected':
             unit_data = layer_data_normalized[self.state.selected_unit]
-            unit_data_resize = ensure_uint255_and_resize_to_fit(unit_data, pane.data.shape)
+            if self.settings.caffevis_keep_aspect_ratio:
+                unit_data_resize = ensure_uint255_and_resize_to_fit(unit_data, pane.data.shape)
+            else:
+                unit_data_resize = ensure_uint255_and_resize_without_fit(unit_data, pane.data.shape)
             pane.data[0:unit_data_resize.shape[0], 0:unit_data_resize.shape[1], :] = unit_data_resize
         elif mode == 'prob_labels':
             self._draw_prob_labels_pane(pane)
@@ -839,7 +851,10 @@ class CaffeVisApp(BaseApp):
 
             grad_img_disp = grad_img
 
-            grad_img_resize = ensure_uint255_and_resize_to_fit(grad_img_disp, pane.data.shape)
+            if self.settings.caffevis_keep_aspect_ratio:
+                grad_img_resize = ensure_uint255_and_resize_to_fit(grad_img_disp, pane.data.shape)
+            else:
+                grad_img_resize = ensure_uint255_and_resize_without_fit(grad_img_disp, pane.data.shape)
             pane.data[0:grad_img_resize.shape[0], 0:grad_img_resize.shape[1], :] = grad_img_resize
 
     def _draw_jpgvis_pane(self, pane):

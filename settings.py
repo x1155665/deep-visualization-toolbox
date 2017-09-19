@@ -285,6 +285,8 @@ caffevis_init_show_label_predictions = locals().get('caffevis_init_show_label_pr
 # Initially show jpg vis or not (toggle with default key '9')
 caffevis_init_show_unit_jpgs = locals().get('caffevis_init_show_unit_jpgs', True)
 
+caffevis_keep_aspect_ratio = locals().get('caffevis_keep_aspect_ratio', False)
+
 # extra pixel spacing between lines. Default: 4 = not much space / tight layout
 caffevis_control_line_spacing = locals().get('caffevis_control_line_spacing', 4)
 # Font settings for control pane (list of layers)
