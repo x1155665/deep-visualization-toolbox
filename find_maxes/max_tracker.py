@@ -189,6 +189,9 @@ def scan_images_for_maxes(settings, net, datadir, n_top):
             print '%s   Image %d/%d' % (datetime.now().ctime(), image_idx, len(image_filenames))
         with WithTimer('Load image', quiet = not do_print):
             im = cv2_read_file_rgb(os.path.join(datadir, filename))
+            net_input_dims = net.blobs['data'].data.shape[2:4]
+            im = cv2.resize(im, net_input_dims)
+            im = im.astype(np.float32)
         with WithTimer('Predict   ', quiet = not do_print):
             net.predict([im], oversample = False)   # Just take center crop
         with WithTimer('Update    ', quiet = not do_print):
@@ -358,7 +361,15 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
                     # concatenate channelwise
                     im = np.concatenate((im1, im2), axis=2)
                 else:
+                    # load image
                     im = cv2_read_file_rgb(os.path.join(datadir, filename))
+
+                    # resize images according to input dimension
+                    net_input_dims = net.blobs['data'].data.shape[2:4]
+                    im = cv2.resize(im, net_input_dims)
+
+                    # convert to float to avoid caffe destroying the image in the scaling phase
+                    im = im.astype(np.float32)
 
             with WithTimer('Predict   ', quiet = not do_print):
                 net.predict([im], oversample = False)
