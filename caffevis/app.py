@@ -469,10 +469,17 @@ class CaffeVisApp(BaseApp):
 
         if display_3D_highres is None:
             display_3D_highres = display_3D
-        
+
+        self._display_pane_based_on_zoom_mode(display_2D, display_3D_highres, is_layer_summary_loaded, pane)
+
+        self._add_label_or_score_overlay(default_layer_name, pane)
+            
+        return display_3D_highres
+
+    def _display_pane_based_on_zoom_mode(self, display_2D, display_3D_highres, is_layer_summary_loaded, pane):
         # Display pane based on layers_pane_zoom_mode
         state_layers_pane_zoom_mode = self.state.layers_pane_zoom_mode
-        assert state_layers_pane_zoom_mode in (0,1,2)
+        assert state_layers_pane_zoom_mode in (0, 1, 2)
         if state_layers_pane_zoom_mode == 0:
             # Mode 0: normal display (activations or patterns)
             if self.settings.caffevis_keep_aspect_ratio:
@@ -495,17 +502,13 @@ class CaffeVisApp(BaseApp):
             else:
                 display_2D_resize = ensure_uint255_and_resize_without_fit(display_2D, pane.data.shape) * 0
 
-        else:   # any other case = zoom_mode + is_layer_summary_loaded
+        else:  # any other case = zoom_mode + is_layer_summary_loaded
             if self.settings.caffevis_keep_aspect_ratio:
                 display_2D_resize = ensure_uint255_and_resize_to_fit(display_2D, pane.data.shape)
             else:
                 display_2D_resize = ensure_uint255_and_resize_without_fit(display_2D, pane.data.shape)
         pane.data[:] = to_255(self.settings.window_background)
         pane.data[0:display_2D_resize.shape[0], 0:display_2D_resize.shape[1], :] = display_2D_resize
-
-        self._add_label_or_score_overlay(default_layer_name, pane)
-            
-        return display_3D_highres
 
     def _add_label_or_score_overlay(self, default_layer_name, pane):
         # check if label or score should be presented for the selected layer
