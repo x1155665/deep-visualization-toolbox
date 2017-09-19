@@ -92,12 +92,12 @@ class CaffeProcThread(CodependentThread):
                     frame1 = frame[0]
                     frame2 = frame[1]
 
-                    im_small1 = cv2.resize(frame1, self.input_dims)
-                    im_small2 = cv2.resize(frame2, self.input_dims)
+                    im_small1 = cv2.resize(frame1, self.input_dims[::-1])
+                    im_small2 = cv2.resize(frame2, self.input_dims[::-1])
                     im_small = np.concatenate( (im_small1, im_small2), axis=2)
 
                 else:
-                    im_small = cv2.resize(frame, self.input_dims)
+                    im_small = cv2.resize(frame, self.input_dims[::-1])
 
                 with WithTimer('CaffeProcThread:forward', quiet = self.debug_level < 1):
                     net_preproc_forward(self.settings, self.net, im_small, self.input_dims)

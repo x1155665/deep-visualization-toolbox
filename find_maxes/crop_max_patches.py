@@ -59,6 +59,11 @@ def main():
 
     data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
 
+    # set network batch size
+    current_input_shape = net.blobs[net.inputs[0]].shape
+    current_input_shape[0] = settings.max_tracker_batch_size
+    net.blobs[net.inputs[0]].reshape(*current_input_shape)
+
     assert args.do_maxes or args.do_deconv or args.do_deconv_norm or args.do_backprop or args.do_backprop_norm or args.do_info, 'Specify at least one do_* option to output.'
 
     with open(args.nmt_pkl, 'rb') as ff:

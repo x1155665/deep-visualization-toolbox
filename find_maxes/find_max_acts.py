@@ -39,7 +39,6 @@ def main():
         caffe.set_mode_cpu()
         print 'find_max_acts mode (in main thread):     CPU'
 
-
     net = caffe.Classifier(args.net_prototxt,
                            args.net_weights,
                            mean=None,
@@ -48,6 +47,11 @@ def main():
                            image_dims=settings.caffe_net_image_dims)
 
     data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
+
+    # set network batch size
+    current_input_shape = net.blobs[net.inputs[0]].shape
+    current_input_shape[0] = settings.max_tracker_batch_size
+    net.blobs[net.inputs[0]].reshape(*current_input_shape)
 
     with WithTimer('Scanning images'):
         if settings.is_siamese:

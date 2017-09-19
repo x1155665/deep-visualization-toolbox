@@ -182,8 +182,12 @@ def main():
     if settings.caffevis_labels:
         labels = read_label_file(settings.caffevis_labels)
 
+    if len(data_mean.shape) == 3:
+        batched_data_mean = np.repeat(data_mean[np.newaxis, :, :, :], args.batch_size, axis=0)
+    elif len(data_mean.shape) == 1:
+        data_mean = data_mean[np.newaxis,:,np.newaxis,np.newaxis]
+        batched_data_mean = np.tile(data_mean, (args.batch_size,1,current_data_shape[2],current_data_shape[3]))
 
-    batched_data_mean = np.repeat(data_mean[np.newaxis, :, :, :], args.batch_size, axis=0)
     optimizer = GradientOptimizer(settings, net, batched_data_mean, labels = labels,
                                   label_layers = settings.caffevis_label_layers,
                                   channel_swap_to_rgb = settings.caffe_net_channel_swap)

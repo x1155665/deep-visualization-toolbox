@@ -15,6 +15,60 @@ from misc import get_files_from_siamese_image_list
 
 from jby_misc import WithTimer
 
+# define records
+
+
+class MaxTrackerBatchRecord(object):
+
+    def __init__(self, image_idx = None, filename = None, image_class = None, im = None):
+        self.image_idx = image_idx
+        self.filename = filename
+        self.image_class = image_class
+        self.im = im
+
+
+class MaxTrackerCropBatchRecord(object):
+
+    def __init__(self, cc = None, channel_idx = None, info_filename = None, maxim_filenames = None,
+                 deconv_filenames = None, deconvnorm_filenames = None, backprop_filenames = None,
+                 backpropnorm_filenames = None, info_file = None, max_idx_0 = None, max_idx = None, im_idx = None,
+                 im_class = None, selected_input_index = None, ii = None, jj = None, recorded_val = None,
+                 out_ii_start = None, out_ii_end = None, out_jj_start = None, out_jj_end = None, data_ii_start = None,
+                 data_ii_end = None, data_jj_start = None, data_jj_end = None, im = None):
+        self.cc = cc
+        self.channel_idx = channel_idx
+        self.info_filename = info_filename
+        self.maxim_filenames = maxim_filenames
+        self.deconv_filenames = deconv_filenames
+        self.deconvnorm_filenames = deconvnorm_filenames
+        self.backprop_filenames = backprop_filenames
+        self.backpropnorm_filenames = backpropnorm_filenames
+        self.info_file = info_file
+        self.max_idx_0 = max_idx_0
+        self.max_idx = max_idx
+        self.im_idx = im_idx
+        self.im_class = im_class
+        self.selected_input_index = selected_input_index
+        self.ii = ii
+        self.jj = jj
+        self.recorded_val = recorded_val
+        self.out_ii_start = out_ii_start
+        self.out_ii_end = out_ii_end
+        self.out_jj_start = out_jj_start
+        self.out_jj_end = out_jj_end
+        self.data_ii_start = data_ii_start
+        self.data_ii_end = data_ii_end
+        self.data_jj_start = data_jj_start
+        self.data_jj_end = data_jj_end
+        self.im = im
+
+
+class InfoFileMetadata(object):
+
+    def __init__(self, info_file = None, ref_count = None):
+        self.info_file = info_file
+        self.ref_count = ref_count
+
 
 def mkdir_p(path):
     # From https://stackoverflow.com/questions/600268/mkdir-p-functionality-in-python
@@ -41,7 +95,7 @@ class MaxTracker(object):
         # set of seen inputs, used to avoid updating on the same input twice
         self.seen_inputs = set()
 
-    def update(self, blob, image_idx, image_class, selected_input_index, layer_unique_input_source):
+    def update(self, blob, image_idx, image_class, selected_input_index, layer_unique_input_source, batch_index):
 
         if layer_unique_input_source in self.seen_inputs:
             return
@@ -49,7 +103,7 @@ class MaxTracker(object):
         # add input identifier to seen inputs set
         self.seen_inputs.add(layer_unique_input_source)
 
-        data = blob[0]                                        # Note: makes a copy of blob, e.g. (96,55,55)
+        data = blob[batch_index]                              # Note: makes a copy of blob, e.g. (96,55,55)
         n_channels = data.shape[0]
         data_unroll = data.reshape((n_channels, -1))          # Note: no copy eg (96,3025). Does nothing if not is_conv
 
@@ -109,7 +163,7 @@ class NetMaxTracker(object):
 
         self.init_done = True
 
-    def update(self, net, image_idx, image_class, net_unique_input_source):
+    def update(self, net, image_idx, image_class, net_unique_input_source, batch_index):
         '''Updates the maxes found so far with the state of the given net. If a new max is found, it is stored together with the image_idx.'''
         if not self.init_done:
             self._init_with_net(net)
@@ -138,7 +192,7 @@ class NetMaxTracker(object):
                 layer_unique_input_source = net_unique_input_source
                 selected_input_index = -1
 
-            self.max_trackers[normalized_layer_name].update(blob, image_idx, image_class, selected_input_index, layer_unique_input_source)
+            self.max_trackers[normalized_layer_name].update(blob, image_idx, image_class, selected_input_index, layer_unique_input_source, batch_index)
 
     def __getstate__(self):
         # Copy the object's state from self.__dict__ which contains
@@ -179,24 +233,49 @@ def scan_images_for_maxes(settings, net, datadir, n_top):
     import caffe
 
     tracker = NetMaxTracker(settings, n_top = n_top, layers=settings.layers_for_max_tracker)
+
+    net_input_dims = net.blobs['data'].data.shape[2:4]
+
+    # prepare variables used for batches
+    batch = [None] * settings.max_tracker_batch_size
+    for i in range(0, settings.max_tracker_batch_size):
+        batch[i] = MaxTrackerBatchRecord()
+
+    batch_index = 0
+
     for image_idx in xrange(len(image_filenames)):
 
-        filename = image_filenames[image_idx]
-        image_class = image_labels[image_idx]
-        #im = caffe.io.load_image('../../data/ilsvrc12/mini_ilsvrc_valid/sized/ILSVRC2012_val_00000610.JPEG')
-        do_print = (image_idx % 100 == 0)
-        if do_print:
-            print '%s   Image %d/%d' % (datetime.now().ctime(), image_idx, len(image_filenames))
-        with WithTimer('Load image', quiet = not do_print):
-            im = cv2_read_file_rgb(os.path.join(datadir, filename))
-            net_input_dims = net.blobs['data'].data.shape[2:4]
-            im = cv2.resize(im, net_input_dims)
-            im = im.astype(np.float32)
-        with WithTimer('Predict   ', quiet = not do_print):
-            net.predict([im], oversample = False)   # Just take center crop
-        with WithTimer('Update    ', quiet = not do_print):
-            tracker.update(net, image_idx, image_class, net_unique_input_source=filename)
+        batch[batch_index].image_idx = image_idx
+        batch[batch_index].filename = image_filenames[image_idx]
+        batch[batch_index].image_class = image_labels[image_idx]
 
+        do_print = (batch[batch_index].image_idx % 100 == 0)
+        if do_print:
+            print '%s   Image %d/%d' % (datetime.now().ctime(), batch[batch_index].image_idx, len(image_filenames))
+
+        with WithTimer('Load image', quiet = not do_print):
+            batch[batch_index].im = cv2_read_file_rgb(os.path.join(datadir, batch[batch_index].filename))
+            batch[batch_index].im = cv2.resize(batch[batch_index].im, net_input_dims)
+            batch[batch_index].im = batch[batch_index].im.astype(np.float32)
+
+        batch_index += 1
+
+        # if current batch is full
+        if batch_index == settings.max_tracker_batch_size \
+            or image_idx == len(image_filenames) - 1:  # or last iteration
+
+            # batch predict
+            with WithTimer('Predict on batch  ', quiet = not do_print):
+                im_batch = [record.im for record in batch]
+                net.predict(im_batch, oversample = False)   # Just take center crop
+
+            # go over batch and update statistics
+            for i in range(0,batch_index):
+
+                with WithTimer('Update    ', quiet = not do_print):
+                    tracker.update(net, batch[i].image_idx, batch[i].image_class, net_unique_input_source=batch[i].filename, batch_index=i)
+
+            batch_index = 0
 
     print 'done!'
     return tracker
@@ -211,30 +290,50 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top):
     import caffe
 
     tracker = NetMaxTracker(settings, n_top=n_top, layers=settings.layers_for_max_tracker)
+
+    net_input_dims = net.blobs['data'].data.shape[2:4]
+
+    # prepare variables used for batches
+    batch = [None] * settings.max_tracker_batch_size
+    for i in range(0, settings.max_tracker_batch_size):
+        batch[i] = MaxTrackerBatchRecord()
+
+    batch_index = 0
+
     for image_idx in xrange(len(image_filenames)):
 
-        images_pair = image_filenames[image_idx]
-        filename1 = images_pair[0]
-        filename2 = images_pair[1]
-        image_class = image_labels[image_idx]
-        # im = caffe.io.load_image('../../data/ilsvrc12/mini_ilsvrc_valid/sized/ILSVRC2012_val_00000610.JPEG')
+        batch[batch_index].image_idx = image_idx
+        batch[batch_index].images_pair = image_filenames[image_idx]
+        filename1 = batch[batch_index].images_pair[0]
+        filename2 = batch[batch_index].images_pair[1]
+        batch[batch_index].image_class = image_labels[image_idx]
         do_print = (image_idx % 100 == 0)
         if do_print:
-            print '%s   Pair %d/%d' % (datetime.now().ctime(), image_idx, len(image_filenames))
+            print '%s   Pair %d/%d' % (datetime.now().ctime(), batch[batch_index].image_idx, len(image_filenames))
+
         with WithTimer('Load image', quiet=not do_print):
             im1 = cv2_read_file_rgb(os.path.join(datadir, filename1))
             im2 = cv2_read_file_rgb(os.path.join(datadir, filename2))
-
-            net_input_dims = net.blobs['data'].data.shape[2:4]
             im1 = cv2.resize(im1, net_input_dims)
             im2 = cv2.resize(im2, net_input_dims)
+            batch[batch_index].im = np.concatenate((im1, im2), axis=2)
 
-            im = np.concatenate((im1, im2), axis=2)
+        batch_index += 1
 
-        with WithTimer('Predict   ', quiet=not do_print):
-            net.predict([im], oversample=False)
-        with WithTimer('Update    ', quiet=not do_print):
-            tracker.update(net, image_idx, image_class, net_unique_input_source=images_pair)
+        # if current batch is full
+        if batch_index == settings.max_tracker_batch_size \
+            or image_idx == len(image_filenames) - 1:  # or last iteration
+
+            with WithTimer('Predict   ', quiet=not do_print):
+                im_batch = [record.im for record in batch]
+                net.predict(im_batch, oversample=False)
+
+            # go over batch and update statistics
+            for i in range(0,batch_index):
+                with WithTimer('Update    ', quiet=not do_print):
+                    tracker.update(net, batch[i].image_idx, batch[i].image_class, net_unique_input_source=batch[i].images_pair, batch_index=i)
+
+            batch_index = 0
 
     print 'done!'
     return tracker
@@ -278,6 +377,38 @@ def save_representations(settings, net, datadir, filelist, layer, first_N = None
     return indices,rep
 
 
+def generate_output_names(unit_dir, num_top, do_info, do_maxes, do_deconv, do_deconv_norm, do_backprop, do_backprop_norm):
+
+    # init values
+    info_filename = []
+    maxim_filenames = []
+    deconv_filenames = []
+    deconvnorm_filenames = []
+    backprop_filenames = []
+    backpropnorm_filenames = []
+
+    if do_info:
+        info_filename = [os.path.join(unit_dir, 'info.txt')]
+
+    for max_idx_0 in range(num_top):
+        if do_maxes:
+            maxim_filenames.append(os.path.join(unit_dir, 'maxim_%03d.png' % max_idx_0))
+
+        if do_deconv:
+            deconv_filenames.append(os.path.join(unit_dir, 'deconv_%03d.png' % max_idx_0))
+
+        if  do_deconv_norm:
+            deconvnorm_filenames.append(os.path.join(unit_dir, 'deconvnorm_%03d.png' % max_idx_0))
+
+        if do_backprop:
+            backprop_filenames.append(os.path.join(unit_dir, 'backprop_%03d.png' % max_idx_0))
+
+        if do_backprop_norm:
+            backpropnorm_filenames.append(os.path.join(unit_dir, 'backpropnorm_%03d.png' % max_idx_0))
+
+    return (info_filename, maxim_filenames, deconv_filenames, deconvnorm_filenames, backprop_filenames, backpropnorm_filenames)
+
+
 def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, num_top, datadir, filelist, outdir, do_which):
     do_maxes, do_deconv, do_deconv_norm, do_backprop, do_backprop_norm, do_info = do_which
     assert do_maxes or do_deconv or do_deconv_norm or do_backprop or do_backprop_norm or do_info, 'nothing to do'
@@ -304,40 +435,96 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
     size_ii, size_jj = get_max_data_extent(net, layer, rc, mt.is_conv)
     data_size_ii, data_size_jj = net.blobs['data'].data.shape[2:4]
 
+    net_input_dims = net.blobs['data'].data.shape[2:4]
+
+    # prepare variables used for batches
+    batch = [None] * settings.max_tracker_batch_size
+    for i in range(0, settings.max_tracker_batch_size):
+        batch[i] = MaxTrackerCropBatchRecord()
+
+    batch_index = 0
+
+    channel_to_info_file = dict()
+
     n_total_images = (idx_end-idx_begin) * num_top
     for cc, channel_idx in enumerate(range(idx_begin, idx_end)):
+
         unit_dir = os.path.join(outdir, layer, 'unit_%04d' % channel_idx)
         mkdir_p(unit_dir)
 
+        # check if all required outputs exist, in which case skip this iteration
+        [info_filename,
+         maxim_filenames,
+         deconv_filenames,
+         deconvnorm_filenames,
+         backprop_filenames,
+         backpropnorm_filenames] = generate_output_names(unit_dir, num_top, do_info, do_maxes, do_deconv, do_deconv_norm, do_backprop, do_backprop_norm)
+
+        relevant_outputs = info_filename + \
+                           maxim_filenames + \
+                           deconv_filenames + \
+                           deconvnorm_filenames + \
+                           backprop_filenames + \
+                           backpropnorm_filenames
+
+        # skip if all exist, unless we are in final iteration, in which case we redo it since we need to handle the partially filled batch
+        relevant_outputs_exist = [os.path.exists(file_name) for file_name in relevant_outputs]
+        if all(relevant_outputs_exist) and channel_idx != idx_end - 1:
+            print "skipped generation of channel %d in layer %s since files already exist" % (channel_idx, layer)
+            continue
+
         if do_info:
-            info_filename = os.path.join(unit_dir, 'info.txt')
-            info_file = open(info_filename, 'w')
-            print >>info_file, '# is_conv val image_idx image_class i(if is_conv) j(if is_conv) filename'
+            channel_to_info_file[channel_idx] = InfoFileMetadata()
+            channel_to_info_file[channel_idx].info_file = open(info_filename[0], 'w')
+            channel_to_info_file[channel_idx].ref_count = num_top
+
+            print >> channel_to_info_file[channel_idx].info_file, '# is_conv val image_idx image_class i(if is_conv) j(if is_conv) filename'
 
         # iterate through maxes from highest (at end) to lowest
         for max_idx_0 in range(num_top):
-            max_idx = num_top_in_mt - 1 - max_idx_0
-            if mt.is_conv:
-                im_idx, im_class, selected_input_index, ii, jj = mt.max_locs[channel_idx, max_idx]
-            else:
-                im_idx, im_class, selected_input_index = mt.max_locs[channel_idx, max_idx]
-                ii, jj = 0, 0
-            recorded_val = mt.max_vals[channel_idx, max_idx]
-            filename = image_filenames[im_idx]
-            do_print = (max_idx_0 == 0)
-            if do_print:
-                print '%s   Output file/image(s) %d/%d   layer %s channel %d' % (datetime.now().ctime(), cc * num_top, n_total_images, layer,channel_idx)
+            batch[batch_index].cc = cc
+            batch[batch_index].channel_idx = channel_idx
+            batch[batch_index].info_filename = info_filename
+            batch[batch_index].maxim_filenames = maxim_filenames
+            batch[batch_index].deconv_filenames = deconv_filenames
+            batch[batch_index].deconvnorm_filenames = deconvnorm_filenames
+            batch[batch_index].backprop_filenames = backprop_filenames
+            batch[batch_index].backpropnorm_filenames = backpropnorm_filenames
+            batch[batch_index].info_file = channel_to_info_file[channel_idx].info_file
 
-            [out_ii_start, out_ii_end, out_jj_start, out_jj_end, data_ii_start, data_ii_end, data_jj_start, data_jj_end] = \
-                compute_data_layer_focus_area(mt.is_conv, ii, jj, rc, layer, size_ii, size_jj, data_size_ii, data_size_jj)
+            batch[batch_index].max_idx_0 = max_idx_0
+            batch[batch_index].max_idx = num_top_in_mt - 1 - batch[batch_index].max_idx_0
+
+            if mt.is_conv:
+                batch[batch_index].im_idx, batch[batch_index].im_class, batch[batch_index].selected_input_index, batch[batch_index].ii, batch[batch_index].jj = mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]
+            else:
+                batch[batch_index].im_idx, batch[batch_index].im_class, batch[batch_index].selected_input_index = mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]
+                batch[batch_index].ii, batch[batch_index].jj = 0, 0
+
+            batch[batch_index].recorded_val = mt.max_vals[batch[batch_index].channel_idx, batch[batch_index].max_idx]
+            batch[batch_index].filename = image_filenames[batch[batch_index].im_idx]
+            do_print = (batch[batch_index].max_idx_0 == 0)
+            if do_print:
+                print '%s   Output file/image(s) %d/%d   layer %s channel %d' % (datetime.now().ctime(), batch[batch_index].cc * num_top, n_total_images, layer, batch[batch_index].channel_idx)
+
+            [batch[batch_index].out_ii_start,
+             batch[batch_index].out_ii_end,
+             batch[batch_index].out_jj_start,
+             batch[batch_index].out_jj_end,
+             batch[batch_index].data_ii_start,
+             batch[batch_index].data_ii_end,
+             batch[batch_index].data_jj_start,
+             batch[batch_index].data_jj_end] = \
+                compute_data_layer_focus_area(mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, rc, layer,
+                                              size_ii, size_jj, data_size_ii, data_size_jj)
 
             if do_info:
-                print >>info_file, 1 if mt.is_conv else 0, '%.6f' % mt.max_vals[channel_idx, max_idx],
+                print >> batch[batch_index].info_file, 1 if mt.is_conv else 0, '%.6f' % mt.max_vals[batch[batch_index].channel_idx, batch[batch_index].max_idx],
                 if mt.is_conv:
-                    print >>info_file, '%d %d %d %d %d' % tuple(mt.max_locs[channel_idx, max_idx]),
+                    print >> batch[batch_index].info_file, '%d %d %d %d %d' % tuple(mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]),
                 else:
-                    print >>info_file, '%d %d %d' % tuple(mt.max_locs[channel_idx, max_idx]),
-                print >>info_file, filename
+                    print >> batch[batch_index].info_file, '%d %d %d' % tuple(mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]),
+                print >> batch[batch_index].info_file, batch[batch_index].filename
 
             if not (do_maxes or do_deconv or do_deconv_norm or do_backprop or do_backprop_norm):
                 continue
@@ -346,109 +533,131 @@ def output_max_patches(settings, max_tracker, net, layer, idx_begin, idx_end, nu
 
                 if settings.is_siamese:
                     # in siamese network, filename is a pair of image file names
-                    filename1 = filename[0]
-                    filename2 = filename[1]
+                    filename1 = batch[batch_index].filename[0]
+                    filename2 = batch[batch_index].filename[1]
 
                     # load both images
                     im1 = cv2_read_file_rgb(os.path.join(datadir, filename1))
                     im2 = cv2_read_file_rgb(os.path.join(datadir, filename2))
 
                     # resize images according to input dimension
-                    net_input_dims = net.blobs['data'].data.shape[2:4]
                     im1 = cv2.resize(im1, net_input_dims)
                     im2 = cv2.resize(im2, net_input_dims)
 
                     # concatenate channelwise
-                    im = np.concatenate((im1, im2), axis=2)
+                    batch[batch_index].im = np.concatenate((im1, im2), axis=2)
                 else:
                     # load image
-                    im = cv2_read_file_rgb(os.path.join(datadir, filename))
+                    batch[batch_index].im = cv2_read_file_rgb(os.path.join(datadir, batch[batch_index].filename))
 
                     # resize images according to input dimension
-                    net_input_dims = net.blobs['data'].data.shape[2:4]
-                    im = cv2.resize(im, net_input_dims)
+                    batch[batch_index].im = cv2.resize(batch[batch_index].im, net_input_dims)
 
                     # convert to float to avoid caffe destroying the image in the scaling phase
-                    im = im.astype(np.float32)
+                    batch[batch_index].im = batch[batch_index].im.astype(np.float32)
 
-            with WithTimer('Predict   ', quiet = not do_print):
-                net.predict([im], oversample = False)
+            batch_index += 1
 
-            # in siamese network, we wish to return from the normalized layer name and selected input index to the
-            # denormalized layer name, e.g. from "conv1_1" and selected_input_index=1 to "conv1_1_p"
-            denormalized_layer_name = settings.denormalize_layer_name_for_max_tracker_fn(layer, selected_input_index)
-            denormalized_top_name = net.top_names[denormalized_layer_name][0]
+            # if current batch is full
+            if batch_index == settings.max_tracker_batch_size \
+                    or ((channel_idx == idx_end - 1) and (max_idx_0 == num_top - 1)):  # or last iteration
 
-            if len(net.blobs[denormalized_top_name].data.shape) == 4:
-                reproduced_val = net.blobs[denormalized_top_name].data[0,channel_idx,ii,jj]
-            else:
-                reproduced_val = net.blobs[denormalized_top_name].data[0,channel_idx]
-            if abs(reproduced_val - recorded_val) > .1:
-                print 'Warning: recorded value %s is suspiciously different from reproduced value %s. Is the filelist the same?' % (recorded_val, reproduced_val)
+                with WithTimer('Predict on batch  ', quiet = not do_print):
+                    im_batch = [record.im for record in batch]
+                    net.predict(im_batch, oversample = False)
 
-            if do_maxes:
-                #grab image from data layer, not from im (to ensure preprocessing / center crop details match between image and deconv/backprop)
+                # go over batch and update statistics
+                for i in range(0, batch_index):
 
-                out_arr = extract_patch_from_image(net.blobs['data'].data[0], net, selected_input_index, settings,
-                                                   data_ii_end, data_ii_start, data_jj_end, data_jj_start,
-                                                   out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
+                    # in siamese network, we wish to return from the normalized layer name and selected input index to the
+                    # denormalized layer name, e.g. from "conv1_1" and selected_input_index=1 to "conv1_1_p"
+                    denormalized_layer_name = settings.denormalize_layer_name_for_max_tracker_fn(layer, batch[i].selected_input_index)
+                    denormalized_top_name = net.top_names[denormalized_layer_name][0]
 
-                with WithTimer('Save img  ', quiet = not do_print):
-                    save_caffe_image(out_arr, os.path.join(unit_dir, 'maxim_%03d.png' % max_idx_0),
-                                     autoscale = False, autoscale_center = 0)
+                    if len(net.blobs[denormalized_top_name].data.shape) == 4:
+                        reproduced_val = net.blobs[denormalized_top_name].data[i, batch[i].channel_idx, batch[i].ii, batch[i].jj]
+                    else:
+                        reproduced_val = net.blobs[denormalized_top_name].data[i, batch[i].channel_idx]
+                    if abs(reproduced_val - batch[i].recorded_val) > .1:
+                        print 'Warning: recorded value %s is suspiciously different from reproduced value %s. Is the filelist the same?' % (batch[i].recorded_val, reproduced_val)
 
-            if do_deconv or do_deconv_norm:
-                diffs = net.blobs[denormalized_top_name].diff * 0
-                if len(diffs.shape) == 4:
-                    diffs[0,channel_idx,ii,jj] = 1.0
-                else:
-                    diffs[0,channel_idx] = 1.0
-                with WithTimer('Deconv    ', quiet = not do_print):
-                    net.deconv_from_layer(denormalized_layer_name, diffs)
+                    if do_maxes:
+                        #grab image from data layer, not from im (to ensure preprocessing / center crop details match between image and deconv/backprop)
 
-                out_arr = extract_patch_from_image(net.blobs['data'].diff[0], net, selected_input_index, settings,
-                                                   data_ii_end, data_ii_start, data_jj_end, data_jj_start,
-                                                   out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
+                        out_arr = extract_patch_from_image(net.blobs['data'].data[i], net, batch[i].selected_input_index, settings,
+                                                           batch[i].data_ii_end, batch[i].data_ii_start, batch[i].data_jj_end, batch[i].data_jj_start,
+                                                           batch[i].out_ii_end, batch[i].out_ii_start, batch[i].out_jj_end, batch[i].out_jj_start, size_ii, size_jj)
 
-                if out_arr.max() == 0:
-                    print 'Warning: Deconv out_arr in range', out_arr.min(), 'to', out_arr.max(), 'ensure force_backward: true in prototxt'
+                        with WithTimer('Save img  ', quiet = not do_print):
+                            save_caffe_image(out_arr, batch[i].maxim_filenames[batch[i].max_idx_0],
+                                             autoscale = False, autoscale_center = 0)
 
-                if do_deconv:
-                    with WithTimer('Save img  ', quiet=not do_print):
-                        save_caffe_image(out_arr, os.path.join(unit_dir, 'deconv_%03d.png' % max_idx_0),
-                                         autoscale=False, autoscale_center=0)
-                if do_deconv_norm:
-                    out_arr = np.linalg.norm(out_arr, axis=0)
-                    with WithTimer('Save img  ', quiet=not do_print):
-                        save_caffe_image(out_arr, os.path.join(unit_dir, 'deconvnorm_%03d.png' % max_idx_0))
+                if do_deconv or do_deconv_norm:
 
+                    diffs = net.blobs[denormalized_top_name].diff * 0
 
-            if do_backprop or do_backprop_norm:
-                diffs = net.blobs[denormalized_top_name].diff * 0
+                    for i in range(0, batch_index):
+                        if len(diffs.shape) == 4:
+                            diffs[i, batch[i].channel_idx, batch[i].ii, batch[i].jj] = 1.0
+                        else:
+                            diffs[i, batch[i].channel_idx] = 1.0
 
-                if len(diffs.shape) == 4:
-                    diffs[0,channel_idx,ii,jj] = 1.0
-                else:
-                    diffs[0,channel_idx] = 1.0
+                    with WithTimer('Deconv    ', quiet = not do_print):
+                        net.deconv_from_layer(denormalized_layer_name, diffs)
 
-                with WithTimer('Backward  ', quiet = not do_print):
-                    net.backward_from_layer(denormalized_layer_name, diffs)
+                    for i in range(0, batch_index):
+                        out_arr = extract_patch_from_image(net.blobs['data'].diff[i], net, batch[i].selected_input_index, settings,
+                                                           batch[i].data_ii_end, batch[i].data_ii_start, batch[i].data_jj_end, batch[i].data_jj_start,
+                                                           batch[i].out_ii_end, batch[i].out_ii_start, batch[i].out_jj_end, batch[i].out_jj_start, size_ii, size_jj)
 
-                out_arr = extract_patch_from_image(net.blobs['data'].diff[0], net, selected_input_index, settings,
-                                                   data_ii_end, data_ii_start, data_jj_end, data_jj_start,
-                                                   out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
+                        if out_arr.max() == 0:
+                            print 'Warning: Deconv out_arr in range', out_arr.min(), 'to', out_arr.max(), 'ensure force_backward: true in prototxt'
 
-                if out_arr.max() == 0:
-                    print 'Warning: Deconv out_arr in range', out_arr.min(), 'to', out_arr.max(), 'ensure force_backward: true in prototxt'
-                if do_backprop:
-                    with WithTimer('Save img  ', quiet = not do_print):
-                        save_caffe_image(out_arr, os.path.join(unit_dir, 'backprop_%03d.png' % max_idx_0),
-                                         autoscale = False, autoscale_center = 0)
-                if do_backprop_norm:
-                    out_arr = np.linalg.norm(out_arr, axis=0)
-                    with WithTimer('Save img  ', quiet = not do_print):
-                        save_caffe_image(out_arr, os.path.join(unit_dir, 'backpropnorm_%03d.png' % max_idx_0))
+                        if do_deconv:
+                            with WithTimer('Save img  ', quiet=not do_print):
+                                save_caffe_image(out_arr, batch[i].deconv_filenames[batch[i].max_idx_0],
+                                                 autoscale=False, autoscale_center=0)
+                        if do_deconv_norm:
+                            out_arr = np.linalg.norm(out_arr, axis=0)
+                            with WithTimer('Save img  ', quiet=not do_print):
+                                save_caffe_image(out_arr, batch[i].deconvnorm_filenames[batch[i].max_idx_0])
 
-        if do_info:
-            info_file.close()
+                if do_backprop or do_backprop_norm:
 
+                    diffs = net.blobs[denormalized_top_name].diff * 0
+
+                    for i in range(0, batch_index):
+
+                        if len(diffs.shape) == 4:
+                            diffs[i, batch[i].channel_idx, batch[i].ii, batch[i].jj] = 1.0
+                        else:
+                            diffs[i, batch[i].channel_idx] = 1.0
+
+                    with WithTimer('Backward batch  ', quiet = not do_print):
+                        net.backward_from_layer(denormalized_layer_name, diffs)
+
+                    for i in range(0, batch_index):
+
+                        out_arr = extract_patch_from_image(net.blobs['data'].diff[i], net, batch[i].selected_input_index, settings,
+                                                           batch[i].data_ii_end, batch[i].data_ii_start, batch[i].data_jj_end, batch[i].data_jj_start,
+                                                           batch[i].out_ii_end, batch[i].out_ii_start, batch[i].out_jj_end, batch[i].out_jj_start, size_ii, size_jj)
+
+                        if out_arr.max() == 0:
+                            print 'Warning: Deconv out_arr in range', out_arr.min(), 'to', out_arr.max(), 'ensure force_backward: true in prototxt'
+                        if do_backprop:
+                            with WithTimer('Save img  ', quiet = not do_print):
+                                save_caffe_image(out_arr, batch[i].backprop_filenames[batch[i].max_idx_0],
+                                                 autoscale = False, autoscale_center = 0)
+                        if do_backprop_norm:
+                            out_arr = np.linalg.norm(out_arr, axis=0)
+                            with WithTimer('Save img  ', quiet = not do_print):
+                                save_caffe_image(out_arr, batch[i].backpropnorm_filenames[batch[i].max_idx_0])
+
+                # close info files
+                for i in range(0, batch_index):
+                    channel_to_info_file[batch[i].channel_idx].ref_count -= 1
+                    if channel_to_info_file[batch[i].channel_idx].ref_count == 0:
+                        if do_info:
+                            channel_to_info_file[batch[i].channel_idx].info_file.close()
+
+                batch_index = 0

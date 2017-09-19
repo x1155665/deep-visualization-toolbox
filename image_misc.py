@@ -364,7 +364,7 @@ def resize_to_fit(img, out_max_shape,
     if convert_early:
         img = np.array(img, dtype=dtype_out)
     out = cv2.resize(img,
-            (int(img.shape[1] * scale), int(img.shape[0] * scale)),   # in (c,r) order
+            (int(round(img.shape[1] * scale)), int(round(img.shape[0] * scale))),   # in (c,r) order
                      interpolation = grow_interpolation if scale > 1 else shrink_interpolation)
     if convert_late:
         out = np.array(out, dtype=dtype_out)
@@ -403,7 +403,7 @@ def resize_without_fit(img, out_max_shape,
     if convert_early:
         img = np.array(img, dtype=dtype_out)
     out = cv2.resize(img,
-            (int(img.shape[1] * scale_1), int(img.shape[0] * scale_0)),   # in (c,r) order
+            (int(round(img.shape[1] * scale_1)), int(round(img.shape[0] * scale_0))),   # in (c,r) order
                      interpolation = grow_interpolation if min(scale_0,scale_1) > 1 else shrink_interpolation)
     if convert_late:
         out = np.array(out, dtype=dtype_out)

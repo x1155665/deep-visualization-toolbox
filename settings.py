@@ -111,7 +111,7 @@ static_files_regexp = locals().get('static_files_regexp', '.*\.(jpg|jpeg|png)$')
 static_files_ignore_case = locals().get('static_files_ignore_case', True)
 # True to stretch to square, False to crop to square. (Can change at
 # runtime via 'stretch_mode' key.)
-static_file_stretch_mode = locals().get('static_file_stretch_mode', False)
+static_file_stretch_mode = locals().get('static_file_stretch_mode', True)
 
 # is the network loaded a siamese network
 is_siamese = locals().get('is_siamese', False)
@@ -382,6 +382,9 @@ max_tracker_output_dir = locals().get('max_tracker_output_dir', './')
 
 # default value for layer parameter in max_tracker
 max_tracker_layers_to_output = locals().get('max_tracker_layers_to_output', [])
+
+# default batch size used in max_tracker
+max_tracker_batch_size = locals().get('max_tracker_batch_size', 1)
 
 # default value for list of layers used in max tracker
 # note the default is a hardcoded choice which was used in the original code,
