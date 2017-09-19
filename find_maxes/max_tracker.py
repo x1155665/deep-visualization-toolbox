@@ -86,7 +86,7 @@ def mkdir_p(path):
             raise
 
 
-def prepare_histogram(layer_name, n_channels, channel_to_histogram_values, process_channel_figure, process_layer_figure):
+def prepare_max_histogram(layer_name, n_channels, channel_to_histogram_values, process_channel_figure, process_layer_figure):
 
     from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
     from matplotlib.figure import Figure
@@ -269,7 +269,7 @@ class MaxTracker(object):
             pass
 
         n_channels = all_max_array.shape[1]
-        prepare_histogram(layer_name, n_channels, channel_to_histogram_values, process_channel_figure, process_layer_figure)
+        prepare_max_histogram(layer_name, n_channels, channel_to_histogram_values, process_channel_figure, process_layer_figure)
 
         pass
 

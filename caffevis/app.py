@@ -266,6 +266,8 @@ class CaffeVisApp(BaseApp):
                 print >> status, 'pattern(' + pattern_first_mode + ' optimized max)'
             elif self.state.pattern_mode == PatternMode.MAXIMAL_INPUT_IMAGE:
                 print >> status, 'pattern(' + pattern_first_mode + ' input max)'
+            elif self.state.pattern_mode == PatternMode.WEIGHTS_HISTOGRAM:
+                print >> status, 'histogram(weights)'
             elif self.state.pattern_mode == PatternMode.MAX_ACTIVATIONS_HISTOGRAM:
                 print >> status, 'histogram(maximal activations)'
             elif self.state.layers_show_back:
@@ -378,6 +380,16 @@ class CaffeVisApp(BaseApp):
                                                                                                pane,
                                                                                                tile_cols, tile_rows, self.state.pattern_first_only,
                                                                                                file_search_pattern='maxim*.png')
+
+            elif self.state.pattern_mode == PatternMode.WEIGHTS_HISTOGRAM:
+
+                    display_3D, display_3D_highres = self.load_weights_histograms(self.net,
+                                                                                  default_layer_name,
+                                                                                  layer_dat_3D, n_tiles, pane,
+                                                                                  tile_cols, tile_rows,
+                                                                                  show_layer_summary=self.state.cursor_area == 'top')
+
+                    is_layer_summary_loaded = display_3D_highres is not None and display_3D_highres.shape[0] == 1
 
             elif self.state.pattern_mode == PatternMode.MAX_ACTIVATIONS_HISTOGRAM:
 
@@ -652,6 +664,124 @@ class CaffeVisApp(BaseApp):
 
         return buf
 
+
+    def load_weights_histograms(self, net, layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows, show_layer_summary):
+
+        empty_display_3D = layer_dat_3D * 0
+        # empty_display_3D = np.expand_dims(empty_display_3D, 0)
+
+        pattern_image_key = (layer_name, "weights_histogram", show_layer_summary)
+
+        # Get highres version
+        display_3D_highres = self.img_cache.get(pattern_image_key, None)
+
+        pane_shape = pane.data.shape
+
+        if display_3D_highres is None:
+            try:
+
+                n_channels = n_tiles
+
+                # check if layer has weights at all
+                if not net.params.has_key(layer_name):
+                    return empty_display_3D, empty_display_3D
+
+                from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+                from matplotlib.figure import Figure
+
+                fig = Figure(figsize=(10, 10))
+                canvas = FigureCanvas(fig)
+                ax = fig.add_subplot(111)
+
+                # for each channel
+                for channel_idx in xrange(n_channels):
+
+                    if channel_idx % 100 == 0:
+                        print "calculating weights histogram for channel %d out of %d" % (channel_idx, n_channels)
+
+                    # get vector of weights
+                    weights = net.params[layer_name][0].data[channel_idx].flatten()
+                    bias = net.params[layer_name][1].data[channel_idx]
+
+                    # create histogram
+                    hist, bin_edges = np.histogram(weights, bins=50)
+
+                    # generate histogram image file
+                    width = 0.7 * (bin_edges[1] - bin_edges[0])
+                    center = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+                    ax.bar(center, hist, align='center', width=width, color='g')
+
+                    fig.suptitle('weights for unit %d, bias is %f' % (channel_idx, bias))
+                    ax.xaxis.label.set_text('weight value')
+                    ax.yaxis.label.set_text('count')
+
+                    figure_buffer = self.fig2data(fig)
+
+                    # handle first generation of results container
+                    if display_3D_highres is None:
+                        first_shape = figure_buffer.shape
+                        display_3D_highres = np.zeros((n_channels, first_shape[0], first_shape[1], first_shape[2]), dtype=np.uint8)
+
+                    display_3D_highres[channel_idx, :, ::] = figure_buffer
+
+                    ax.cla()
+
+                half_pane_shape = (pane_shape[0], pane_shape[1]/2)
+
+                # generate weights histogram for layer
+                weights = net.params[layer_name][0].data.flatten()
+                hist, bin_edges = np.histogram(weights, bins=50)
+
+                width = 0.7 * (bin_edges[1] - bin_edges[0])
+                center = (bin_edges[:-1] + bin_edges[1:]) / 2
+                ax.bar(center, hist, align='center', width=width, color='g')
+
+                fig.suptitle('weights for layer %s' % layer_name)
+                ax.xaxis.label.set_text('weight value')
+                ax.yaxis.label.set_text('count')
+
+                figure_buffer = self.fig2data(fig)
+                display_3D_highres_summary_weights = ensure_uint255_and_resize_without_fit(figure_buffer, half_pane_shape)
+
+                ax.cla()
+
+                # generate bias histogram for layer
+                bias = net.params[layer_name][1].data.flatten()
+                hist, bin_edges = np.histogram(bias, bins=50)
+
+                width = 0.7 * (bin_edges[1] - bin_edges[0])
+                center = (bin_edges[:-1] + bin_edges[1:]) / 2
+                ax.bar(center, hist, align='center', width=width, color='g')
+
+                fig.suptitle('bias for layer %s' % layer_name)
+                ax.xaxis.label.set_text('bias value')
+                ax.yaxis.label.set_text('count')
+
+                figure_buffer = self.fig2data(fig)
+                display_3D_highres_summary_bias = ensure_uint255_and_resize_without_fit(figure_buffer, half_pane_shape)
+
+                display_3D_highres_summary = np.concatenate((display_3D_highres_summary_weights, display_3D_highres_summary_bias), axis=1)
+                display_3D_highres_summary = np.expand_dims(display_3D_highres_summary, 0)
+
+                pattern_image_key_layer = (layer_name, "weights_histogram", True)
+                pattern_image_key_details = (layer_name, "weights_histogram", False)
+
+                self.img_cache.set(pattern_image_key_details, display_3D_highres)
+                self.img_cache.set(pattern_image_key_layer, display_3D_highres_summary)
+
+                if show_layer_summary:
+                    display_3D_highres = display_3D_highres_summary
+
+            except IOError:
+                return empty_display_3D, empty_display_3D
+                # File does not exist, so just display disabled.
+                pass
+
+        display_3D = self.downsample_display_3d(display_3D_highres, layer_dat_3D, pane, tile_cols, tile_rows)
+        return display_3D, display_3D_highres
+
+
     def load_maximal_activations_histograms(self, default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows, show_layer_summary):
 
         empty_display_3D = layer_dat_3D * 0
@@ -710,7 +840,7 @@ class CaffeVisApp(BaseApp):
                     pass
 
                 n_channels = len(channel_to_histogram)
-                find_maxes.max_tracker.prepare_histogram(default_layer_name, n_channels, channel_to_histogram_values, process_channel_figure, process_layer_figure)
+                find_maxes.max_tracker.prepare_max_histogram(default_layer_name, n_channels, channel_to_histogram_values, process_channel_figure, process_layer_figure)
 
                 pattern_image_key_layer = (self.settings.caffevis_maximum_activation_histogram_data_file, default_layer_name, "max histograms",True)
                 pattern_image_key_details = (self.settings.caffevis_maximum_activation_histogram_data_file, default_layer_name, "max histograms",False)

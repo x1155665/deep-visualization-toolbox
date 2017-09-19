@@ -9,8 +9,9 @@ class PatternMode:
     OFF = 0
     MAXIMAL_OPTIMIZED_IMAGE = 1
     MAXIMAL_INPUT_IMAGE = 2
-    MAX_ACTIVATIONS_HISTOGRAM = 3
-    NUMBER_OF_MODES = 4
+    WEIGHTS_HISTOGRAM = 3
+    MAX_ACTIVATIONS_HISTOGRAM = 4
+    NUMBER_OF_MODES = 5
 
 class CaffeVisAppState(object):
     '''State of CaffeVis app.'''
