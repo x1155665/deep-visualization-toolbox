@@ -14,7 +14,8 @@ plt.rcParams['image.cmap'] = 'gray'
 from misc import mkdir_p, combine_dicts
 from image_misc import saveimagesc, saveimagescc
 
-from caffe_misc import RegionComputer, get_max_data_extent, compute_data_layer_focus_area, extract_patch_from_image
+from caffe_misc import RegionComputer, get_max_data_extent, compute_data_layer_focus_area, extract_patch_from_image, \
+    layer_name_to_top_name
 
 
 class FindParams(object):
@@ -159,12 +160,12 @@ class FindResults(object):
 class GradientOptimizer(object):
     '''Finds images by gradient.'''
     
-    def __init__(self, settings, net, batched_data_mean, labels = None, label_layers = None, channel_swap_to_rgb = None):
+    def __init__(self, settings, net, batched_data_mean, labels = None, label_layers = [], channel_swap_to_rgb = None):
         self.settings = settings
         self.net = net
         self.batched_data_mean = batched_data_mean
         self.labels = labels if labels else ['labels not provided' for ii in range(1000)]
-        self.label_layers = label_layers if label_layers else tuple()
+        self.label_layers = label_layers if label_layers else list()
         if channel_swap_to_rgb:
             self.channel_swap_to_rgb = array(channel_swap_to_rgb)
         else:
@@ -220,7 +221,7 @@ class GradientOptimizer(object):
         is_labeled_unit = params.push_layer in self.label_layers
 
         # Sanity checks for conv vs FC layers
-        top_name = self.net.top_names[params.push_layer][0]
+        top_name = layer_name_to_top_name(self.net, params.push_layer)
         data_shape = self.net.blobs[top_name].data.shape
         assert len(data_shape) in (2,4), 'Expected shape of length 2 (for FC) or 4 (for conv) layers but shape is %s' % repr(data_shape)
         is_conv = (len(data_shape) == 4)
@@ -250,7 +251,7 @@ class GradientOptimizer(object):
             # 1. Push data through net
             out = self.net.forward_all(data = xx)
             #shownet(net)
-            top_name = self.net.top_names[params.push_layer][0]
+            top_name = layer_name_to_top_name(self.net, params.push_layer)
             acts = self.net.blobs[top_name].data
 
             if not is_conv:
@@ -289,7 +290,7 @@ class GradientOptimizer(object):
 
 
             # 4. Do backward pass to get gradient
-            top_name = self.net.top_names[params.push_layer][0]
+            top_name = layer_name_to_top_name(self.net, params.push_layer)
             diffs = self.net.blobs[top_name].diff * 0
             if not is_conv:
                 # Promote bc -> bc01
@@ -393,22 +394,25 @@ class GradientOptimizer(object):
 
         return xx, results, True
 
-    def find_selected_input_index(self, layer):
+    def find_selected_input_index(self, layer_name):
 
-        for item in self.settings.siamese_layers_list:
+        for item in self.settings.layers_list:
 
             # if we have only a single layer, the header is the layer name
-            if type(item) is str and item == layer:
+            if item['format'] == 'normal' and item['name/s'] == layer_name:
                 return -1
 
             # if we got a pair of layers
-            elif (type(item) is tuple) and (len(item) == 2):
+            elif item['format'] == 'siamese_layer_pair':
 
-                if item[0] == layer:
+                if item['name/s'][0] == layer_name:
                     return 0
 
-                if item[1] == layer:
+                if item['name/s'][1] == layer_name:
                     return 1
+
+            elif item['format'] == 'siamese_batch_pair':
+                raise NotImplementedError("in function find_selected_input_index()")
 
         return -1
 
@@ -469,14 +473,14 @@ class GradientOptimizer(object):
 
                 is_conv = params.layer_is_conv
                 rc = RegionComputer(self.settings.max_tracker_layers_list)
-                layer = params.push_layer
-                size_ii, size_jj = get_max_data_extent(self.net, layer, rc, is_conv)
+                layer_name = params.push_layer
+                size_ii, size_jj = get_max_data_extent(self.net, layer_name, rc, is_conv)
                 data_size_ii, data_size_jj = self.net.blobs['data'].data.shape[2:4]
 
                 [out_ii_start, out_ii_end, out_jj_start, out_jj_end, data_ii_start, data_ii_end, data_jj_start, data_jj_end] = \
-                    compute_data_layer_focus_area(is_conv, temp_ii, temp_jj, rc, layer, size_ii, size_jj, data_size_ii, data_size_jj)
+                    compute_data_layer_focus_area(is_conv, temp_ii, temp_jj, rc, layer_name, size_ii, size_jj, data_size_ii, data_size_jj)
 
-                selected_input_index = self.find_selected_input_index(layer)
+                selected_input_index = self.find_selected_input_index(layer_name)
 
                 out_arr = extract_patch_from_image(results[batch_index].best_xx, self.net, selected_input_index, self.settings,
                                                    data_ii_end, data_ii_start, data_jj_end, data_jj_start,

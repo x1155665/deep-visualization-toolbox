@@ -20,7 +20,7 @@ caffevis_data_mean       = (104, 117, 123)   # per-channel mean
 caffevis_labels          = '%DVT_ROOT%/models/bvlc-googlenet/ilsvrc_2012_labels.txt'
 caffevis_jpgvis_layers   = []
 caffevis_prob_layer      = 'prob'
-caffevis_label_layers    = ('loss3/classifier', 'prob')
+caffevis_label_layers    = ['loss3/classifier', 'prob']
 def caffevis_layer_pretty_name_fn(name):
     # Shorten many layer names to fit in control pane (full layer name visible in status bar)
     name = name.replace('conv','c').replace('pool','p').replace('norm','n')

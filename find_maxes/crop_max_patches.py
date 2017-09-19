@@ -12,6 +12,7 @@ import cPickle as pickle
 
 import settings
 from caffevis.caffevis_helper import set_mean
+from siamese_helper import SiameseHelper
 
 from jby_misc import WithTimer
 from max_tracker import output_max_patches
@@ -59,6 +60,12 @@ def main():
 
     data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
 
+    # validate batch size
+    if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
+        # currently, no batch support for siamese_batch_pair networks
+        # it can be added by simply handle the batch indexes properly, but it should be thoroughly tested
+        assert (settings.max_tracker_batch_size == 1)
+
     # set network batch size
     current_input_shape = net.blobs[net.inputs[0]].shape
     current_input_shape[0] = settings.max_tracker_batch_size
@@ -66,14 +73,16 @@ def main():
 
     assert args.do_maxes or args.do_deconv or args.do_deconv_norm or args.do_backprop or args.do_backprop_norm or args.do_info, 'Specify at least one do_* option to output.'
 
+    siamese_helper = SiameseHelper(settings.layers_list)
+
     with open(args.nmt_pkl, 'rb') as ff:
         nmt = pickle.load(ff)
 
-    for layer in settings.max_tracker_layers_to_output:
+    for layer_name in settings.max_tracker_layers_to_output:
 
-        print 'Started work on layer %s' % (layer)
+        print 'Started work on layer %s' % (layer_name)
 
-        normalized_layer_name = settings.normalize_layer_name_for_max_tracker_fn(layer)
+        normalized_layer_name = siamese_helper.normalize_layer_name_for_max_tracker(layer_name)
 
         mt = nmt.max_trackers[normalized_layer_name]
 

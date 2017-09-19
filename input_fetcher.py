@@ -131,6 +131,7 @@ class InputImageFetcher(CodependentThread):
                     # If static file mode was switched to cam mode but cam is still frozen, we need to push the cam frame again
                     if not self.latest_frame_is_from_cam:
 
+                        # todo: implement more interesting combination of using a camera in sieamese mode
                         if self.settings.is_siamese:
                             im = (self.latest_cam_frame, self.latest_cam_frame)
                         else:

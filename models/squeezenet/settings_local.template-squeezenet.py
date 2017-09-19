@@ -22,7 +22,7 @@ caffevis_data_mean       = (104, 117, 123)   # per-channel mean
 caffevis_labels          = '%DVT_ROOT%/models/squeezenet/ilsvrc_2012_labels.txt'
 caffevis_jpgvis_layers   = []
 caffevis_prob_layer      = 'prob'
-caffevis_label_layers    = ('conv10', 'relu_conv10', 'pool10', 'prob')
+caffevis_label_layers    = ['conv10', 'relu_conv10', 'pool10', 'prob']
 def caffevis_layer_pretty_name_fn(name):
     name = name.replace('fire','f').replace('relu_expand','re').replace('expand','e').replace('concat','c').replace('squeeze','s')
     name = name.replace('1x1_','').replace('1x1','')

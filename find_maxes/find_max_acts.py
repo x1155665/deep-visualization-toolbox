@@ -17,8 +17,20 @@ from caffevis.caffevis_helper import set_mean
 from jby_misc import WithTimer
 from max_tracker import scan_images_for_maxes, scan_pairs_for_maxes
 
+def pickle_to_text(pickle_filename):
+
+    with open(pickle_filename, 'rb') as pickle_file:
+        data = pickle.load(pickle_file)
+
+    data_dict = data.__dict__.copy()
+
+    with open(pickle_filename + ".txt", 'wt') as text_file:
+        text_file.write(str(data_dict))
+
+    return
 
 def main():
+
     parser = argparse.ArgumentParser(description='Finds images in a training set that cause max activation for a network; saves results in a pickled NetMaxTracker.')
     parser.add_argument('--N', type = int, default = 9, help = 'note and save top N activations')
     parser.add_argument('--gpu', action = 'store_true', default=settings.caffevis_mode_gpu, help = 'use gpu')
@@ -48,6 +60,12 @@ def main():
 
     data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
 
+    # validate batch size
+    if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
+        # currently, no batch support for siamese_batch_pair networks
+        # it can be added by simply handle the batch indexes properly, but it should be thoroughly tested
+        assert (settings.max_tracker_batch_size == 1)
+
     # set network batch size
     current_input_shape = net.blobs[net.inputs[0]].shape
     current_input_shape[0] = settings.max_tracker_batch_size
@@ -61,6 +79,8 @@ def main():
     with WithTimer('Saving maxes'):
         with open(args.outfile, 'wb') as ff:
             pickle.dump(max_tracker, ff, -1)
+        # save text version of pickle file for easier debugging
+        pickle_to_text(args.outfile)
 
 
 

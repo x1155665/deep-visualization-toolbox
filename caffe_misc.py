@@ -27,7 +27,7 @@ def shownet(net):
 
 
 
-def region_converter(top_slice, bot_size, top_size, filter_width = (1,1), stride = (1,1), pad = (0,0)):
+def region_converter(top_slice, bot_size, top_size, filter_width = (1,1), stride = (1,1), pad = (0,0), crop_to_boundary = True):
     '''
     Works for conv or pool
 
@@ -58,25 +58,29 @@ vector<int> ConvolutionLayer<Dtype>::JBY_region_of_influence(const vector<int>& 
     # Crop top slice to allowable region
     top_slice = [ss for ss in top_slice]   # Copy list or array -> list
 
-    top_slice[0] = max(0, min(top_size[0], top_slice[0]))
-    top_slice[1] = max(0, min(top_size[0], top_slice[1]))
-    top_slice[2] = max(0, min(top_size[1], top_slice[2]))
-    top_slice[3] = max(0, min(top_size[1], top_slice[3]))
+    # should we crop to boundary
+    if crop_to_boundary:
+        top_slice[0] = max(0, min(top_size[0], top_slice[0]))
+        top_slice[1] = max(0, min(top_size[0], top_slice[1]))
+        top_slice[2] = max(0, min(top_size[1], top_slice[2]))
+        top_slice[3] = max(0, min(top_size[1], top_slice[3]))
 
     bot_slice = [-123] * 4
 
-    bot_slice[0] = top_slice[0] * stride[0] - pad[0];
-    bot_slice[1] = (top_slice[1]-1) * stride[0] + filter_width[0] - pad[0];
-    bot_slice[2] = top_slice[2] * stride[1] - pad[1];
-    bot_slice[3] = (top_slice[3]-1) * stride[1] + filter_width[1] - pad[1];
+    bot_slice[0] = top_slice[0] * stride[0] - pad[0]
+    bot_slice[1] = top_slice[1] * stride[0] - pad[0] + filter_width[0] - 1
+    bot_slice[2] = top_slice[2] * stride[1] - pad[1]
+    bot_slice[3] = top_slice[3] * stride[1] - pad[1] + filter_width[1] - 1
 
     return bot_slice
 
+
 def get_conv_converter(bot_size, top_size, filter_width = (1,1), stride = (1,1), pad = (0,0)):
-    return lambda top_slice : region_converter(top_slice, bot_size, top_size, filter_width, stride, pad)
+    return lambda top_slice, crop_to_boundary : region_converter(top_slice, bot_size, top_size, filter_width, stride, pad, crop_to_boundary)
+
 
 def get_pool_converter(bot_size, top_size, filter_width = (1,1), stride = (1,1), pad = (0,0)):
-    return lambda top_slice : region_converter(top_slice, bot_size, top_size, filter_width, stride, pad)
+    return lambda top_slice, crop_to_boundary : region_converter(top_slice, bot_size, top_size, filter_width, stride, pad, crop_to_boundary)
 
 
 
@@ -101,7 +105,7 @@ class RegionComputer(object):
         self.names = [tt[0] for tt in _tmp]
         self.converters = [tt[1] for tt in _tmp]
 
-    def convert_region(self, from_layer, to_layer, region, verbose = False):
+    def convert_region(self, from_layer, to_layer, region, verbose = False, crop_to_boundary = True):
         '''region is the slice of the from_layer in the following Python
             index format: (ii_start, ii_end, jj_start, jj_end)
         '''
@@ -115,7 +119,7 @@ class RegionComputer(object):
             converter = self.converters[ii]
             if verbose:
                 print 'pushing', self.names[ii], 'region', ret, 'through converter'
-            ret = converter(ret)
+            ret = converter(ret, crop_to_boundary)
         if verbose:
             print 'Final region at ', self.names[to_idx], 'is', ret
 
@@ -151,27 +155,36 @@ def save_caffe_image(img, filename, autoscale = True, autoscale_center = None):
     skimage.io.imsave(filename, img)
 
 
-def get_max_data_extent(net, layer, rc, is_conv):
+def layer_name_to_top_name(net, layer_name):
+    return net.top_names[layer_name][0]
+
+
+def get_max_data_extent(net, layer_name, rc, is_conv):
     '''Gets the maximum size of the data layer that can influence a unit on layer.'''
+
+    data_size = net.blobs['data'].data.shape[2:4]  # e.g. (227,227) for fc6,fc7,fc8,prop
+
     if is_conv:
-        top_name = net.top_names[layer][0]
+        top_name = layer_name_to_top_name(net, layer_name)
         conv_size = net.blobs[top_name].data.shape[2:4]        # e.g. (13,13) for conv5
         layer_slice_middle = (conv_size[0]/2,conv_size[0]/2+1, conv_size[1]/2,conv_size[1]/2+1)   # e.g. (6,7,6,7,), the single center unit
-        data_slice = rc.convert_region(layer, 'data', layer_slice_middle)
-        return data_slice[1]-data_slice[0], data_slice[3]-data_slice[2]   # e.g. (163, 163) for conv5
+        data_slice = rc.convert_region(layer_name, 'data', layer_slice_middle, crop_to_boundary = False)
+        data_slice_size = data_slice[1]-data_slice[0], data_slice[3]-data_slice[2]   # e.g. (163, 163) for conv5
+        # crop data slice size to data size
+        data_slice_size = min(data_slice_size[0], data_size[0]), min(data_slice_size[1], data_size[1])
+        return data_slice_size
     else:
         # Whole data region
-        return net.blobs['data'].data.shape[2:4]        # e.g. (227,227) for fc6,fc7,fc8,prop
+        return data_size
 
 
-
-def compute_data_layer_focus_area(is_conv, ii, jj, region_computer, layer, size_ii, size_jj, data_size_ii, data_size_jj):
+def compute_data_layer_focus_area(is_conv, ii, jj, region_computer, layer_name, size_ii, size_jj, data_size_ii, data_size_jj):
 
     if is_conv:
 
         # Compute the focus area of the data layer
         layer_indices = (ii, ii + 1, jj, jj + 1)
-        data_indices = region_computer.convert_region(layer, 'data', layer_indices)
+        data_indices = region_computer.convert_region(layer_name, 'data', layer_indices)
         data_ii_start, data_ii_end, data_jj_start, data_jj_end = data_indices
 
         # safe guard edges
@@ -243,19 +256,19 @@ def extract_patch_from_image(data, net, selected_input_index, settings,
     return out_arr
 
 
-def get_top_to_layer_dict(net):
-
-    top_to_layer = dict()
-
-    # go over layers
-    for layer in list(net._layer_names):
-
-        if len(net.top_names[layer]) == 1 and len(net.bottom_names[layer]) == 1 and net.top_names[layer][0] == net.bottom_names[layer][0]:
-            # skip inplace layers
-            continue
-
-        # go over tops
-        for top_name in net.top_names[layer]:
-            top_to_layer[top_name] = layer
-
-    return top_to_layer
+# def get_top_to_layer_dict(net):
+#
+#     top_to_layer = dict()
+#
+#     # go over layers
+#     for layer_name in list(net._layer_names):
+#
+#         if len(net.top_names[layer_name]) == 1 and len(net.bottom_names[layer_name]) == 1 and net.top_names[layer_name][0] == net.bottom_names[layer_name][0]:
+#             # skip inplace layers
+#             continue
+#
+#         # go over tops
+#         for top_name in net.top_names[layer_name]:
+#             top_to_layer[top_name] = layer_name
+#
+#     return top_to_layer

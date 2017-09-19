@@ -38,7 +38,7 @@ input_updater_capture_device = locals().get('input_updater_capture_device', 0)
 input_updater_sleep_after_read_frame = locals().get('input_updater_sleep_after_read_frame', 1.0/20)
 
 # Input updater thread die after this many seconds without a heartbeat. Useful during debugging to avoid other threads running after main thread has crashed.
-input_updater_heartbeat_required = locals().get('input_updater_heartbeat_required', 15.0)
+input_updater_heartbeat_required = locals().get('input_updater_heartbeat_required', 150.0 if __debug__ else 15.0)
 
 # How long to sleep while waiting for key presses and redraws. Recommendation: 1 (min: 1)
 main_loop_sleep_ms = locals().get('main_loop_sleep_ms', 1)
@@ -116,6 +116,9 @@ static_file_stretch_mode = locals().get('static_file_stretch_mode', True)
 # is the network loaded a siamese network
 is_siamese = locals().get('is_siamese', False)
 
+# siamese network format, can be either 'siamese_layer_pair' or 'siamese_batch_pair'
+siamese_network_format = locals().get('siamese_network_format', 'siamese_layer_pair')
+
 # contains the input mode for reading static images, can be: 'directory', 'image_list'
 static_files_input_mode = locals().get('static_files_input_mode', 'directory')
 
@@ -186,7 +189,10 @@ caffevis_labels = locals().get('caffevis_labels', None)
 # Which layers have channels/neurons corresponding to the order given
 # in the caffevis_labels file? Annotate these units with label text
 # (when those neurons are selected). None to disable.
-caffevis_label_layers = locals().get('caffevis_label_layers', None)
+caffevis_label_layers = locals().get('caffevis_label_layers', [])
+
+# Which layers should we print the channel score. makes sense for fully-connected layers. None to disable.
+caffevis_score_layers = locals().get('caffevis_score_layers', [])
 
 # Which layer to use for displaying class output numbers in left pane
 # (when no neurons are selected). None to disable.
@@ -245,7 +251,7 @@ caffevis_jpg_load_sleep = locals().get('caffevis_jpg_load_sleep', .01)
 # CaffeProc thread dies after this many seconds without a
 # heartbeat. Useful during debugging to avoid other threads running
 # after main thread has crashed.
-caffevis_heartbeat_required = locals().get('caffevis_heartbeat_required', 15.0)
+caffevis_heartbeat_required = locals().get('caffevis_heartbeat_required', 150.0 if __debug__ else 15.0)
 
 # How far to move when using fast left/right/up/down keys
 caffevis_fast_move_dist = locals().get('caffevis_fast_move_dist', 3)
@@ -345,17 +351,6 @@ layers_for_max_tracker = locals().get('layers_for_max_tracker', ['conv1', 'conv2
 # function used to check if a layer is a convolutional
 is_conv_fn = locals().get('is_conv_fn', lambda layer_name: 'conv' in layer_name)
 
-# function to normalize layer name used in NetMaxTracker to combine activations of siamese layers
-# for example, this is used to make activations of layer "conv_1" and "conv_1_p" count the same
-normalize_layer_name_for_max_tracker_fn = locals().get('normalize_layer_name_for_max_tracker_fn', lambda layer_name: layer_name)
-
-# function to denormalize layer name used in NetMaxTracker to split combined activations of siamese layers
-# for example, given layer name "conv_1" and selected_input_index = 1, we might want to return "conv_1_p" to state that the twin layer should be used as source
-denormalize_layer_name_for_max_tracker_fn = locals().get('denormalize_layer_name_for_max_tracker_fn', lambda layer_name, selected_input_index: layer_name)
-
-# function which selects an image from a siamese input pair, given the layer name
-siamese_layer_to_index_of_saved_image_fn = locals().get('siamese_layer_to_index_of_saved_image_fn', lambda layer_name: 0)
-
 # location for max tracker output file
 find_max_acts_output_file = locals().get('find_max_acts_output_file', 'find_max_acts_output.pickled')
 
@@ -403,7 +398,7 @@ max_tracker_layers_list = locals().get('max_tracker_layers_list', default_max_tr
 
 # list of siamese layers/blobs to show
 # note: if an item in the list is a pair of layers, then it is a siamese layer
-siamese_layers_list = locals().get('siamese_layers_list', [])
+layers_list = locals().get('layers_list', [])
 
 # rand-seed parameter for optimize_image.py
 optimize_image_rand_seed = locals().get('optimize_image_rand_seed', 0)

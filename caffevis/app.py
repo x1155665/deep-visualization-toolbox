@@ -21,7 +21,7 @@ from jpg_vis_loading_thread import JPGVisLoadingThread
 from caffevis_app_state import CaffeVisAppState, SiameseInputMode, PatternMode
 from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, \
     check_force_backward_true, set_mean, get_image_from_files
-
+from caffe_misc import layer_name_to_top_name
 
 class CaffeVisApp(BaseApp):
     '''App to visualize using caffe.'''
@@ -75,31 +75,10 @@ class CaffeVisApp(BaseApp):
             raise Exception('caffevis_jpg_cache_size must be at least 10MB for normal operation.')
         self.img_cache = FIFOLimitedArrayCache(settings.caffevis_jpg_cache_size)
 
-        self._populate_net_layer_info()
-
-    def _populate_net_layer_info(self):
-        '''For each layer, save the number of filters and precompute
-        tile arrangement (needed by CaffeVisAppState to handle
-        keyboard navigation).
-        '''
-        self.net_layer_info = {}
-        for key in self.net.blobs.keys():
-            self.net_layer_info[key] = {}
-            # Conv example: (1, 96, 55, 55)
-            # FC example: (1, 1000)
-            blob_shape = self.net.blobs[key].data.shape
-            assert len(blob_shape) in (2,4), 'Expected either 2 for FC or 4 for conv layer'
-            self.net_layer_info[key]['isconv'] = (len(blob_shape) == 4)
-            self.net_layer_info[key]['data_shape'] = blob_shape[1:]  # Chop off batch size
-            self.net_layer_info[key]['n_tiles'] = blob_shape[1]
-            self.net_layer_info[key]['tiles_rc'] = get_tiles_height_width_ratio(blob_shape[1], self.settings.caffevis_layers_aspect_ratio)
-            self.net_layer_info[key]['tile_rows'] = self.net_layer_info[key]['tiles_rc'][0]
-            self.net_layer_info[key]['tile_cols'] = self.net_layer_info[key]['tiles_rc'][1]
-
     def start(self):
-        self.state = CaffeVisAppState(self.net, self.settings, self.bindings, self.net_layer_info)
+        self.state = CaffeVisAppState(self.net, self.settings, self.bindings)
         self.state.drawing_stale = True
-        self.header_print_names = [get_pretty_layer_name(self.settings, nn) for nn in self.state._headers]
+        self.header_print_names = [get_pretty_layer_name(self.settings, nn) for nn in self.state.get_headers()]
 
         if self.proc_thread is None or not self.proc_thread.is_alive():
             # Start thread if it's not already running
@@ -246,16 +225,16 @@ class CaffeVisApp(BaseApp):
 
         for ii in range(len(self.header_print_names)):
             fs = FormattedString(self.header_print_names[ii], defaults)
-            this_layer = self.state._headers[ii]
-            if self.state.backprop_selection_frozen and this_layer == self.state.backprop_layer:
-                fs.clr   = to_255(self.settings.caffevis_control_clr_bp)
+            this_layer_def = self.settings.layers_list[ii]
+            if self.state.backprop_selection_frozen and this_layer_def == self.state.get_current_backprop_layer_definition():
+                fs.clr = to_255(self.settings.caffevis_control_clr_bp)
                 fs.thick = self.settings.caffevis_control_thick_bp
-            if this_layer == self.state._headers[self.state.layer_idx]:
+            if this_layer_def == self.state.get_current_layer_definition():
                 if self.state.cursor_area == 'top':
                     fs.clr = to_255(self.settings.caffevis_control_clr_cursor)
                     fs.thick = self.settings.caffevis_control_thick_cursor
                 else:
-                    if not (self.state.backprop_selection_frozen and this_layer == self.state.backprop_layer):
+                    if not (self.state.backprop_selection_frozen and this_layer_def == self.state.get_current_backprop_layer_definition()):
                         fs.clr = to_255(self.settings.caffevis_control_clr_selected)
                         fs.thick = self.settings.caffevis_control_thick_selected
             strings.append(fs)
@@ -280,12 +259,13 @@ class CaffeVisApp(BaseApp):
             print >>status, 'pattern(' + pattern_first_mode + ' optimized max)' if self.state.pattern_mode == PatternMode.MAXIMAL_OPTIMIZED_IMAGE else \
                 ('pattern(' + pattern_first_mode + ' input max)' if self.state.pattern_mode == PatternMode.MAXIMAL_INPUT_IMAGE else
                 ('back' if self.state.layers_show_back else 'fwd')),
-            print >>status, '%s:%d |' % (self.state.get_default_layer_name(), self.state.selected_unit),
+            default_layer_name = self.state.get_default_layer_name()
+            print >>status, '%s:%d |' % (default_layer_name, self.state.selected_unit),
             if not self.state.back_enabled:
                 print >>status, 'Back: off',
             else:
                 print >>status, 'Back: %s' % ('deconv' if self.state.back_mode == 'deconv' else 'bprop'),
-                print >>status, '(from %s_%d, disp %s)' % (self.state.backprop_layer,
+                print >>status, '(from %s_%d, disp %s)' % (self.state.get_default_layer_name(self.state.get_current_backprop_layer_definition()) ,
                                                            self.state.backprop_unit,
                                                            self.state.back_filt_mode),
             print >>status, '|',
@@ -311,14 +291,13 @@ class CaffeVisApp(BaseApp):
 
         default_layer_name = self.state.get_default_layer_name()
 
-        if self.state.siamese_input_mode_has_two_images(self.state.layer):
+        if self.state.siamese_input_mode_has_two_images():
 
             if self.state.layers_show_back:
-                layer_dat_3D_0 = self.net.blobs[self.state.layer[0]].diff[0]
-                layer_dat_3D_1 = self.net.blobs[self.state.layer[1]].diff[0]
+
+                layer_dat_3D_0, layer_dat_3D_1 = self.state.get_siamese_selected_diff_blobs(self.net)
             else:
-                layer_dat_3D_0 = self.net.blobs[self.state.layer[0]].data[0]
-                layer_dat_3D_1 = self.net.blobs[self.state.layer[1]].data[0]
+                layer_dat_3D_0, layer_dat_3D_1 = self.state.get_siamese_selected_data_blobs(self.net)
 
             # Promote FC layers with shape (n) to have shape (n,1,1)
             if len(layer_dat_3D_0.shape) == 1:
@@ -337,9 +316,9 @@ class CaffeVisApp(BaseApp):
 
         else:
             if self.state.layers_show_back:
-                layer_dat_3D = self.net.blobs[default_layer_name].diff[0]
+                layer_dat_3D = self.state.get_single_selected_diff_blob(self.net)
             else:
-                layer_dat_3D = self.net.blobs[default_layer_name].data[0]
+                layer_dat_3D = self.state.get_single_selected_data_blob(self.net)
 
         # Promote FC layers with shape (n) to have shape (n,1,1)
         if len(layer_dat_3D.shape) == 1:
@@ -347,7 +326,8 @@ class CaffeVisApp(BaseApp):
 
         n_tiles = layer_dat_3D.shape[0]
 
-        tile_rows, tile_cols = self.net_layer_info[default_layer_name]['tiles_rc']
+        top_name = layer_name_to_top_name(self.net, default_layer_name)
+        tile_rows, tile_cols = self.state.net_blob_info[top_name]['tiles_rc']
 
         display_3D_highres = None
         if self.state.pattern_mode != PatternMode.OFF:
@@ -434,7 +414,7 @@ class CaffeVisApp(BaseApp):
         with self.state.lock:
             if self.state.cursor_area == 'bottom':
                 highlights[self.state.selected_unit] = self.settings.caffevis_layer_clr_cursor  # in [0,1] range
-            if self.state.backprop_selection_frozen and default_layer_name == self.state.backprop_layer:
+            if self.state.backprop_selection_frozen and self.state.get_current_layer_definition() == self.state.get_current_backprop_layer_definition():
                 highlights[self.state.backprop_unit] = self.settings.caffevis_layer_clr_back_sel  # in [0,1] range
 
         _, display_2D = tile_images_make_tiles(display_3D, hw = (tile_rows,tile_cols), padval = padval, highlights = highlights)
@@ -458,8 +438,11 @@ class CaffeVisApp(BaseApp):
 
         pane.data[:] = to_255(self.settings.window_background)
         pane.data[0:display_2D_resize.shape[0], 0:display_2D_resize.shape[1], :] = display_2D_resize
-        
-        if self.settings.caffevis_label_layers and default_layer_name in self.settings.caffevis_label_layers and self.state.cursor_area == 'bottom':
+
+        # check if label or score should be presented for the selected layer
+        if (default_layer_name in self.settings.caffevis_label_layers and self.state.cursor_area == 'bottom') or \
+           (default_layer_name in self.settings.caffevis_score_layers and self.state.cursor_area == 'bottom'):
+
             # Display label annotation atop layers pane (e.g. for fc8/prob)
             defaults = {'face':  getattr(cv2, self.settings.caffevis_label_face),
                         'fsize': self.settings.caffevis_label_fsize,
@@ -467,10 +450,23 @@ class CaffeVisApp(BaseApp):
                         'thick': self.settings.caffevis_label_thick}
             loc_base = self.settings.caffevis_label_loc[::-1]   # Reverse to OpenCV c,r order
 
-            if self.labels:
-                lines = [FormattedString(self.labels[self.state.selected_unit], defaults)]
-            else:
-                lines = [FormattedString(str(self.net.blobs[default_layer_name].data[0,self.state.selected_unit]), defaults)]
+            text_to_display = ""
+            if (self.labels) and (default_layer_name in self.settings.caffevis_label_layers):
+                text_to_display = self.labels[self.state.selected_unit] + " "
+
+            if (default_layer_name in self.settings.caffevis_score_layers):
+
+                if self.state.siamese_input_mode_has_two_images():
+                    blob1, blob2 = self.state.get_siamese_selected_data_blobs(self.net)
+                    value1, value2 = blob1[self.state.selected_unit], blob2[self.state.selected_unit]
+                    text_to_display += str(value1) + " " +  str(value2)
+
+                else:
+                    blob = self.state.get_single_selected_data_blob(self.net)
+                    value = blob[self.state.selected_unit]
+                    text_to_display += str(value)
+
+            lines = [FormattedString(text_to_display, defaults)]
             cv2_typeset_text(pane.data, lines, loc_base)
             
         return display_3D_highres
@@ -606,8 +602,6 @@ class CaffeVisApp(BaseApp):
             back_enabled = self.state.back_enabled
             back_mode = self.state.back_mode
             back_filt_mode = self.state.back_filt_mode
-            state_layer = self.state.layer
-            selected_unit = self.state.selected_unit
             back_what_to_disp = self.get_back_what_to_disp()
                 
         if back_what_to_disp == 'disabled':
@@ -709,7 +703,7 @@ class CaffeVisApp(BaseApp):
         pane.data[:] = to_255(self.settings.window_background)
 
         with self.state.lock:
-            state_layer, state_selected_unit, cursor_area, show_unit_jpgs = self.state.get_default_layer_name(), self.state.selected_unit, self.state.cursor_area, self.state.show_unit_jpgs
+            state_layer_name, state_selected_unit, cursor_area, show_unit_jpgs = self.state.get_default_layer_name(), self.state.selected_unit, self.state.cursor_area, self.state.show_unit_jpgs
 
         try:
             # Some may be missing this setting
@@ -718,10 +712,10 @@ class CaffeVisApp(BaseApp):
             print '\n\nNOTE: you need to upgrade your settings.py and settings_local.py files. See README.md.\n\n'
             raise
             
-        if self.settings.caffevis_jpgvis_remap and state_layer in self.settings.caffevis_jpgvis_remap:
-            img_key_layer = self.settings.caffevis_jpgvis_remap[state_layer]
+        if self.settings.caffevis_jpgvis_remap and state_layer_name in self.settings.caffevis_jpgvis_remap:
+            img_key_layer = self.settings.caffevis_jpgvis_remap[state_layer_name]
         else:
-            img_key_layer = state_layer
+            img_key_layer = state_layer_name
 
         if self.settings.caffevis_jpgvis_layers and img_key_layer in self.settings.caffevis_jpgvis_layers and cursor_area == 'bottom' and show_unit_jpgs:
             img_key = (img_key_layer, state_selected_unit, pane.data.shape, self.state.show_maximal_score)
