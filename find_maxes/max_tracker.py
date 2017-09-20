@@ -665,7 +665,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
             channel_to_info_file[channel_idx].info_file = open(info_filename[0], 'w')
             channel_to_info_file[channel_idx].ref_count = num_top
 
-            print >> channel_to_info_file[channel_idx].info_file, '# is_conv val image_idx image_class i(if is_conv) j(if is_conv) filename'
+            print >> channel_to_info_file[channel_idx].info_file, '# is_conv val image_idx image_class selected_input_index i(if is_conv) j(if is_conv) filename'
 
         # iterate through maxes from highest (at end) to lowest
         for max_idx_0 in range(num_top):
