@@ -1189,8 +1189,8 @@ class CaffeVisApp(BaseApp):
             
         for tag in ('sel_layer_left', 'sel_layer_right', 'zoom_mode', 'next_pattern_mode','pattern_first_only',
                     'next_ez_back_mode_loop', 'next_back_view_option', 'freeze_back_unit', 'show_back',
-                    'boost_gamma', 'boost_individual', 'reset_state', 'siamese_input_mode', 'toggle_maximal_score',
-                    'toggle_input_overlay_in_aux_pane'):
+                    'boost_gamma', 'boost_individual', 'siamese_input_mode', 'toggle_maximal_score',
+                    'toggle_input_overlay_in_aux_pane', 'reset_state'):
             key_strings, help_string = self.bindings.get_key_help(tag)
             label = '%10s:' % (','.join(key_strings))
             lines.append([FormattedString(label, defaults, width=120, align='right'),
