@@ -1050,11 +1050,11 @@ class CaffeVisApp(BaseApp):
                         image1 = process_image_fn(image1)
 
                         # resize each gradient image to half the pane size
-                        half_pane_shape = (image.shape[1] / 2, image.shape[0])
+                        half_pane_shape = (image.shape[0], image.shape[1] / 2)
                         # half_pane_shape = (pane.data.shape[1] / 2, pane.data.shape[0])
 
-                        image0 = cv2.resize(image0[:], half_pane_shape)
-                        image1 = cv2.resize(image1[:], half_pane_shape)
+                        image0 = resize_without_fit(image0[:], half_pane_shape)
+                        image1 = resize_without_fit(image1[:], half_pane_shape)
 
                         # generate the pane image by concatenating both images
                         return np.concatenate((image0, image1), axis=1)

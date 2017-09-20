@@ -15,7 +15,7 @@ except ImportError:
     raise
 
 from misc import WithTimer
-from image_misc import cv2_imshow_rgb, FormattedString, cv2_typeset_text, to_255
+from image_misc import cv2_imshow_rgb, FormattedString, cv2_typeset_text, to_255, resize_without_fit
 from bindings import bindings
 from input_fetcher import InputImageFetcher
 
@@ -322,12 +322,13 @@ class LiveVis(object):
         if self.settings.is_siamese and ((type(frame),len(frame)) == (tuple,2)):
             frame1 = frame[0]
             frame2 = frame[1]
-            half_pane_shape = (full_pane_shape[0] / 2, full_pane_shape[1])
-            frame_disp1 = cv2.resize(frame1[:], half_pane_shape)
-            frame_disp2 = cv2.resize(frame2[:], half_pane_shape)
+            # half_pane_shape = (full_pane_shape[0] / 2, full_pane_shape[1])
+            half_pane_shape = (full_pane_shape[0], full_pane_shape[1]/2)
+            frame_disp1 = resize_without_fit(frame1[:], half_pane_shape)
+            frame_disp2 = resize_without_fit(frame2[:], half_pane_shape)
             frame_disp = np.concatenate((frame_disp1, frame_disp2), axis=1)
         else:
-            frame_disp = cv2.resize(frame[:], full_pane_shape)
+            frame_disp = resize_without_fit(frame[:], full_pane_shape)
 
         self.panes['input'].data[:] = frame_disp
 
