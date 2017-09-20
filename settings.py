@@ -346,6 +346,9 @@ caffevis_score_thick = locals().get('caffevis_score_thick', 1)
 # how should histograms be loaded: 'calculate_in_realtime' or 'load_from_file'
 caffevis_histograms_format = locals().get('caffevis_histograms_format','calculate_in_realtime')
 
+# should we black maximal input images with zero or negative activation score
+caffevis_clear_negative_activations = locals().get('caffevis_clear_negative_activations', False)
+
 # caffe net parameter - channel swap
 caffe_net_channel_swap = locals().get('caffe_net_channel_swap', (2,1,0))
 

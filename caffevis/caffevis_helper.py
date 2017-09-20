@@ -224,11 +224,12 @@ def get_image_from_files(settings, unit_folder_path, should_crop_to_corner, resi
         unit_images = [caffe_load_image(unit_image_path, color=True, as_uint=True) for unit_image_path in
                        unit_images_path]
 
-        # clear images with 0 value
-        if values:
-            for i in range(len(values)):
-                if values[i] < float_info.epsilon:
-                    unit_images[i] *= 0
+        if settings.caffevis_clear_negative_activations:
+            # clear images with 0 value
+            if values:
+                for i in range(len(values)):
+                    if values[i] < float_info.epsilon:
+                        unit_images[i] *= 0
 
         if should_crop_to_corner:
             unit_images = [crop_to_corner(img, 2) for img in unit_images]
