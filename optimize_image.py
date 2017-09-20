@@ -172,6 +172,12 @@ def main():
 
     data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
 
+    # validate batch size
+    if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
+        # currently, no batch support for siamese_batch_pair networks
+        # it can be added by simply handle the batch indexes properly, but it should be thoroughly tested
+        assert (settings.max_tracker_batch_size == 1)
+
     check_force_backward_true(settings.caffevis_deploy_prototxt)
 
     current_data_shape = net.blobs['data'].shape

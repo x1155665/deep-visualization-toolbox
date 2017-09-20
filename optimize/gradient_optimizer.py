@@ -244,6 +244,7 @@ class GradientOptimizer(object):
             push_label = None
 
         old_obj = np.zeros(params.batch_size)
+        obj = np.zeros(params.batch_size)
         for ii in range(params.max_iter):
             # 0. Crop data
             xx = minimum(255.0, maximum(0.0, xx + self.batched_data_mean)) - self.batched_data_mean     # Crop all values to [0,255]
@@ -254,17 +255,44 @@ class GradientOptimizer(object):
             top_name = layer_name_to_top_name(self.net, params.push_layer)
             acts = self.net.blobs[top_name].data
 
-            if not is_conv:
-                # promote to 4D
-                acts = np.reshape(acts, (params.batch_size, -1, 1, 1))
+            # note: no batch support in 'siamese_batch_pair'
+            if self.settings.is_siamese and self.settings.siamese_network_format == 'siamese_batch_pair' and acts.shape[0] == 2:
 
-            reshaped_acts = np.reshape(acts, (params.batch_size, -1))
+                if not is_conv:
+                    # promote to 4D
+                    acts = np.reshape(acts, (2, -1, 1, 1))
+                reshaped_acts = np.reshape(acts, (2, -1))
+                idxmax = unravel_index(reshaped_acts.argmax(axis=1), acts.shape[1:])
+                valmax = reshaped_acts.max(axis=1)
 
-            idxmax = unravel_index(reshaped_acts.argmax(axis=1), acts.shape[1:])
-            valmax = reshaped_acts.max(axis=1)
-            # idxmax for fc or prob layer will be like:  (batch,278, 0, 0)
-            # idxmax for conv layer will be like:        (batch,37, 4, 37)
-            obj = acts[np.arange(params.batch_size), params.push_unit[0], params.push_unit[1], params.push_unit[2]]
+                # idxmax for fc or prob layer will be like:  (batch,278, 0, 0)
+                # idxmax for conv layer will be like:        (batch,37, 4, 37)
+                obj[0] = acts[0, params.push_unit[0], params.push_unit[1], params.push_unit[2]]
+
+            elif self.settings.is_siamese and self.settings.siamese_network_format == 'siamese_batch_pair' and acts.shape[0] == 1:
+
+                if not is_conv:
+                    # promote to 4D
+                    acts = np.reshape(acts, (1, -1, 1, 1))
+                reshaped_acts = np.reshape(acts, (1, -1))
+                idxmax = unravel_index(reshaped_acts.argmax(axis=1), acts.shape[1:])
+                valmax = reshaped_acts.max(axis=1)
+
+                # idxmax for fc or prob layer will be like:  (batch,278, 0, 0)
+                # idxmax for conv layer will be like:        (batch,37, 4, 37)
+                obj[0] = acts[0, params.push_unit[0], params.push_unit[1], params.push_unit[2]]
+
+            else:
+                if not is_conv:
+                    # promote to 4D
+                    acts = np.reshape(acts, (params.batch_size, -1, 1, 1))
+                reshaped_acts = np.reshape(acts, (params.batch_size, -1))
+                idxmax = unravel_index(reshaped_acts.argmax(axis=1), acts.shape[1:])
+                valmax = reshaped_acts.max(axis=1)
+
+                # idxmax for fc or prob layer will be like:  (batch,278, 0, 0)
+                # idxmax for conv layer will be like:        (batch,37, 4, 37)
+                obj = acts[np.arange(params.batch_size), params.push_unit[0], params.push_unit[1], params.push_unit[2]]
 
             # 2. Update results
             for batch_index in range(params.batch_size):
@@ -296,7 +324,12 @@ class GradientOptimizer(object):
                 # Promote bc -> bc01
                 diffs = diffs[:,:,np.newaxis,np.newaxis]
 
-            diffs[np.arange(params.batch_size), params.push_unit[0], params.push_unit[1], params.push_unit[2]] = params.push_dir
+            if self.settings.is_siamese and self.settings.siamese_network_format == 'siamese_batch_pair' and acts.shape[0] == 2:
+                diffs[0, params.push_unit[0], params.push_unit[1], params.push_unit[2]] = params.push_dir
+            elif self.settings.is_siamese and self.settings.siamese_network_format == 'siamese_batch_pair' and acts.shape[0] == 1:
+                diffs[0, params.push_unit[0], params.push_unit[1], params.push_unit[2]] = params.push_dir
+            else:
+                diffs[np.arange(params.batch_size), params.push_unit[0], params.push_unit[1], params.push_unit[2]] = params.push_dir
             backout = self.net.backward_from_layer(params.push_layer, diffs if is_conv else diffs[:,:,0,0])
 
             grad = backout['data'].copy()
@@ -411,8 +444,8 @@ class GradientOptimizer(object):
                 if item['name/s'][1] == layer_name:
                     return 1
 
-            elif item['format'] == 'siamese_batch_pair':
-                raise NotImplementedError("in function find_selected_input_index()")
+            elif item['format'] == 'siamese_batch_pair' and item['name/s'] == layer_name:
+                return 0
 
         return -1
 
