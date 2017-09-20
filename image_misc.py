@@ -5,6 +5,7 @@ import numpy as np
 import skimage
 import skimage.io
 from copy import deepcopy
+import matplotlib.pyplot as plt
 
 from misc import WithTimer
 
@@ -594,7 +595,6 @@ def cv2_typeset_text(data, lines, loc, between = ' ', string_spacing = 0, line_s
     return locy
 
 
-
 def saveimage(filename, im):
     '''Saves an image with pixel values in [0,1]'''
     #matplotlib.image.imsave(filename, im)
@@ -605,11 +605,17 @@ def saveimage(filename, im):
         cv2.imwrite(filename, 255*im)
 
 
-
 def saveimagesc(filename, im):
     saveimage(filename, norm01(im))
 
 
-
 def saveimagescc(filename, im, center):
     saveimage(filename, norm01c(im, center))
+
+
+def gray_to_colormap(map_name, gray_image):
+
+    cmap = plt.get_cmap(map_name)
+    rgba_image = cmap(gray_image)
+    rgb_image = np.delete(rgba_image, 3, 2)
+    return rgb_image

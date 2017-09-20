@@ -19,17 +19,19 @@ from misc import WithTimer, mkdir_p
 from numpy_cache import FIFOLimitedArrayCache
 from app_base import BaseApp
 from image_misc import norm01, norm01c, tile_images_normalize, ensure_float01, tile_images_make_tiles, \
-    ensure_uint255_and_resize_to_fit, resize_without_fit, \
+    ensure_uint255_and_resize_to_fit, resize_without_fit, ensure_uint255, \
     caffe_load_image, ensure_uint255_and_resize_without_fit, softmax_image, array_histogram, fig2data
 from image_misc import FormattedString, cv2_typeset_text, to_255
 from caffe_proc_thread import CaffeProcThread
 from jpg_vis_loading_thread import JPGVisLoadingThread
-from caffevis_app_state import CaffeVisAppState, SiameseInputMode, PatternMode, BackpropMode, BackpropViewOption
+from caffevis_app_state import CaffeVisAppState, SiameseInputMode, PatternMode, BackpropMode, BackpropViewOption, \
+    ColorMapOption, InputOverlayOption
 from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, \
     check_force_backward_true, set_mean, get_image_from_files
 from caffe_misc import layer_name_to_top_name, save_caffe_image
 from siamese_helper import SiameseHelper
 from settings_misc import deduce_calculated_settings
+
 
 class CaffeVisApp(BaseApp):
     '''App to visualize using caffe.'''
@@ -489,16 +491,7 @@ class CaffeVisApp(BaseApp):
 
         elif state_layers_pane_zoom_mode == 1 and not is_layer_summary_loaded:
             # Mode 1: zoomed selection
-            unit_data = display_3D_highres[self.state.selected_unit]
-            if self.settings.caffevis_keep_aspect_ratio:
-                display_2D_resize = ensure_uint255_and_resize_to_fit(unit_data, pane.data.shape)
-            else:
-                display_2D_resize = ensure_uint255_and_resize_without_fit(unit_data, pane.data.shape)
-
-            if self.state.show_input_overlay_in_aux_pane and self.state.pattern_mode == PatternMode.OFF:
-                input_image = SiameseHelper.get_image_from_frame(self.state.last_frame, self.state.settings.is_siamese, pane.data.shape, self.state.siamese_input_mode)
-                normalized_mask = display_2D_resize / 255.0
-                display_2D_resize = normalized_mask * input_image + (1 - normalized_mask) * display_2D_resize
+            display_2D_resize = self.get_processed_selected_unit(display_3D_highres, pane.data.shape, use_colored_data=False)
 
         elif state_layers_pane_zoom_mode == 2 and not is_layer_summary_loaded:
             # Mode 2: zoomed backprop pane
@@ -986,6 +979,67 @@ class CaffeVisApp(BaseApp):
         display_3D = self.downsample_display_3d(display_3D_highres, layer_dat_3D, pane, tile_cols, tile_rows)
         return display_2D, display_3D, display_3D_highres, is_layer_summary_loaded
 
+    def get_processed_selected_unit(self, all_units, resize_shape, use_colored_data = False):
+
+        unit_data = all_units[self.state.selected_unit]
+        if self.settings.caffevis_keep_aspect_ratio:
+            unit_data_resize = ensure_uint255_and_resize_to_fit(unit_data, resize_shape)
+        else:
+            unit_data_resize = ensure_uint255_and_resize_without_fit(unit_data, resize_shape)
+
+        if self.state.pattern_mode == PatternMode.OFF:
+            input_image = SiameseHelper.get_image_from_frame(self.state.last_frame, self.state.settings.is_siamese,
+                                                             resize_shape, self.state.siamese_input_mode)
+            normalized_mask = unit_data_resize / 255.0
+
+            if use_colored_data:
+                unit_data_resize = self.state.gray_to_colormap(unit_data_resize)
+                normalized_mask = np.tile(normalized_mask[:, :, np.newaxis], 3)
+
+            if self.state.input_overlay_option == InputOverlayOption.OFF:
+                pass
+
+            elif self.state.input_overlay_option == InputOverlayOption.OVER_ACTIVE:
+
+                unit_data_resize = normalized_mask * input_image + (1 - normalized_mask) * unit_data_resize
+
+            elif self.state.input_overlay_option == InputOverlayOption.OVER_INACTIVE:
+                unit_data_resize = (normalized_mask < 0.1) * input_image + (normalized_mask >= 0.1) * unit_data_resize
+                pass
+
+        return unit_data_resize
+
+
+    def _mix_input_overlay_with_colormap(self, unit_data, resize_shape, input_image):
+
+        if self.settings.caffevis_keep_aspect_ratio:
+            unit_data_resize = ensure_uint255_and_resize_to_fit(unit_data, resize_shape)
+            input_image_resize = ensure_uint255_and_resize_to_fit(input_image, resize_shape)
+        else:
+            unit_data_resize = ensure_uint255_and_resize_without_fit(unit_data, resize_shape)
+            input_image_resize = ensure_uint255_and_resize_without_fit(input_image, resize_shape)
+
+        normalized_mask = unit_data_resize / 255.0
+        normalized_mask = np.tile(normalized_mask[:, :, np.newaxis], 3)
+
+        colored_unit_data_resize = self.state.gray_to_colormap(unit_data_resize)
+        colored_unit_data_resize = ensure_uint255(colored_unit_data_resize)
+        if len(colored_unit_data_resize.shape) == 2:
+            colored_unit_data_resize = np.tile(colored_unit_data_resize[:, :, np.newaxis], 3)
+
+        if self.state.input_overlay_option == InputOverlayOption.OFF:
+            pass
+
+        elif self.state.input_overlay_option == InputOverlayOption.OVER_ACTIVE:
+            colored_unit_data_resize = np.array(normalized_mask * input_image_resize + (1 - normalized_mask) * colored_unit_data_resize, dtype = 'uint8')
+
+        elif self.state.input_overlay_option == InputOverlayOption.OVER_INACTIVE:
+            MAGIC_THRESHOLD_NUMBER = 0.3
+            colored_unit_data_resize = (normalized_mask < MAGIC_THRESHOLD_NUMBER) * input_image_resize + (normalized_mask >= MAGIC_THRESHOLD_NUMBER) * colored_unit_data_resize
+            pass
+
+        return colored_unit_data_resize
+
     def _draw_aux_pane(self, pane, layer_data_normalized):
         pane.data[:] = to_255(self.settings.window_background)
 
@@ -997,18 +1051,9 @@ class CaffeVisApp(BaseApp):
                 mode = 'prob_labels'
                 
         if mode == 'selected':
-            unit_data = layer_data_normalized[self.state.selected_unit]
-            if self.settings.caffevis_keep_aspect_ratio:
-                unit_data_resize = ensure_uint255_and_resize_to_fit(unit_data, pane.data.shape)
-            else:
-                unit_data_resize = ensure_uint255_and_resize_without_fit(unit_data, pane.data.shape)
-
-            if self.state.show_input_overlay_in_aux_pane and self.state.pattern_mode == PatternMode.OFF:
-                input_image = SiameseHelper.get_image_from_frame(self.state.last_frame, self.state.settings.is_siamese, pane.data.shape, self.state.siamese_input_mode)
-                normalized_mask = unit_data_resize / 255.0
-                unit_data_resize = normalized_mask * input_image + (1-normalized_mask) * unit_data_resize
-
+            unit_data_resize = self.get_processed_selected_unit(layer_data_normalized, pane.data.shape, use_colored_data=False)
             pane.data[0:unit_data_resize.shape[0], 0:unit_data_resize.shape[1], :] = unit_data_resize
+
         elif mode == 'prob_labels':
             self._draw_prob_labels_pane(pane)
 
@@ -1026,9 +1071,8 @@ class CaffeVisApp(BaseApp):
         elif back_what_to_disp == 'stale':
             pane.data[:] = to_255(self.settings.stale_background)
 
-        else:
-            # One of the backprop modes is enabled and the back computation (gradient or deconv) is up to date
-            
+        else: # One of the backprop modes is enabled and the back computation (gradient or deconv) is up to date
+
             grad_blob = self.net.blobs['data'].diff
 
             # Manually deprocess (skip mean subtraction and rescaling)
@@ -1053,20 +1097,20 @@ class CaffeVisApp(BaseApp):
                     # combine image0 and image1
                     if self.state.siamese_input_mode == SiameseInputMode.FIRST_IMAGE:
                         # run processing on image0
-                        return process_image_fn(image0)
+                        return process_image_fn(image0, resize_shape, self.state.last_frame[0])
 
                     elif self.state.siamese_input_mode == SiameseInputMode.SECOND_IMAGE:
                         # run processing on image1
-                        return process_image_fn(image1)
+                        return process_image_fn(image1, resize_shape, self.state.last_frame[1])
 
                     elif self.state.siamese_input_mode == SiameseInputMode.BOTH_IMAGES:
 
-                        # run processing on both image0 and image1
-                        image0 = process_image_fn(image0)
-                        image1 = process_image_fn(image1)
-
                         # resize each gradient image to half the pane size
                         half_pane_shape = (resize_shape[0], resize_shape[1] / 2)
+
+                        # run processing on both image0 and image1
+                        image0 = process_image_fn(image0, half_pane_shape, self.state.last_frame[0])
+                        image1 = process_image_fn(image1, half_pane_shape, self.state.last_frame[1])
 
                         image0 = resize_without_fit(image0[:], half_pane_shape)
                         image1 = resize_without_fit(image1[:], half_pane_shape)
@@ -1077,38 +1121,55 @@ class CaffeVisApp(BaseApp):
                 # else, normal network, run processing once
                 else:
                     # run processing on image
-                    return process_image_fn(image)
+                    return process_image_fn(image, resize_shape, self.state.last_frame)
 
                 raise Exception("flow should not arrive here")
 
-            if back_view_option == BackpropViewOption.SOFTMAX_RAW:
-                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: softmax_image(norm01c(grad_img, 0)))
+            # if back_view_option == BackpropViewOption.SOFTMAX_RAW:
+            #     grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img, resize_shape, input_image: softmax_image(norm01c(grad_img, 0)))
 
-            elif back_view_option == BackpropViewOption.RAW:
-                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: norm01c(grad_img, 0))
+            if back_view_option == BackpropViewOption.RAW:
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img, resize_shape, input_image: norm01c(grad_img, 0))
 
             elif back_view_option == BackpropViewOption.RAW_POS:
-                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: norm01c(grad_img, 0) * (grad_img > 0) + (0.5) * (grad_img <= 0))
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img, resize_shape, input_image: norm01c(grad_img, 0) * (grad_img > 0) + (0.5) * (grad_img <= 0))
 
             elif back_view_option == BackpropViewOption.RAW_NEG:
-                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: norm01c(grad_img, 0) * (grad_img < 0) + (0.5) * (grad_img >= 0))
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img, resize_shape, input_image: norm01c(grad_img, 0) * (grad_img < 0) + (0.5) * (grad_img >= 0))
 
             elif back_view_option == BackpropViewOption.GRAY:
-                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: norm01c(grad_img.mean(axis=2), 0))
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img, resize_shape, input_image: norm01c(grad_img.mean(axis=2), 0))
 
             elif back_view_option == BackpropViewOption.NORM:
-                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: norm01(np.linalg.norm(grad_img, axis=2)))
+                def do_norm(grad_img, resize_shape, input_image):
+                    norm_grad_img = norm01(np.linalg.norm(grad_img, axis=2))
+                    # return self.state.gray_to_colormap(norm_grad_img)
+                    return self._mix_input_overlay_with_colormap(norm_grad_img, resize_shape, input_image)
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, do_norm)
 
             elif back_view_option == BackpropViewOption.NORM_BLUR:
-                def do_norm_blur(grad_img):
+                def do_norm_blur(grad_img, resize_shape, input_image):
                     grad_img = np.linalg.norm(grad_img, axis=2)
                     cv2.GaussianBlur(grad_img, (0, 0), self.settings.caffevis_grad_norm_blur_radius, grad_img)
-                    return norm01(grad_img)
+                    norm_grad_img = norm01(grad_img)
+                    # return self.state.gray_to_colormap(norm_grad_img)
+                    return self._mix_input_overlay_with_colormap(norm_grad_img, resize_shape, input_image)
                 grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, do_norm_blur)
+
+            elif back_view_option == BackpropViewOption.MAX_ABS:
+                def do_max_abs(grad_img, resize_shape, input_image):
+                    sigma = 0.02 * max(grad_img.shape[0:2])
+                    blur_grad_img = cv2.GaussianBlur(grad_img, (0, 0), sigma)
+                    abs_grad_img = np.abs(blur_grad_img)
+                    max_abs_grad_img = np.max(abs_grad_img, axis=2)
+                    normalized_max_abs_grad_img = norm01(max_abs_grad_img)
+                    # return self.state.gray_to_colormap(normalized_max_abs_grad_img)
+                    return self._mix_input_overlay_with_colormap(normalized_max_abs_grad_img, resize_shape, input_image)
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, do_max_abs)
 
             elif back_view_option == BackpropViewOption.HISTOGRAM:
                 half_pane_shape = (pane.data.shape[0],pane.data.shape[1]/2,3)
-                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: array_histogram(grad_img, half_pane_shape, BackpropMode.to_string(back_mode)+' histogram', 'values', 'count'))
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img, resize_shape, input_image: array_histogram(grad_img, half_pane_shape, BackpropMode.to_string(back_mode)+' histogram', 'values', 'count'))
 
             else:
                 raise Exception('Invalid option for back_view_option: %s' % (back_view_option))
@@ -1117,12 +1178,11 @@ class CaffeVisApp(BaseApp):
             if len(grad_img.shape) == 2:
                 grad_img = np.tile(grad_img[:,:,np.newaxis], 3)
 
-            grad_img_disp = grad_img
-
             if self.settings.caffevis_keep_aspect_ratio:
-                grad_img_resize = ensure_uint255_and_resize_to_fit(grad_img_disp, pane.data.shape)
+                grad_img_resize = ensure_uint255_and_resize_to_fit(grad_img, pane.data.shape)
             else:
-                grad_img_resize = ensure_uint255_and_resize_without_fit(grad_img_disp, pane.data.shape)
+                grad_img_resize = ensure_uint255_and_resize_without_fit(grad_img, pane.data.shape)
+
             pane.data[0:grad_img_resize.shape[0], 0:grad_img_resize.shape[1], :] = grad_img_resize
 
     def _draw_jpgvis_pane(self, pane):
@@ -1212,9 +1272,9 @@ class CaffeVisApp(BaseApp):
                       FormattedString(nav_string, defaults)])
             
         for tag in ('sel_layer_left', 'sel_layer_right', 'zoom_mode', 'next_pattern_mode','pattern_first_only',
-                    'next_ez_back_mode_loop', 'next_back_view_option', 'freeze_back_unit', 'show_back',
-                    'boost_gamma', 'boost_individual', 'siamese_input_mode', 'toggle_maximal_score',
-                    'toggle_input_overlay_in_aux_pane', 'reset_state'):
+                    'next_input_overlay', 'next_ez_back_mode_loop', 'next_back_view_option', 'next_color_map',
+                    'freeze_back_unit', 'show_back', 'boost_gamma', 'boost_individual', 'siamese_input_mode',
+                    'toggle_maximal_score', 'reset_state'):
             key_strings, help_string = self.bindings.get_key_help(tag)
             label = '%10s:' % (','.join(key_strings))
             lines.append([FormattedString(label, defaults, width=120, align='right'),

@@ -109,17 +109,21 @@ _.add('pattern_first_only', '1',
        'Toggle pattern loading first image only or loading all available images')
 
 _.add('next_ez_back_mode_loop', 'b',
-       'Cycle through backprop modes (backprop, deconv zf, deconv gb, off)')
+       'Cycle through backprop modes (grad, deconv zf, deconv gb, off)')
 _.add('prev_ez_back_mode_loop', 'B',
-       'Cycle through backprop modes (backprop, deconv zf, deconv gb, off)')
+       'Cycle through backprop modes (grad, deconv zf, deconv gb, off)')
 _.add('freeze_back_unit', 'd',
        'Freeze the bprop/deconv origin to be the currently selected unit')
 _.add('show_back', 'a',
        'Toggle between showing forward activations and back/deconv diffs')
 _.add('next_back_view_option', 'n',
-       'Cycle through backprop view options (raw, raw>0, raw<0, gray, norm, normblur)')
+       'Cycle through backprop view options (raw, raw>0, raw<0, gray, norm, normblur, max abs, histogram)')
 _.add('prev_back_view_option', 'N',
-       'Cycle through backprop view options (raw, raw>0, raw<0, gray, norm, normblur)')
+       'Cycle through backprop view options (raw, raw>0, raw<0, gray, norm, normblur, max abs, histogram)')
+_.add('next_color_map', 'm',
+       'Cycle through colormaps options (grayscale, jet, plasma)')
+_.add('prev_color_map', 'M',
+       'Cycle through colormaps options (grayscale, jet, plasma)')
 
 _.add('boost_gamma', 't',
        'Boost contrast using gamma correction')
@@ -135,8 +139,10 @@ _.add('siamese_input_mode', 'v',
 
 _.add('toggle_maximal_score', 'r',
         'Toggle showing maximal score overlays {on, off}')
-_.add('toggle_input_overlay_in_aux_pane', 'y',
-        'Toggle showing input overlay in aux pane {on, off}')
+_.add('next_input_overlay', 'y',
+      'Cycle input overlay {off, over active, over inactive}')
+_.add('prev_input_overlay', 'Y',
+      'Cycle input overlay {off, over active, over inactive}')
 
 
 bindings = _

@@ -3,7 +3,7 @@ import time
 from threading import Lock
 from siamese_helper import SiameseInputMode, SiameseHelper
 from caffe_misc import layer_name_to_top_name
-from image_misc import get_tiles_height_width_ratio
+from image_misc import get_tiles_height_width_ratio, gray_to_colormap
 
 class PatternMode:
     OFF = 0
@@ -34,21 +34,22 @@ class BackpropMode:
         return 'n/a'
 
 class BackpropViewOption:
-    SOFTMAX_RAW = 0
-    RAW = 1
-    RAW_POS = 2
-    RAW_NEG = 3
-    GRAY = 4
-    NORM = 5
-    NORM_BLUR = 6
+    # SOFTMAX_RAW = 0
+    RAW = 0
+    RAW_POS = 1
+    RAW_NEG = 2
+    GRAY = 3
+    NORM = 4
+    NORM_BLUR = 5
+    MAX_ABS = 6
     HISTOGRAM = 7
     NUMBER_OF_OPTIONS = 8
 
     @staticmethod
     def to_string(back_view_option):
-        if back_view_option == BackpropViewOption.SOFTMAX_RAW:
-            return 'softmax raw'
-        elif back_view_option == BackpropViewOption.RAW:
+        # if back_view_option == BackpropViewOption.SOFTMAX_RAW:
+        #     return 'softmax raw'
+        if back_view_option == BackpropViewOption.RAW:
             return 'raw'
         elif back_view_option == BackpropViewOption.RAW_POS:
             return 'raw>0'
@@ -62,6 +63,42 @@ class BackpropViewOption:
             return 'normblur'
         elif back_view_option == BackpropViewOption.HISTOGRAM:
             return 'histogram'
+        elif back_view_option == BackpropViewOption.MAX_ABS:
+            return 'max abs'
+
+        return 'n/a'
+
+class ColorMapOption:
+    GRAY = 0
+    JET = 1
+    PLASMA = 2
+    NUMBER_OF_OPTIONS = 3
+
+    @staticmethod
+    def to_string(color_map_option):
+        if color_map_option == ColorMapOption.GRAY:
+            return 'gray'
+        elif color_map_option == ColorMapOption.JET:
+            return 'jet'
+        elif color_map_option == ColorMapOption.PLASMA:
+            return 'plasma'
+
+        return 'n/a'
+
+class InputOverlayOption:
+    OFF = 0
+    OVER_ACTIVE = 1
+    OVER_INACTIVE = 2
+    NUMBER_OF_OPTIONS = 3
+
+    @staticmethod
+    def to_string(input_overlay_option):
+        if input_overlay_option == InputOverlayOption.OFF:
+            return 'off'
+        elif input_overlay_option == InputOverlayOption.OVER_ACTIVE:
+            return 'over active'
+        elif input_overlay_option == InputOverlayOption.OVER_INACTIVE:
+            return 'over inactive'
 
         return 'n/a'
 
@@ -122,7 +159,7 @@ class CaffeVisAppState(object):
 
     def _reset_user_state(self):
         self.show_maximal_score = False
-        self.show_input_overlay_in_aux_pane = False
+        self.input_overlay_option = InputOverlayOption.OFF
         self.layer_idx = 0
         self.layer_boost_indiv_idx = self.settings.caffevis_boost_indiv_default_idx
         self.layer_boost_indiv = self.layer_boost_indiv_choices[self.layer_boost_indiv_idx]
@@ -140,6 +177,7 @@ class CaffeVisAppState(object):
         self.back_enabled = False
         self.back_mode = BackpropMode.OFF
         self.back_view_option = BackpropViewOption.RAW
+        self.color_map_option = ColorMapOption.GRAY
         self.pattern_mode = PatternMode.OFF    # type of patterns to show instead of activations in layers pane: maximal optimized image, maximal input image, maximal histogram, off
         self.pattern_first_only = True         # should we load only the first pattern image for each neuron, or all the relevant images per neuron
         self.layers_pane_zoom_mode = 0       # 0: off, 1: zoom selected (and show pref in small pane), 2: zoom backprop
@@ -232,6 +270,12 @@ class CaffeVisAppState(object):
             elif tag == 'prev_back_view_option':
                 self.back_view_option = (self.back_view_option - 1 + BackpropViewOption.NUMBER_OF_OPTIONS) % BackpropViewOption.NUMBER_OF_OPTIONS
 
+            elif tag == 'next_color_map':
+                self.color_map_option = (self.color_map_option  + 1) % ColorMapOption.NUMBER_OF_OPTIONS
+
+            elif tag == 'prev_color_map':
+                self.color_map_option  = (self.color_map_option  - 1 + ColorMapOption.NUMBER_OF_OPTIONS) % ColorMapOption.NUMBER_OF_OPTIONS
+
             elif tag == 'freeze_back_unit':
                 # Freeze selected layer/unit as backprop unit
                 self.backprop_selection_frozen = not self.backprop_selection_frozen
@@ -259,8 +303,11 @@ class CaffeVisAppState(object):
             elif tag == 'toggle_maximal_score':
                 self.show_maximal_score = not self.show_maximal_score
 
-            elif tag == 'toggle_input_overlay_in_aux_pane':
-                self.show_input_overlay_in_aux_pane = not self.show_input_overlay_in_aux_pane
+            elif tag == 'next_input_overlay':
+                self.input_overlay_option = (self.input_overlay_option + 1) % InputOverlayOption.NUMBER_OF_OPTIONS
+
+            elif tag == 'prev_input_overlay':
+                self.input_overlay_option  = (self.input_overlay_option  - 1 + InputOverlayOption.NUMBER_OF_OPTIONS) % InputOverlayOption.NUMBER_OF_OPTIONS
 
             else:
                 key_handled = False
@@ -431,3 +478,14 @@ class CaffeVisAppState(object):
 
 
         pass
+
+    def gray_to_colormap(self, gray_image):
+
+        if self.color_map_option == ColorMapOption.GRAY:
+            return gray_image
+
+        elif self.color_map_option == ColorMapOption.JET:
+            return gray_to_colormap('jet', gray_image)
+
+        elif self.color_map_option == ColorMapOption.PLASMA:
+            return gray_to_colormap('plasma', gray_image)
