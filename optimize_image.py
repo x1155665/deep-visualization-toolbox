@@ -8,7 +8,7 @@ import numpy as np
 import settings
 from optimize.gradient_optimizer import GradientOptimizer, FindParams
 from caffevis.caffevis_helper import check_force_backward_true, read_label_file, set_mean
-from settings_misc import deduce_calculated_settings
+from settings_misc import deduce_calculated_settings, get_layer_info
 
 LR_POLICY_CHOICES = ('constant', 'progress', 'progress01')
 
@@ -126,27 +126,6 @@ def parse_and_validate_push_spatial(parser, push_spatial):
         parser.error(err)
 
     return push_spatial
-
-
-def get_layer_info(settings, layer_name):
-    '''
-        get layer info (name, type, input, output, filter, stride, pad) from settings
-
-    :param settings: contains script settings
-    :param layer_name: name of layer
-    :return: current_layer and previous_layer tuples of (name, type, input, output, filter, stride, pad)
-    '''
-
-    # go over layers
-
-    previous_layer = None
-    for (name, type, input, output, filter, stride, pad) in settings.max_tracker_layers_list:
-        if name == layer_name:
-            current_layer = (name, type, input, output, filter, stride, pad)
-            return current_layer, previous_layer
-
-        # update previous layer
-        previous_layer = (name, type, input, output, filter, stride, pad)
 
 
 def main():

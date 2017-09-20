@@ -28,3 +28,24 @@ def set_calculated_image_dims(settings, net):
     else:
         input_shape = net.blobs[net.inputs[0]].data.shape
         settings._calculated_image_dims = input_shape[2:4]
+
+
+def get_layer_info(settings, layer_name):
+    '''
+        get layer info (name, type, input, output, filter, stride, pad) from settings
+
+    :param settings: contains script settings
+    :param layer_name: name of layer
+    :return: current_layer and previous_layer tuples of (name, type, input, output, filter, stride, pad)
+    '''
+
+    # go over layers
+
+    previous_layer = None
+    for (name, type, input, output, filter, stride, pad) in settings.max_tracker_layers_list:
+        if name == layer_name:
+            current_layer = (name, type, input, output, filter, stride, pad)
+            return current_layer, previous_layer
+
+        # update previous layer
+        previous_layer = (name, type, input, output, filter, stride, pad)

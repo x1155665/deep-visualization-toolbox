@@ -12,6 +12,7 @@ from image_misc import cv2_read_file_rgb, resize_without_fit
 from caffe_misc import RegionComputer, save_caffe_image, get_max_data_extent, extract_patch_from_image, \
     compute_data_layer_focus_area, layer_name_to_top_name
 from siamese_helper import SiameseHelper
+from settings_misc import get_layer_info
 
 from jby_misc import WithTimer
 
@@ -283,7 +284,12 @@ class NetMaxTracker(object):
             # count as the same layer in terms of activations
             normalized_layer_name = self.siamese_helper.normalize_layer_name_for_max_tracker(layer_name)
 
-            is_conv = self.settings.is_conv_fn(layer_name)
+            current_layer, previous_layer = get_layer_info(self.settings, normalized_layer_name)
+            (current_name, current_type, current_input, current_output, current_filter, current_stride, current_pad) = current_layer
+            (previous_name, previous_type, previous_input, previous_output, previous_filter, previous_stride, previous_pad) = previous_layer
+
+            is_conv = (current_type == 'Convolution') or (previous_type == 'Convolution' and current_type == 'Eltwise')
+            # is_conv = self.settings.is_conv_fn(layer_name)
 
             # only add normalized layer once
             if normalized_layer_name not in self.max_trackers:
@@ -681,6 +687,10 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
             else:
                 batch[batch_index].im_idx, batch[batch_index].im_class, batch[batch_index].selected_input_index = mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]
                 batch[batch_index].ii, batch[batch_index].jj = 0, 0
+
+            # if ii and jj are invalid then there is no data for this "top" image, so we can skip it
+            if (batch[batch_index].ii, batch[batch_index].jj) == (-1,-1):
+                continue
 
             batch[batch_index].recorded_val = mt.max_vals[batch[batch_index].channel_idx, batch[batch_index].max_idx]
             batch[batch_index].filename = image_filenames[batch[batch_index].im_idx]
