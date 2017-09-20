@@ -15,7 +15,7 @@ except ImportError:
     raise
 
 from misc import WithTimer
-from image_misc import cv2_imshow_rgb, FormattedString, cv2_typeset_text, to_255, resize_without_fit
+from image_misc import cv2_imshow_rgb, FormattedString, cv2_typeset_text, to_255, resize_without_fit, gray_to_color
 from bindings import bindings
 from input_fetcher import InputImageFetcher
 
@@ -328,6 +328,9 @@ class LiveVis(object):
             frame_disp = np.concatenate((frame_disp1, frame_disp2), axis=1)
         else:
             frame_disp = resize_without_fit(frame[:], full_pane_shape)
+
+        if self.settings._calculated_is_gray_model:
+            frame_disp = gray_to_color(frame_disp)
 
         self.panes['input'].data[:] = frame_disp
 

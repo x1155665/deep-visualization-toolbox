@@ -116,19 +116,35 @@ def cv2_read_cap_rgb(cap, saveto = None):
     frame = frame[:,:,::-1]   # Convert native OpenCV BGR -> RGB
     return frame
 
-    
-def cv2_read_file_rgb(filename):
-    '''Reads an image from file. Always returns (x,y,3)'''
-    im = cv2.imread(filename)
+
+def gray_to_color(im):
+
     if len(im.shape) == 2:
         # Upconvert single channel grayscale to color
-        im = im[:,:,np.newaxis]
+        im = im[:, :, np.newaxis]
     if im.shape[2] == 1:
-        im = np.tile(im, (1,1,3))
-    if im.shape[2] > 3:
-        # Chop off transparency
-        im = im[:,:,:3]
-    im = im[:,:,::-1]   # Convert native OpenCV BGR -> RGB
+        im = np.tile(im, (1, 1, 3))
+
+    return im
+
+
+def cv2_read_file_rgb(filename, as_grayscale = False):
+    '''Reads an image from file. Returns (x,y,3) or (x,y,1) depending on as_grayscale parameter'''
+
+    if as_grayscale:
+        im = cv2.imread(filename, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+        if len(im.shape) == 2:
+            # Upconvert single channel grayscale to color
+            im = im[:, :, np.newaxis]
+
+    else:
+        im = cv2.imread(filename)
+        im = gray_to_color(im)
+        if im.shape[2] > 3:
+            # Chop off transparency
+            im = im[:,:,:3]
+        im = im[:,:,::-1]   # Convert native OpenCV BGR -> RGB
+
     return im
 
     
@@ -431,8 +447,14 @@ def resize_to_fit(img, out_max_shape,
     out = cv2.resize(img,
             (int(round(img.shape[1] * scale)), int(round(img.shape[0] * scale))),   # in (c,r) order
                      interpolation = grow_interpolation if scale > 1 else shrink_interpolation)
+
     if convert_late:
         out = np.array(out, dtype=dtype_out)
+
+    # fix resize of grayscale images
+    if len(img.shape) == 3 and img.shape[2] == 1 and len(out.shape) == 2:
+        out = out[:,:,np.newaxis]
+
     return out
 
 
@@ -470,8 +492,14 @@ def resize_without_fit(img, out_max_shape,
     out = cv2.resize(img,
             (int(round(img.shape[1] * scale_1)), int(round(img.shape[0] * scale_0))),   # in (c,r) order
                      interpolation = grow_interpolation if min(scale_0,scale_1) > 1 else shrink_interpolation)
+
     if convert_late:
         out = np.array(out, dtype=dtype_out)
+
+    # fix resize of grayscale images
+    if len(img.shape) == 3 and img.shape[2] == 1 and len(out.shape) == 2:
+        out = out[:, :, np.newaxis]
+
     return out
 
 

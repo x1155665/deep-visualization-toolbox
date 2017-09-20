@@ -7,7 +7,7 @@ import numpy as np
 
 from codependent_thread import CodependentThread
 from image_misc import cv2_imshow_rgb, cv2_read_file_rgb, read_cam_frame, crop_to_square
-from misc import tsplit, get_files_from_directory, get_files_from_image_list, get_files_from_siamese_image_list
+from misc import tsplit, get_files_list
 
 
 class InputImageFetcher(CodependentThread):
@@ -187,21 +187,8 @@ class InputImageFetcher(CodependentThread):
                 # Skip if a static frame is already loaded and there is no increment
                 return
 
-            # available_files - local list of files
-            if self.settings.static_files_input_mode == "directory":
-                available_files = get_files_from_directory(self.settings)
-                labels = None
-            elif (self.settings.static_files_input_mode == "image_list") and (not self.settings.is_siamese):
-                available_files, labels = get_files_from_image_list(self.settings)
-            elif (self.settings.static_files_input_mode == "image_list") and (self.settings.is_siamese):
-                available_files, labels = get_files_from_siamese_image_list(self.settings)
-            else:
-                raise Exception(('Error: setting static_files_input_mode has invalid option (%s)' %
-                                (self.settings.static_files_input_mode) ))
+            available_files, labels = get_files_list(self.settings)
 
-            #print 'Found files:'
-            #for filename in available_files:
-            #    print '   %s' % filename
             assert len(available_files) != 0, ('Error: No files found in %s matching %s (current working directory is %s)' %
                                                (self.settings.static_files_dir, self.settings.static_files_regexp, os.getcwd()))
             if self.static_file_idx is None:
@@ -213,8 +200,8 @@ class InputImageFetcher(CodependentThread):
 
                 if self.settings.is_siamese:
                     # loading two images for siamese network
-                    im1 = cv2_read_file_rgb(os.path.join(self.settings.static_files_dir, self.latest_static_filename[0]))
-                    im2 = cv2_read_file_rgb(os.path.join(self.settings.static_files_dir, self.latest_static_filename[1]))
+                    im1 = cv2_read_file_rgb(os.path.join(self.settings.static_files_dir, self.latest_static_filename[0]), as_grayscale=self.settings._calculated_is_gray_model)
+                    im2 = cv2_read_file_rgb(os.path.join(self.settings.static_files_dir, self.latest_static_filename[1]), as_grayscale=self.settings._calculated_is_gray_model)
                     if not self.static_file_stretch_mode:
                         im1 = crop_to_square(im1)
                         im2 = crop_to_square(im2)
@@ -222,7 +209,7 @@ class InputImageFetcher(CodependentThread):
                     im = (im1,im2)
 
                 else:
-                    im = cv2_read_file_rgb(os.path.join(self.settings.static_files_dir, self.latest_static_filename))
+                    im = cv2_read_file_rgb(os.path.join(self.settings.static_files_dir, self.latest_static_filename), as_grayscale=self.settings._calculated_is_gray_model)
                     if not self.static_file_stretch_mode:
                         im = crop_to_square(im)
 

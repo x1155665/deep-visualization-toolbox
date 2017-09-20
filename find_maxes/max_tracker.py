@@ -7,12 +7,10 @@ from datetime import datetime
 import cv2
 
 import numpy as np
-from misc import mkdir_p
+from misc import mkdir_p, get_files_list
 from image_misc import cv2_read_file_rgb, resize_without_fit
 from caffe_misc import RegionComputer, save_caffe_image, get_max_data_extent, extract_patch_from_image, \
     compute_data_layer_focus_area, layer_name_to_top_name
-from misc import get_files_from_image_list
-from misc import get_files_from_siamese_image_list
 from siamese_helper import SiameseHelper
 
 from jby_misc import WithTimer
@@ -387,22 +385,8 @@ class NetMaxTracker(object):
         self.settings = None
         self.siamese_helper = None
 
-
-def load_file_list(settings):
-
-    if (settings.static_files_input_mode == "image_list") and (not settings.is_siamese):
-        available_files, labels = get_files_from_image_list(settings)
-
-    elif (settings.static_files_input_mode == "image_list") and (settings.is_siamese):
-        available_files, labels = get_files_from_siamese_image_list(settings)
-
-    converted_labels = [settings.convert_label_fn(label) for label in labels]
-
-    return available_files, converted_labels
-
-
 def scan_images_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
-    image_filenames, image_labels = load_file_list(settings)
+    image_filenames, image_labels = get_files_list(settings, True)
     print 'Scanning %d files' % len(image_filenames)
     print '  First file', os.path.join(datadir, image_filenames[0])
 
@@ -424,14 +408,17 @@ def scan_images_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
 
         batch[batch_index].image_idx = image_idx
         batch[batch_index].filename = image_filenames[image_idx]
-        batch[batch_index].image_class = image_labels[image_idx]
+        if image_labels:
+            batch[batch_index].image_class = image_labels[image_idx]
+        else: # no labels so just put a default value
+            batch[batch_index].image_class = 0
 
         do_print = (batch[batch_index].image_idx % 100 == 0)
         if do_print:
             print '%s   Image %d/%d' % (datetime.now().ctime(), batch[batch_index].image_idx, len(image_filenames))
 
         with WithTimer('Load image', quiet = not do_print):
-            batch[batch_index].im = cv2_read_file_rgb(os.path.join(datadir, batch[batch_index].filename))
+            batch[batch_index].im = cv2_read_file_rgb(os.path.join(datadir, batch[batch_index].filename), as_grayscale=settings._calculated_is_gray_model)
             batch[batch_index].im = resize_without_fit(batch[batch_index].im, net_input_dims)
             batch[batch_index].im = batch[batch_index].im.astype(np.float32)
 
@@ -461,7 +448,7 @@ def scan_images_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
 
 
 def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
-    image_filenames, image_labels = load_file_list(settings)
+    image_filenames, image_labels = get_files_list(settings, True)
     print 'Scanning %d pairs' % len(image_filenames)
     print '  First pair', image_filenames[0]
 
@@ -485,14 +472,18 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
         batch[batch_index].images_pair = image_filenames[image_idx]
         filename1 = batch[batch_index].images_pair[0]
         filename2 = batch[batch_index].images_pair[1]
-        batch[batch_index].image_class = image_labels[image_idx]
+        if image_labels:
+            batch[batch_index].image_class = image_labels[image_idx]
+        else:  # no labels so just put a default value
+            batch[batch_index].image_class = 0
+
         do_print = (image_idx % 100 == 0)
         if do_print:
             print '%s   Pair %d/%d' % (datetime.now().ctime(), batch[batch_index].image_idx, len(image_filenames))
 
         with WithTimer('Load image', quiet=not do_print):
-            im1 = cv2_read_file_rgb(os.path.join(datadir, filename1))
-            im2 = cv2_read_file_rgb(os.path.join(datadir, filename2))
+            im1 = cv2_read_file_rgb(os.path.join(datadir, filename1), as_grayscale=settings._calculated_is_gray_model)
+            im2 = cv2_read_file_rgb(os.path.join(datadir, filename2), as_grayscale=settings._calculated_is_gray_model)
             im1 = resize_without_fit(im1, net_input_dims)
             im2 = resize_without_fit(im2, net_input_dims)
             batch[batch_index].im = np.concatenate((im1, im2), axis=2)
@@ -521,7 +512,7 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
 
 
 def save_representations(settings, net, datadir, filelist, layer_name, first_N = None):
-    image_filenames, image_labels = load_file_list(filelist)
+    image_filenames, image_labels = get_files_list(filelist)
     if first_N is None:
         first_N = len(image_filenames)
     assert first_N <= len(image_filenames)
@@ -537,12 +528,15 @@ def save_representations(settings, net, datadir, filelist, layer_name, first_N =
     rep = None
     for ii,image_idx in enumerate(image_indices):
         filename = image_filenames[image_idx]
-        image_class = image_labels[image_idx]
+        if image_labels:
+            image_class = image_labels[image_idx]
+        else:
+            image_class = 0
         do_print = (image_idx % 10 == 0)
         if do_print:
             print '%s   Image %d/%d' % (datetime.now().ctime(), image_idx, len(image_indices))
         with WithTimer('Load image', quiet = not do_print):
-            im = cv2_read_file_rgb(os.path.join(datadir, filename))
+            im = cv2_read_file_rgb(os.path.join(datadir, filename), as_grayscale=settings._calculated_is_gray_model)
         with WithTimer('Predict   ', quiet = not do_print):
             net.predict([im], oversample = False)   # Just take center crop
         with WithTimer('Store     ', quiet = not do_print):
@@ -600,7 +594,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
     mt = max_tracker
     rc = RegionComputer(settings.max_tracker_layers_list)
 
-    image_filenames, image_labels = load_file_list(settings)
+    image_filenames, image_labels = get_files_list(settings)
 
     if settings.is_siamese:
         print 'Loaded filenames and labels for %d pairs' % len(image_filenames)
@@ -734,8 +728,8 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                     filename2 = batch[batch_index].filename[1]
 
                     # load both images
-                    im1 = cv2_read_file_rgb(os.path.join(datadir, filename1))
-                    im2 = cv2_read_file_rgb(os.path.join(datadir, filename2))
+                    im1 = cv2_read_file_rgb(os.path.join(datadir, filename1), as_grayscale=settings._calculated_is_gray_model)
+                    im2 = cv2_read_file_rgb(os.path.join(datadir, filename2), as_grayscale=settings._calculated_is_gray_model)
 
                     # resize images according to input dimension
                     im1 = resize_without_fit(im1, net_input_dims)
@@ -745,7 +739,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                     batch[batch_index].im = np.concatenate((im1, im2), axis=2)
                 else:
                     # load image
-                    batch[batch_index].im = cv2_read_file_rgb(os.path.join(datadir, batch[batch_index].filename))
+                    batch[batch_index].im = cv2_read_file_rgb(os.path.join(datadir, batch[batch_index].filename), as_grayscale=settings._calculated_is_gray_model)
 
                     # resize images according to input dimension
                     batch[batch_index].im = resize_without_fit(batch[batch_index].im, net_input_dims)
@@ -829,7 +823,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                                 diffs[i, batch[i].channel_idx] = 1.0
 
                         with WithTimer('Deconv    ', quiet = not do_print):
-                            net.deconv_from_layer(batch[i].denormalized_layer_name, diffs, 'Guided Backprop')
+                            net.deconv_from_layer(batch[i].denormalized_layer_name, diffs, zero_higher=True, deconv_type='Guided Backprop')
 
                         out_arr = extract_patch_from_image(net.blobs['data'].diff[i], net, batch[i].selected_input_index, settings,
                                                            batch[i].data_ii_end, batch[i].data_ii_start, batch[i].data_jj_end, batch[i].data_jj_start,

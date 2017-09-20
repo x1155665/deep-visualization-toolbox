@@ -92,15 +92,18 @@ class RegionComputer(object):
 
         _tmp = []
 
-        for (name, type, input, output, filter, stride, pad) in layers_list:
-            if type == 'Input':
-                _tmp.append((name, None))
-            elif type == 'Convolution':
-                _tmp.append((name, get_conv_converter(input[0:2], output[0:2], filter, stride, pad)))
-            elif type == 'Pooling':
-                _tmp.append((name, get_pool_converter(input[0:2], output[0:2], filter, stride, pad)))
-            else:
-                continue # skip adding layer
+        (previous_name, previous_type, previous_input, previous_output, previous_filter, previous_stride, previous_pad) = (None, None, None, None, None, None, None)
+        for (current_name, current_type, current_input, current_output, current_filter, current_stride, current_pad) in layers_list:
+            if current_type == 'Input':
+                _tmp.append((current_name, None))
+            elif current_type == 'Convolution':
+                _tmp.append((current_name, get_conv_converter(current_input[0:2], current_output[0:2], current_filter, current_stride, current_pad)))
+            elif current_type == 'Pooling':
+                _tmp.append((current_name, get_pool_converter(current_input[0:2], current_output[0:2], current_filter, current_stride, current_pad)))
+            elif current_type == 'Eltwise' and previous_type == 'Convolution':
+                _tmp.append((current_name, get_conv_converter(previous_input[0:2], previous_output[0:2], previous_filter, previous_stride, previous_pad)))
+
+            (previous_name, previous_type, previous_input, previous_output, previous_filter, previous_stride, previous_pad) = (current_name, current_type, current_input, current_output, current_filter, current_stride, current_pad)
 
         self.names = [tt[0] for tt in _tmp]
         self.converters = [tt[1] for tt in _tmp]

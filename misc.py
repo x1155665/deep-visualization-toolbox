@@ -104,3 +104,22 @@ def get_files_from_siamese_image_list(settings):
 
     return available_files, labels
 
+
+def get_files_list(settings, should_convert_labels = False):
+
+    # available_files - local list of files
+    if settings.static_files_input_mode == "directory":
+        available_files = get_files_from_directory(settings)
+        labels = None
+    elif (settings.static_files_input_mode == "image_list") and (not settings.is_siamese):
+        available_files, labels = get_files_from_image_list(settings)
+    elif (settings.static_files_input_mode == "image_list") and (settings.is_siamese):
+        available_files, labels = get_files_from_siamese_image_list(settings)
+    else:
+        raise Exception(('Error: setting static_files_input_mode has invalid option (%s)' %
+                         (settings.static_files_input_mode)))
+
+    if should_convert_labels and labels:
+        labels = [settings.convert_label_fn(label) for label in labels]
+
+    return available_files, labels

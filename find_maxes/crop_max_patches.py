@@ -17,6 +17,7 @@ from siamese_helper import SiameseHelper
 from jby_misc import WithTimer
 from max_tracker import output_max_patches
 from find_max_acts import load_max_tracker_from_file
+from settings_misc import deduce_calculated_settings
 
 
 def main():
@@ -59,6 +60,8 @@ def main():
                            image_dims=settings.caffe_net_image_dims)
 
     data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
+
+    deduce_calculated_settings(settings, net)
 
     # validate batch size
     if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':

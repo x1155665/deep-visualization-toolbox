@@ -69,7 +69,7 @@ debug_window_panes = locals().get('debug_window_panes', False)
 if 'default_window_panes' in locals():
     raise Exception('Override window panes in settings_MODEL.py by defining window_panes, not default_window_panes')
 
-control_pane_height = locals().get('control_pane_height', 30)
+control_pane_height = locals().get('control_pane_height', 4*20)
 
 default_window_panes = (
     # (i, j, i_size, j_size)
@@ -124,6 +124,10 @@ static_files_input_mode = locals().get('static_files_input_mode', 'directory')
 
 # contains the file name to read, relevant only when static_files_input_mode is 'image_list'
 static_files_input_file = locals().get('static_files_input_file', 'images_file_list.txt')
+
+# set to True if the model expects grayscale inputs, False otherwise.
+# If value is None we set this parameter according to the network structure
+is_gray_model = locals().get('is_gray_model', None)
 
 # int, 0+. How many times to go through the main loop after a keypress
 # before resuming handling frames (0 to handle every frame as it
@@ -416,7 +420,7 @@ layers_list = locals().get('layers_list', [])
 optimize_image_rand_seed = locals().get('optimize_image_rand_seed', 0)
 
 # push-layer parameter for optimize_image.py
-optimize_image_push_layers = locals().get('optimize_image_push_layers', ['fc8'])
+optimize_image_push_layers = locals().get('optimize_image_push_layers', [])
 
 # decay parameter for optimize_image.py
 optimize_image_decay = locals().get('optimize_image_decay', 0)

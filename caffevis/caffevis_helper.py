@@ -14,7 +14,9 @@ def net_preproc_forward(settings, net, img, data_hw):
 
     if settings.is_siamese and img.shape[2] == 6:
         appropriate_shape = data_hw + (6,)
-    else:
+    elif settings._calculated_is_gray_model:
+        appropriate_shape = data_hw + (1,)
+    else: # default is color
         appropriate_shape = data_hw + (3,)
 
     assert img.shape == appropriate_shape, 'img is wrong size (got %s but expected %s)' % (img.shape, appropriate_shape)

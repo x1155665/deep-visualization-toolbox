@@ -169,11 +169,17 @@ class GradientOptimizer(object):
         if channel_swap_to_rgb:
             self.channel_swap_to_rgb = array(channel_swap_to_rgb)
         else:
-            data_n_channels = self.batched_data_mean.shape[0]
-            self.channel_swap_to_rgb = arange(data_n_channels)   # Don't change order
+
+            if settings._calculated_is_gray_model:
+                self.channel_swap_to_rgb = arange(1)
+            else:
+                self.channel_swap_to_rgb = arange(3)  # Don't change order
 
         # since we have a batch of same data mean images, we can just take the first
-        self._data_mean_rgb_img = self.batched_data_mean[0, self.channel_swap_to_rgb].transpose((1,2,0))  # Store as (227,227,3) in RGB order.
+        if batched_data_mean:
+            self._data_mean_rgb_img = self.batched_data_mean[0, self.channel_swap_to_rgb].transpose((1,2,0))  # Store as (227,227,3) in RGB order.
+        else:
+            self._data_mean_rgb_img = None
 
     def run_optimize(self, params, prefix_template = None, brave = False, skipbig = False, skipsmall = False):
         '''All images are in Caffe format, e.g. shape (3, 227, 227) in BGR order.'''
@@ -194,12 +200,17 @@ class GradientOptimizer(object):
 
         np.random.seed(params.rand_seed)
 
+        input_shape = self.net.blobs['data'].data.shape
+
         if params.start_at == 'mean_plus_rand':
-            x0 = np.random.normal(0, 10, self.batched_data_mean.shape)
+            x0 = np.random.normal(0, 10, input_shape)
         elif params.start_at == 'randu':
-            x0 = uniform(0, 255, self.batched_data_mean.shape) - self.batched_data_mean
+            if self.batched_data_mean:
+                x0 = uniform(0, 255, input_shape) - self.batched_data_mean
+            else:
+                x0 = uniform(0, 255, input_shape)
         elif params.start_at == 'mean':
-            x0 = zeros(self.batched_data_mean.shape)
+            x0 = zeros(input_shape)
         else:
             raise Exception('Unknown start conditions: %s' % params.start_at)
 
@@ -247,8 +258,10 @@ class GradientOptimizer(object):
         obj = np.zeros(params.batch_size)
         for ii in range(params.max_iter):
             # 0. Crop data
-            xx = minimum(255.0, maximum(0.0, xx + self.batched_data_mean)) - self.batched_data_mean     # Crop all values to [0,255]
-
+            if self.batched_data_mean:
+                xx = minimum(255.0, maximum(0.0, xx + self.batched_data_mean)) - self.batched_data_mean     # Crop all values to [0,255]
+            else:
+                xx = minimum(255.0, maximum(0.0, xx)) # Crop all values to [0,255]
             # 1. Push data through net
             out = self.net.forward_all(data = xx)
             #shownet(net)
@@ -374,12 +387,13 @@ class GradientOptimizer(object):
                     xx[batch_index] += lr[batch_index] * grad[batch_index]
                     xx[batch_index] *= (1 - params.decay)
 
+                    channels = xx.shape[1]
+
                     if params.blur_every is not 0 and params.blur_radius > 0:
                         if params.blur_radius < .3:
                             print 'Warning: blur-radius of .3 or less works very poorly'
                             #raise Exception('blur-radius of .3 or less works very poorly')
                         if ii % params.blur_every == 0:
-                            channels = 6 if self.settings.is_siamese else 3
                             for channel in range(channels):
                                 cimg = gaussian_filter(xx[batch_index,channel], params.blur_radius)
                                 xx[batch_index,channel] = cimg
@@ -390,30 +404,21 @@ class GradientOptimizer(object):
                     if params.small_norm_percentile > 0:
                         pxnorms = norm(xx[batch_index,np.newaxis,:,:,:], axis=1)
                         smallpx = pxnorms < percentile(pxnorms, params.small_norm_percentile)
-                        if self.settings.is_siamese:
-                            smallpx3 = tile(smallpx[:,newaxis,:,:], (1,6,1,1))
-                        else:
-                            smallpx3 = tile(smallpx[:,newaxis,:,:], (1,3,1,1))
+                        smallpx3 = tile(smallpx[:,newaxis,:,:], (1,channels,1,1))
                         xx[batch_index,:,:,:] = xx[batch_index,np.newaxis,:,:,:] - xx[batch_index,np.newaxis,:,:,:]*smallpx3
 
                     if params.px_benefit_percentile > 0:
                         pred_0_benefit = grad[batch_index,np.newaxis,:,:,:] * -xx[batch_index,np.newaxis,:,:,:]
                         px_benefit = pred_0_benefit.sum(1)   # sum over color channels
                         smallben = px_benefit < percentile(px_benefit, params.px_benefit_percentile)
-                        if self.settings.is_siamese:
-                            smallben3 = tile(smallben[:,newaxis,:,:], (1,6,1,1))
-                        else:
-                            smallben3 = tile(smallben[:,newaxis,:,:], (1,3,1,1))
+                        smallben3 = tile(smallben[:,newaxis,:,:], (1,channels,1,1))
                         xx[batch_index,:,:,:] = xx[batch_index,np.newaxis,:,:,:] - xx[batch_index,np.newaxis,:,:,:]*smallben3
 
                     if params.px_abs_benefit_percentile > 0:
                         pred_0_benefit = grad[batch_index,np.newaxis,:,:,:] * -xx[batch_index,np.newaxis,:,:,:]
                         px_benefit = pred_0_benefit.sum(1)   # sum over color channels
                         smallaben = abs(px_benefit) < percentile(abs(px_benefit), params.px_abs_benefit_percentile)
-                        if self.settings.is_siamese:
-                            smallaben3 = tile(smallaben[:,newaxis,:,:], (1,6,1,1))
-                        else:
-                            smallaben3 = tile(smallaben[:,newaxis,:,:], (1,3,1,1))
+                        smallaben3 = tile(smallaben[:,newaxis,:,:], (1,channels,1,1))
                         xx[batch_index,:,:,:] = xx[batch_index,np.newaxis,:,:,:] - xx[batch_index,np.newaxis,:,:,:]*smallaben3
 
             print '     timestamp:', datetime.datetime.now()
@@ -519,18 +524,28 @@ class GradientOptimizer(object):
                                                    data_ii_end, data_ii_start, data_jj_end, data_jj_start,
                                                    out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
 
-                save_output(out_arr,
-                            channel_swap_to_rgb=self.channel_swap_to_rgb[[0, 1, 2]],
-                            best_X_image_name=best_X_name)
+                if self.settings.is_siamese:
+                    save_output(out_arr,
+                                channel_swap_to_rgb=self.channel_swap_to_rgb[[0, 1, 2]],
+                                best_X_image_name=best_X_name)
+                else:
+                    save_output(out_arr,
+                                channel_swap_to_rgb=self.channel_swap_to_rgb,
+                                best_X_image_name=best_X_name)
 
                 if self.settings.optimize_image_generate_plus_mean:
                     out_arr_pm = extract_patch_from_image(results[batch_index].best_xx + self.batched_data_mean, self.net, selected_input_index, self.settings,
                                                        data_ii_end, data_ii_start, data_jj_end, data_jj_start,
                                                        out_ii_end, out_ii_start, out_jj_end, out_jj_start, size_ii, size_jj)
 
-                    save_output(out_arr_pm,
-                                channel_swap_to_rgb=self.channel_swap_to_rgb[[0, 1, 2]],
-                                best_X_image_name=best_Xpm_name)
+                    if self.settings.is_siamese:
+                        save_output(out_arr_pm,
+                                    channel_swap_to_rgb=self.channel_swap_to_rgb[[0, 1, 2]],
+                                    best_X_image_name=best_Xpm_name)
+                    else:
+                        save_output(out_arr_pm,
+                                    channel_swap_to_rgb=self.channel_swap_to_rgb,
+                                    best_X_image_name=best_Xpm_name)
 
             with open(info_name, 'w') as ff:
                 print >>ff, params

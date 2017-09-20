@@ -8,6 +8,7 @@ import numpy as np
 import settings
 from optimize.gradient_optimizer import GradientOptimizer, FindParams
 from caffevis.caffevis_helper import check_force_backward_true, read_label_file, set_mean
+from settings_misc import deduce_calculated_settings
 
 LR_POLICY_CHOICES = ('constant', 'progress', 'progress01')
 
@@ -133,13 +134,19 @@ def get_layer_info(settings, layer_name):
 
     :param settings: contains script settings
     :param layer_name: name of layer
-    :return: (name, type, input, output, filter, stride, pad)
+    :return: current_layer and previous_layer tuples of (name, type, input, output, filter, stride, pad)
     '''
 
     # go over layers
+
+    previous_layer = None
     for (name, type, input, output, filter, stride, pad) in settings.max_tracker_layers_list:
         if name == layer_name:
-            return (name, type, input, output, filter, stride, pad)
+            current_layer = (name, type, input, output, filter, stride, pad)
+            return current_layer, previous_layer
+
+        # update previous layer
+        previous_layer = (name, type, input, output, filter, stride, pad)
 
 
 def main():
@@ -172,6 +179,8 @@ def main():
 
     data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
 
+    deduce_calculated_settings(settings, net)
+
     # validate batch size
     if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
         # currently, no batch support for siamese_batch_pair networks
@@ -188,30 +197,53 @@ def main():
     if settings.caffevis_labels:
         labels = read_label_file(settings.caffevis_labels)
 
-    if len(data_mean.shape) == 3:
-        batched_data_mean = np.repeat(data_mean[np.newaxis, :, :, :], args.batch_size, axis=0)
-    elif len(data_mean.shape) == 1:
-        data_mean = data_mean[np.newaxis,:,np.newaxis,np.newaxis]
-        batched_data_mean = np.tile(data_mean, (args.batch_size,1,current_data_shape[2],current_data_shape[3]))
+    if data_mean:
+        if len(data_mean.shape) == 3:
+            batched_data_mean = np.repeat(data_mean[np.newaxis, :, :, :], args.batch_size, axis=0)
+        elif len(data_mean.shape) == 1:
+            data_mean = data_mean[np.newaxis,:,np.newaxis,np.newaxis]
+            batched_data_mean = np.tile(data_mean, (args.batch_size,1,current_data_shape[2],current_data_shape[3]))
+    else:
+        batched_data_mean = data_mean
 
     optimizer = GradientOptimizer(settings, net, batched_data_mean, labels = labels,
                                   label_layers = settings.caffevis_label_layers,
                                   channel_swap_to_rgb = settings.caffe_net_channel_swap)
 
+    if not args.push_layers:
+        print "ERROR: No layers to work on, please set optimize_image_push_layers to list of layers"
+        return
+
     # go over push layers
     for count, push_layer in enumerate(args.push_layers):
 
         # get layer type
-        (name, type, input, output, filter, stride, pad) = get_layer_info(settings, push_layer)
+        current_layer, previous_layer = get_layer_info(settings, push_layer)
+        (current_name, current_type, current_input, current_output, current_filter, current_stride, current_pad) = current_layer
+        (previous_name, previous_type, previous_input, previous_output, previous_filter, previous_stride, previous_pad) = previous_layer
 
-        if type == 'FullyConnected':
+        if current_type == 'FullyConnected':
             # get number of units
-            channels = output
+            channels = current_output
             push_spatial = (0, 0)
-        elif type == 'Convolution':
+            layer_is_conv = False
+
+        elif current_type == 'Convolution':
             # get number of channels
-            channels = output[2]
-            push_spatial = (filter[0]/2, filter[1]/2)
+            channels = current_output[2]
+            push_spatial = (current_filter[0]/2, current_filter[1]/2)
+            layer_is_conv = True
+
+        elif current_type == 'Eltwise' and previous_type == 'FullyConnected':
+            channels = current_output
+            push_spatial = (0, 0)
+            layer_is_conv = False
+
+        elif current_type == 'Eltwise' and previous_type == 'Convolution':
+            # get number of channels
+            channels = current_output[2]
+            push_spatial = (previous_filter[0]/2, previous_filter[1]/2)
+            layer_is_conv = True
 
         # if channels defined in settings file, use them
         if settings.optimize_image_channels:
@@ -239,7 +271,7 @@ def main():
                 lr_policy = args.lr_policy,
                 lr_params = lr_params,
                 max_iter = args.max_iters[count % len(args.max_iters)],
-                layer_is_conv=(type == 'Convolution'),
+                layer_is_conv=layer_is_conv,
             )
 
             optimizer.run_optimize(params, prefix_template = args.output_prefix,

@@ -16,6 +16,8 @@ import settings
 from caffevis.caffevis_helper import set_mean
 from jby_misc import WithTimer
 from max_tracker import scan_images_for_maxes, scan_pairs_for_maxes
+from settings_misc import deduce_calculated_settings
+from misc import mkdir_p
 
 def pickle_to_text(pickle_filename):
 
@@ -63,6 +65,8 @@ def main():
 
     data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
 
+    deduce_calculated_settings(settings, net)
+
     # validate batch size
     if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
         # currently, no batch support for siamese_batch_pair networks
@@ -84,6 +88,10 @@ def main():
 
 
 def save_max_tracker_to_file(filename, net_max_tracker):
+
+    dir_name = os.path.dirname(filename)
+    mkdir_p(dir_name)
+
     with WithTimer('Saving maxes'):
         with open(filename, 'wb') as ff:
             pickle.dump(net_max_tracker, ff, -1)

@@ -29,6 +29,7 @@ from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_
     check_force_backward_true, set_mean, get_image_from_files
 from caffe_misc import layer_name_to_top_name, save_caffe_image
 from siamese_helper import SiameseHelper
+from settings_misc import deduce_calculated_settings
 
 class CaffeVisApp(BaseApp):
     '''App to visualize using caffe.'''
@@ -67,6 +68,8 @@ class CaffeVisApp(BaseApp):
             raw_scale=settings.caffe_net_raw_scale,
             image_dims=settings.caffe_net_image_dims,
         )
+
+        deduce_calculated_settings(settings, self.net)
 
         self._data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, self.net)
 
@@ -561,9 +564,8 @@ class CaffeVisApp(BaseApp):
         load_layer = default_layer_name
         if self.settings.caffevis_jpgvis_remap and load_layer in self.settings.caffevis_jpgvis_remap:
             load_layer = self.settings.caffevis_jpgvis_remap[load_layer]
-        if self.settings.caffevis_jpgvis_layers and load_layer in self.settings.caffevis_jpgvis_layers:
-            jpg_path = os.path.join(self.settings.caffevis_unit_jpg_dir,
-                                    'regularized_opt', load_layer, 'whole_layer.jpg')
+        if self.settings.caffevis_jpgvis_layers and load_layer in self.settings.caffevis_jpgvis_layers and self.settings.caffevis_unit_jpg_dir:
+            jpg_path = os.path.join(self.settings.caffevis_unit_jpg_dir, 'regularized_opt', load_layer, 'whole_layer.jpg')
 
             # Get highres version
             display_3D_highres = self.img_cache.get((jpg_path, 'whole'), None)
@@ -603,22 +605,23 @@ class CaffeVisApp(BaseApp):
             if display_3D_highres is None:
                 try:
 
-                    resize_shape = pane.data.shape
+                    if self.settings.caffevis_unit_jpg_dir:
+                        resize_shape = pane.data.shape
 
-                    if show_layer_summary:
-                        # load layer summary image
-                        layer_summary_image_path = os.path.join(self.settings.caffevis_unit_jpg_dir, load_layer, file_summary_pattern)
-                        layer_summary_image = caffe_load_image(layer_summary_image_path, color=True, as_uint=True)
-                        layer_summary_image = ensure_uint255_and_resize_without_fit(layer_summary_image, resize_shape)
-                        display_3D_highres = layer_summary_image
-                        display_3D_highres = np.expand_dims(display_3D_highres, 0)
-                        display_2D = display_3D_highres[0]
-                        is_layer_summary_loaded = True
+                        if show_layer_summary:
+                            # load layer summary image
+                            layer_summary_image_path = os.path.join(self.settings.caffevis_unit_jpg_dir, load_layer, file_summary_pattern)
+                            layer_summary_image = caffe_load_image(layer_summary_image_path, color=True, as_uint=True)
+                            layer_summary_image = ensure_uint255_and_resize_without_fit(layer_summary_image, resize_shape)
+                            display_3D_highres = layer_summary_image
+                            display_3D_highres = np.expand_dims(display_3D_highres, 0)
+                            display_2D = display_3D_highres[0]
+                            is_layer_summary_loaded = True
 
-                    else:
-                        with WithTimer('CaffeVisApp:load_image_per_unit', quiet=self.debug_level < 1):
-                            # load all images
-                            display_3D_highres = self.load_image_per_unit(display_3D_highres, load_layer, units_num, first_only, resize_shape, file_search_pattern)
+                        else:
+                            with WithTimer('CaffeVisApp:load_image_per_unit', quiet=self.debug_level < 1):
+                                # load all images
+                                display_3D_highres = self.load_image_per_unit(display_3D_highres, load_layer, units_num, first_only, resize_shape, file_search_pattern)
 
                 except IOError:
                     # File does not exist, so just display disabled.
@@ -640,8 +643,7 @@ class CaffeVisApp(BaseApp):
         # for each neuron in layer
         for unit_id in range(0, units_num):
 
-            unit_folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, load_layer,
-                                            "unit_%04d" % (unit_id), file_search_pattern)
+            unit_folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, load_layer, "unit_%04d" % (unit_id), file_search_pattern)
 
             try:
 
@@ -696,11 +698,17 @@ class CaffeVisApp(BaseApp):
         display_2D = self.img_cache.get(pattern_image_key_2d, None)
 
         if display_3D_highres is None or display_2D is None:
+
             pane_shape = pane.data.shape
 
-            folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, layer_name)
-            cache_layer_weights_histogram_image_path = os.path.join(folder_path, 'layer_weights_histogram.png')
-            cache_details_weights_histogram_image_path = os.path.join(folder_path, 'details_weights_histogram.png')
+            if not self.settings.caffevis_unit_jpg_dir:
+                folder_path = None
+                cache_layer_weights_histogram_image_path = None
+                cache_details_weights_histogram_image_path = None
+            else:
+                folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, layer_name)
+                cache_layer_weights_histogram_image_path = os.path.join(folder_path, 'layer_weights_histogram.png')
+                cache_details_weights_histogram_image_path = os.path.join(folder_path, 'details_weights_histogram.png')
 
             # plotting objects needed for
             # 1. calculating size of results array
@@ -752,7 +760,7 @@ class CaffeVisApp(BaseApp):
                 if show_layer_summary:
 
                     # try load cache file for layer weight histogram
-                    if os.path.exists(cache_layer_weights_histogram_image_path):
+                    if cache_layer_weights_histogram_image_path and os.path.exists(cache_layer_weights_histogram_image_path):
 
                         # load 2d image from cache file
                         display_2D = caffe_load_image(cache_layer_weights_histogram_image_path, color=True, as_uint=False)
@@ -762,7 +770,7 @@ class CaffeVisApp(BaseApp):
                 else:
 
                     # try load cache file for details weights histogram
-                    if os.path.exists(cache_details_weights_histogram_image_path):
+                    if cache_details_weights_histogram_image_path and os.path.exists(cache_details_weights_histogram_image_path):
 
                         # load 2d image from cache file
                         display_2D = caffe_load_image(cache_details_weights_histogram_image_path, color=True, as_uint=False)
@@ -836,8 +844,11 @@ class CaffeVisApp(BaseApp):
                         display_2D = display_3D_highres[0]
                         is_layer_summary_loaded = True
 
-                        mkdir_p(folder_path)
-                        save_caffe_image(display_2D.astype(np.float32).transpose((2,0,1)), cache_layer_weights_histogram_image_path)
+                        if folder_path:
+                            mkdir_p(folder_path)
+                            save_caffe_image(display_2D.astype(np.float32).transpose((2,0,1)), cache_layer_weights_histogram_image_path)
+                        else:
+                            print "WARNING: unable to save weight histogram to cache since caffevis_unit_jpg_dir is not set"
 
                     else:
 
@@ -850,9 +861,12 @@ class CaffeVisApp(BaseApp):
                         # generate display of details weights histogram image
                         display_2D = self.prepare_tile_image(display_3D, False, n_channels, tile_rows, tile_cols)
 
-                        # save histogram image to cache
-                        mkdir_p(folder_path)
-                        save_caffe_image(display_2D.astype(np.float32).transpose((2,0,1)), cache_details_weights_histogram_image_path)
+                        if folder_path:
+                            # save histogram image to cache
+                            mkdir_p(folder_path)
+                            save_caffe_image(display_2D.astype(np.float32).transpose((2,0,1)), cache_details_weights_histogram_image_path)
+                        else:
+                            print "WARNING: unable to save weight histogram to cache since caffevis_unit_jpg_dir is not set"
 
                         # generate empty highlights
                         display_2D_highlights_only = self.prepare_tile_image(display_3D * 0, True, n_channels, tile_rows, tile_cols)
