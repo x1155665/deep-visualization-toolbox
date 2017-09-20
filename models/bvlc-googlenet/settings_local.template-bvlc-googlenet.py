@@ -1,9 +1,5 @@
 # Define critical settings and/or override defaults specified in
-# settings.py. Copy this file to settings_local.py in the same
-# directory as settings.py and edit. Any settings defined here
-# will override those defined in settings.py
-
-
+# settings.py. Any settings defined here will override those defined in settings.py
 
 # Set this to point to your compiled checkout of caffe
 caffevis_caffe_root      = '/path/to/caffe'

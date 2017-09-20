@@ -8,11 +8,8 @@ try:
     import settings
 except:
     print '\nError importing settings.py. Check the error message below for more information.'
-    print "If you haven't already, you'll want to copy one of the settings_local.template-*.py files"
-    print 'to settings_local.py and edit it to point to your caffe checkout. E.g. via:'
-    print
-    print '  $ cp models/caffenet_yos/settings_local_template_caffenet_yos.py settings_local.py'
-    print '  $ < edit settings_local.py >\n'
+    print "If you haven't already, you'll want to open the settings_model_selector.py file"
+    print 'and edit it to point to your caffe checkout.\n'
     raise
 
 if not os.path.exists(settings.caffevis_caffe_root):

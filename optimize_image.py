@@ -14,7 +14,7 @@ LR_POLICY_CHOICES = ('constant', 'progress', 'progress01')
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(description='Script to find, with or without regularization, images that cause high or low activations of specific neurons in a network via numerical optimization. Settings are read from settings.py, overridden in settings_local.py, and may be further overridden on the command line.',
+    parser = argparse.ArgumentParser(description='Script to find, with or without regularization, images that cause high or low activations of specific neurons in a network via numerical optimization. Settings are read from settings.py, overridden in settings_MODEL.py and settings_user.py, and may be further overridden on the command line.',
                                      formatter_class=lambda prog: argparse.ArgumentDefaultsHelpFormatter(prog, width=100)
     )
 

@@ -41,9 +41,9 @@ def get_pretty_layer_name(settings, layer_name):
     has_old_settings = hasattr(settings, 'caffevis_layer_pretty_names')
     has_new_settings = hasattr(settings, 'caffevis_layer_pretty_name_fn')
     if has_old_settings and not has_new_settings:
-        print ('WARNING: Your settings.py and/or settings_local.py are out of date.'
+        print ('WARNING: Your settings.py and/or settings_model_selector.py are out of date.'
                'caffevis_layer_pretty_names has been replaced with caffevis_layer_pretty_name_fn.'
-               'Update your settings.py and/or settings_local.py (see documentation in'
+               'Update your settings.py and/or settings_model_selector.py (see documentation in'
                'setttings.py) to remove this warning.')
         return settings.caffevis_layer_pretty_names.get(layer_name, layer_name)
 

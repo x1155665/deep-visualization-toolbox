@@ -1,18 +1,17 @@
 # Settings for Deep Visualization Toolbox
 #
 # Note: Probably don't change anything in this file. To override
-# settings, define them in settings_local.py rather than changing them
-# here.
+# settings, define them in your network specific settings file or settings_user.py rather than changing them here.
 
 # Import network settings. Turn off creation of X.pyc to avoid stale settings if X.py is removed.
 import os
 import sys
 sys.dont_write_bytecode = True
 try:
-    from settings_local import *
+    from settings_model_selector import *
 except ImportError:
-    if not os.path.exists('settings_local.py'):
-        raise Exception('Could not import settings_local. Did you create it from the template? See README and start with:\n\n  $ cp models/caffenet-yos/settings_local.template-caffenet-yos.py settings_local.py')
+    if not os.path.exists('settings_model_selector.py'):
+        raise Exception('Could not import settings_model_selector.py')
     else:
         raise
 # Resume usual pyc creation
@@ -68,7 +67,7 @@ debug_window_panes = locals().get('debug_window_panes', False)
 # height of the control panel (to accomodate varying length of layer
 # names), one can simply define control_pane_height. If more
 if 'default_window_panes' in locals():
-    raise Exception('Override window panes in settings_local.py by defining window_panes, not default_window_panes')
+    raise Exception('Override window panes in settings_MODEL.py by defining window_panes, not default_window_panes')
 
 control_pane_height = locals().get('control_pane_height', 30)
 
@@ -459,7 +458,7 @@ optimize_image_channels = locals().get('optimize_image_channels', [])
 bound_locals = locals()
 def assert_in_settings(setting_name):
     if not setting_name in bound_locals:
-        raise Exception('The "%s" setting is required; be sure to define it in settings_local.py' % setting_name)
+        raise Exception('The "%s" setting is required; be sure to define it in settings_MODEL.py' % setting_name)
 
 # Set this to point to your compiled checkout of caffe
 assert_in_settings('caffevis_caffe_root')
@@ -473,4 +472,5 @@ assert_in_settings('caffevis_data_mean')
 
 # Check that caffe directory actually exists
 if not os.path.exists(caffevis_caffe_root):
-    raise Exception('The Caffe directory specified in settings_local.py, %s, does not exist. Set the caffevis_caffe_root variable in your settings_local.py to the path of your compiled Caffe checkout.' % caffevis_caffe_root)
+    raise Exception('The Caffe directory specified in settings_model_selector.py, %s, does not exist. Set the caffevis_caffe_root variable in your settings_model_selector.py to the path of your compiled Caffe checkout.' % caffevis_caffe_root)
+

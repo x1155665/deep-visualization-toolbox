@@ -531,14 +531,24 @@ class CaffeVisApp(BaseApp):
             if (default_layer_name in self.settings.caffevis_score_layers):
 
                 if self.state.siamese_input_mode_has_two_images():
-                    blob1, blob2 = self.state.get_siamese_selected_data_blobs(self.net)
-                    value1, value2 = blob1[self.state.selected_unit], blob2[self.state.selected_unit]
-                    text_to_display += str(value1) + " " + str(value2)
+                    if self.state.layers_show_back:
+                        blob1, blob2 = self.state.get_siamese_selected_diff_blobs(self.net)
+                        value1, value2 = blob1[self.state.selected_unit], blob2[self.state.selected_unit]
+                        text_to_display += 'grad: ' + str(value1) + " " + str(value2)
+                    else:
+                        blob1, blob2 = self.state.get_siamese_selected_data_blobs(self.net)
+                        value1, value2 = blob1[self.state.selected_unit], blob2[self.state.selected_unit]
+                        text_to_display += 'act: ' + str(value1) + " " + str(value2)
 
                 else:
-                    blob = self.state.get_single_selected_data_blob(self.net)
-                    value = blob[self.state.selected_unit]
-                    text_to_display += str(value)
+                    if self.state.layers_show_back:
+                        blob = self.state.get_single_selected_diff_blob(self.net)
+                        value = blob[self.state.selected_unit]
+                        text_to_display += 'grad: ' + str(value)
+                    else:
+                        blob = self.state.get_single_selected_data_blob(self.net)
+                        value = blob[self.state.selected_unit]
+                        text_to_display += 'act: ' + str(value)
 
             lines = [FormattedString(text_to_display, defaults)]
             cv2_typeset_text(pane.data, lines, loc_base)
@@ -1058,7 +1068,7 @@ class CaffeVisApp(BaseApp):
                 raise Exception("flow should not arrive here")
 
             if back_view_option == BackpropViewOption.SOFTMAX_RAW:
-                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: softmax_image(grad_img))
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: softmax_image(norm01c(grad_img, 0)))
 
             elif back_view_option == BackpropViewOption.RAW:
                 grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: norm01c(grad_img, 0))
@@ -1111,7 +1121,7 @@ class CaffeVisApp(BaseApp):
             # Some may be missing this setting
             self.settings.caffevis_jpgvis_layers
         except:
-            print '\n\nNOTE: you need to upgrade your settings.py and settings_local.py files. See README.md.\n\n'
+            print '\n\nNOTE: you need to upgrade your settings.py and settings_model_selector.py files. See README.md.\n\n'
             raise
             
         if self.settings.caffevis_jpgvis_remap and state_layer_name in self.settings.caffevis_jpgvis_remap:
