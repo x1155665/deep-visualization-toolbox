@@ -694,6 +694,9 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
             if do_print:
                 print '%s   Output file/image(s) %d/%d   layer %s channel %d' % (datetime.now().ctime(), batch[batch_index].cc * num_top, n_total_images, layer_name, batch[batch_index].channel_idx)
 
+
+            # print "DEBUG: (mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, rc, layer_name, size_ii, size_jj, data_size_ii, data_size_jj)", str((mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, rc, layer_name, size_ii, size_jj, data_size_ii, data_size_jj))
+
             [batch[batch_index].out_ii_start,
              batch[batch_index].out_ii_end,
              batch[batch_index].out_jj_start,
@@ -704,6 +707,13 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
              batch[batch_index].data_jj_end] = \
                 compute_data_layer_focus_area(mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, rc, layer_name,
                                               size_ii, size_jj, data_size_ii, data_size_jj)
+
+            # print "DEBUG: channel:%d out_ii_start:%d out_ii_end:%d out_jj_start:%d out_jj_end:%d data_ii_start:%d data_ii_end:%d data_jj_start:%d data_jj_end:%d" % \
+            #       (channel_idx,
+            #        batch[batch_index].out_ii_start, batch[batch_index].out_ii_end,
+            #        batch[batch_index].out_jj_start, batch[batch_index].out_jj_end,
+            #        batch[batch_index].data_ii_start, batch[batch_index].data_ii_end,
+            #        batch[batch_index].data_jj_start, batch[batch_index].data_jj_end)
 
             if do_info:
                 print >> batch[batch_index].info_file, 1 if mt.is_conv else 0, '%.6f' % mt.max_vals[batch[batch_index].channel_idx, batch[batch_index].max_idx],
@@ -803,6 +813,8 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                                 if len(diffs.shape) == 4:
                                     diffs[batch[i].selected_input_index, batch[i].channel_idx, batch[i].ii, batch[i].jj] = 1.0
                                 else:
+                                    # note: the following will not crash, since we already checked we have 2 outputs, so selected_input_index is either 0 or 1
+                                    assert batch[i].selected_input_index != -1
                                     diffs[batch[i].selected_input_index, batch[i].channel_idx] = 1.0
                             elif diffs.shape[0] == 1:
                                 if len(diffs.shape) == 4:
