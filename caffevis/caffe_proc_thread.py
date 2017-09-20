@@ -6,6 +6,7 @@ from codependent_thread import CodependentThread
 from misc import WithTimer
 from caffevis_helper import net_preproc_forward
 from image_misc import resize_without_fit
+from caffevis_app_state import BackpropMode
 
 class CaffeProcThread(CodependentThread):
     '''Runs Caffe in separate thread.'''
@@ -98,13 +99,17 @@ class CaffeProcThread(CodependentThread):
 
             if run_back:
 
-                assert back_mode in ('grad', 'deconv')
-                if back_mode == 'grad':
+                if back_mode == BackpropMode.GRAD:
                     with WithTimer('CaffeProcThread:backward', quiet = self.debug_level < 1):
                         self.state.backward_from_layer(self.net, backprop_layer_def, backprop_unit)
-                else:
+
+                elif back_mode == BackpropMode.DECONV_ZF:
                     with WithTimer('CaffeProcThread:deconv', quiet = self.debug_level < 1):
-                        self.state.deconv_from_layer(self.net, backprop_layer_def, backprop_unit)
+                        self.state.deconv_from_layer(self.net, backprop_layer_def, backprop_unit, 'Zeiler & Fergus')
+
+                elif back_mode == BackpropMode.DECONV_GB:
+                    with WithTimer('CaffeProcThread:deconv', quiet=self.debug_level < 1):
+                        self.state.deconv_from_layer(self.net, backprop_layer_def, backprop_unit, 'Guided Backprop')
 
                 with self.state.lock:
                     self.state.back_stale = False

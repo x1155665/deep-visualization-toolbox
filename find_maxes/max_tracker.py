@@ -829,7 +829,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                                 diffs[i, batch[i].channel_idx] = 1.0
 
                         with WithTimer('Deconv    ', quiet = not do_print):
-                            net.deconv_from_layer(batch[i].denormalized_layer_name, diffs)
+                            net.deconv_from_layer(batch[i].denormalized_layer_name, diffs, 'Guided Backprop')
 
                         out_arr = extract_patch_from_image(net.blobs['data'].diff[i], net, batch[i].selected_input_index, settings,
                                                            batch[i].data_ii_end, batch[i].data_ii_start, batch[i].data_jj_end, batch[i].data_jj_start,

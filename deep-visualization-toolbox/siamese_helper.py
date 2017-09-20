@@ -382,7 +382,7 @@ class SiameseHelper(object):
         pass
 
     @staticmethod
-    def deconv_from_layer(net, backprop_layer_def, backprop_unit, siamese_input_mode):
+    def deconv_from_layer(net, backprop_layer_def, backprop_unit, siamese_input_mode, deconv_type):
 
         # if we are in siamese_batch_pair, we don't care of siamese_input_mode since we must do deconv on the 2-batch
         # otherwise, if we are in siamese_layer_pair, we do it on both layers only if both deconv are requested
@@ -399,13 +399,13 @@ class SiameseHelper(object):
             diffs1 = expand_dims(diffs1, 0)
 
             if backprop_layer_def['format'] == 'siamese_layer_pair':
-                net.deconv_from_layer(backprop_layer_def['name/s'][0], diffs0, zero_higher=True)
-                net.deconv_from_layer(backprop_layer_def['name/s'][1], diffs1, zero_higher=True)
+                net.deconv_from_layer(backprop_layer_def['name/s'][0], diffs0, zero_higher=True, deconv_type=deconv_type)
+                net.deconv_from_layer(backprop_layer_def['name/s'][1], diffs1, zero_higher=True, deconv_type=deconv_type)
 
             elif backprop_layer_def['format'] == 'siamese_batch_pair':
                 # combine them to 2-batch and send once
                 diffs = concatenate((diffs0, diffs1), axis=0)
-                net.deconv_from_layer(backprop_layer_def['name/s'], diffs, zero_higher=True)
+                net.deconv_from_layer(backprop_layer_def['name/s'], diffs, zero_higher=True, deconv_type=deconv_type)
 
         else:
 
@@ -418,7 +418,7 @@ class SiameseHelper(object):
             diffs = expand_dims(diffs, 0)
 
             selected_backprop_layer_name = SiameseHelper._get_single_selected_layer_name(backprop_layer_def, siamese_input_mode)
-            net.deconv_from_layer(selected_backprop_layer_name, diffs, zero_higher=True)
+            net.deconv_from_layer(selected_backprop_layer_name, diffs, zero_higher=True, deconv_type=deconv_type)
 
     @staticmethod
     def get_image_from_frame(frame, is_siamese, image_shape, siamese_input_mode):

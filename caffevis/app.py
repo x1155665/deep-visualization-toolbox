@@ -24,7 +24,7 @@ from image_misc import norm01, norm01c, norm0255, tile_images_normalize, ensure_
 from image_misc import FormattedString, cv2_typeset_text, to_255
 from caffe_proc_thread import CaffeProcThread
 from jpg_vis_loading_thread import JPGVisLoadingThread
-from caffevis_app_state import CaffeVisAppState, SiameseInputMode, PatternMode
+from caffevis_app_state import CaffeVisAppState, SiameseInputMode, PatternMode, BackpropMode, BackpropViewOption
 from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, \
     check_force_backward_true, set_mean, get_image_from_files
 from caffe_misc import layer_name_to_top_name, save_caffe_image
@@ -283,10 +283,8 @@ class CaffeVisApp(BaseApp):
             if not self.state.back_enabled:
                 print >>status, 'Back: off',
             else:
-                print >>status, 'Back: %s' % ('deconv' if self.state.back_mode == 'deconv' else 'bprop'),
-                print >>status, '(from %s_%d, disp %s)' % (self.state.get_default_layer_name(self.state.get_current_backprop_layer_definition()) ,
-                                                           self.state.backprop_unit,
-                                                           self.state.back_filt_mode),
+                print >>status, 'Back: %s (%s)' % (BackpropMode.to_string(self.state.back_mode), BackpropViewOption.to_string(self.state.back_view_option)),
+                print >>status, '(from %s_%d)' % (self.state.get_default_layer_name(self.state.get_current_backprop_layer_definition()), self.state.backprop_unit),
             print >>status, '|',
             print >>status, 'Boost: %g/%g' % (self.state.layer_boost_indiv, self.state.layer_boost_gamma)
 
@@ -1011,7 +1009,7 @@ class CaffeVisApp(BaseApp):
         with self.state.lock:
             back_enabled = self.state.back_enabled
             back_mode = self.state.back_mode
-            back_filt_mode = self.state.back_filt_mode
+            back_view_option = self.state.back_view_option
             back_what_to_disp = self.get_back_what_to_disp()
                 
         if back_what_to_disp == 'disabled':
@@ -1033,10 +1031,6 @@ class CaffeVisApp(BaseApp):
                 grad_img = grad_blob[:, :, :]  # do nothing
             else:
                 grad_img = grad_blob[:, :, self._net_channel_swap_inv]  # e.g. BGR -> RGB
-
-            # Mode-specific processing
-            assert back_mode in ('grad', 'deconv')
-            assert back_filt_mode in ('raw', 'gray', 'norm', 'normblur')
 
             # define helper function ro run processing once or twice, in case of siamese network
             def run_processing_once_or_twice(image, process_image_fn):
@@ -1080,17 +1074,22 @@ class CaffeVisApp(BaseApp):
 
                 raise Exception("flow should not arrive here")
 
-
-            if back_filt_mode == 'raw':
+            if back_view_option == BackpropViewOption.RAW:
                 grad_img = run_processing_once_or_twice(grad_img, lambda grad_img: norm01c(grad_img, 0))
 
-            elif back_filt_mode == 'gray':
+            elif back_view_option == BackpropViewOption.RAW_POS:
+                grad_img = run_processing_once_or_twice(grad_img, lambda grad_img: norm01c(grad_img, 0) * (grad_img > 0) + (0.5) * (grad_img <= 0))
+
+            elif back_view_option == BackpropViewOption.RAW_NEG:
+                grad_img = run_processing_once_or_twice(grad_img, lambda grad_img: norm01c(grad_img, 0) * (grad_img < 0) + (0.5) * (grad_img >= 0))
+
+            elif back_view_option == BackpropViewOption.GRAY:
                 grad_img = run_processing_once_or_twice(grad_img, lambda grad_img: norm01c(grad_img.mean(axis=2), 0))
 
-            elif back_filt_mode == 'norm':
+            elif back_view_option == BackpropViewOption.NORM:
                 grad_img = run_processing_once_or_twice(grad_img, lambda grad_img: norm01(np.linalg.norm(grad_img, axis=2)))
 
-            elif back_filt_mode == 'normblur':
+            elif back_view_option == BackpropViewOption.NORM_BLUR:
                 def do_norm_blur(grad_img):
                     grad_img = np.linalg.norm(grad_img, axis=2)
                     cv2.GaussianBlur(grad_img, (0, 0), self.settings.caffevis_grad_norm_blur_radius, grad_img)
@@ -1098,7 +1097,7 @@ class CaffeVisApp(BaseApp):
                 grad_img = run_processing_once_or_twice(grad_img, do_norm_blur)
 
             else:
-                raise Exception('Invalid option for back_filter_mode: %s' % (back_filt_mode))
+                raise Exception('Invalid option for back_view_option: %s' % (back_view_option))
 
             # If necessary, re-promote from grayscale to color
             if len(grad_img.shape) == 2:
@@ -1199,8 +1198,9 @@ class CaffeVisApp(BaseApp):
                       FormattedString(nav_string, defaults)])
             
         for tag in ('sel_layer_left', 'sel_layer_right', 'zoom_mode', 'next_pattern_mode','pattern_first_only',
-                    'next_ez_back_mode_loop', 'freeze_back_unit', 'show_back', 'back_mode', 'back_filt_mode',
-                    'boost_gamma', 'boost_individual', 'reset_state', 'siamese_input_mode', 'toggle_maximal_score', 'toggle_input_overlay_in_aux_pane'):
+                    'next_ez_back_mode_loop', 'next_back_view_option', 'freeze_back_unit', 'show_back',
+                    'boost_gamma', 'boost_individual', 'reset_state', 'siamese_input_mode', 'toggle_maximal_score',
+                    'toggle_input_overlay_in_aux_pane'):
             key_strings, help_string = self.bindings.get_key_help(tag)
             label = '%10s:' % (','.join(key_strings))
             lines.append([FormattedString(label, defaults, width=120, align='right'),

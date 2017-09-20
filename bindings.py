@@ -109,17 +109,17 @@ _.add('pattern_first_only', '1',
        'Toggle pattern loading first image only or loading all available images')
 
 _.add('next_ez_back_mode_loop', 'b',
-       'Cycle through a few common backprop/deconv modes')
+       'Cycle through backprop modes (backprop, deconv zf, deconv gb, off)')
 _.add('prev_ez_back_mode_loop', 'B',
-       'Cycle through a few common backprop/deconv modes')
+       'Cycle through backprop modes (backprop, deconv zf, deconv gb, off)')
 _.add('freeze_back_unit', 'd',
        'Freeze the bprop/deconv origin to be the currently selected unit')
 _.add('show_back', 'a',
        'Toggle between showing forward activations and back/deconv diffs')
-_.add('back_mode', 'n',
-       '(expert) Change back mode directly.')
-_.add('back_filt_mode', 'm',
-       '(expert) Change back output filter directly.')
+_.add('next_back_view_option', 'n',
+       'Cycle through backprop view options (raw, raw>0, raw<0, gray, norm, normblur)')
+_.add('prev_back_view_option', 'N',
+       'Cycle through backprop view options (raw, raw>0, raw<0, gray, norm, normblur)')
 
 _.add('boost_gamma', 't',
        'Boost contrast using gamma correction')

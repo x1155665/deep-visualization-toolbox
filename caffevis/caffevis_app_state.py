@@ -13,6 +13,52 @@ class PatternMode:
     MAX_ACTIVATIONS_HISTOGRAM = 4
     NUMBER_OF_MODES = 5
 
+class BackpropMode:
+    OFF = 0
+    GRAD = 1
+    DECONV_ZF = 2
+    DECONV_GB = 3
+    NUMBER_OF_MODES = 4
+
+    @staticmethod
+    def to_string(back_mode):
+        if back_mode == BackpropMode.OFF:
+            return 'off'
+        elif back_mode == BackpropMode.GRAD:
+            return 'grad'
+        elif back_mode == BackpropMode.DECONV_ZF:
+            return 'deconv zf'
+        elif back_mode == BackpropMode.DECONV_GB:
+            return 'deconv gb'
+
+        return 'n/a'
+
+class BackpropViewOption:
+    RAW = 0
+    RAW_POS = 1
+    RAW_NEG = 2
+    GRAY = 3
+    NORM = 4
+    NORM_BLUR = 5
+    NUMBER_OF_OPTIONS = 6
+
+    @staticmethod
+    def to_string(back_view_option):
+        if back_view_option == BackpropViewOption.RAW:
+            return 'raw'
+        elif back_view_option == BackpropViewOption.RAW_POS:
+            return 'raw>0'
+        elif back_view_option == BackpropViewOption.RAW_NEG:
+            return 'raw<0'
+        elif back_view_option == BackpropViewOption.GRAY:
+            return 'gray'
+        elif back_view_option == BackpropViewOption.NORM:
+            return 'norm'
+        elif back_view_option == BackpropViewOption.NORM_BLUR:
+            return 'normblur'
+
+        return 'n/a'
+
 class CaffeVisAppState(object):
     '''State of CaffeVis app.'''
 
@@ -86,8 +132,8 @@ class CaffeVisAppState(object):
         self.backprop_selection_frozen = False    # If false, backprop unit tracks selected unit
         self.backprop_siamese_input_mode = SiameseInputMode.BOTH_IMAGES
         self.back_enabled = False
-        self.back_mode = 'grad'      # 'grad' or 'deconv'
-        self.back_filt_mode = 'raw'  # 'raw', 'gray', 'norm', 'normblur'
+        self.back_mode = BackpropMode.OFF
+        self.back_view_option = BackpropViewOption.RAW
         self.pattern_mode = PatternMode.OFF    # type of patterns to show instead of activations in layers pane: maximal optimized image, maximal input image, maximal histogram, off
         self.pattern_first_only = True         # should we load only the first pattern image for each neuron, or all the relevant images per neuron
         self.layers_pane_zoom_mode = 0       # 0: off, 1: zoom selected (and show pref in small pane), 2: zoom backprop
@@ -159,60 +205,27 @@ class CaffeVisAppState(object):
                     self.layers_show_back = not self.layers_show_back
                 if self.layers_show_back:
                     if not self.back_enabled:
+                        if self.back_mode == BackpropMode.OFF:
+                            self.back_mode = BackpropMode.GRAD
                         self.back_enabled = True
                         self.back_stale = True
-            elif tag == 'back_mode':
-                if not self.back_enabled:
-                    self.back_enabled = True
-                    self.back_mode = 'grad'
-                    self.back_stale = True
-                else:
-                    if self.back_mode == 'grad':
-                        self.back_mode = 'deconv'
-                        self.back_stale = True
-                    else:
-                        self.back_enabled = False
-            elif tag == 'back_filt_mode':
-                    if self.back_filt_mode == 'raw':
-                        self.back_filt_mode = 'gray'
-                    elif self.back_filt_mode == 'gray':
-                        self.back_filt_mode = 'norm'
-                    elif self.back_filt_mode == 'norm':
-                        self.back_filt_mode = 'normblur'
-                    else:
-                        self.back_filt_mode = 'raw'
+
             elif tag == 'next_ez_back_mode_loop':
-                # Cycle:
-                # off -> grad (raw) -> grad(gray) -> grad(norm) -> grad(normblur) -> deconv
-                if not self.back_enabled:
-                    self.back_enabled = True
-                    self.back_mode = 'grad'
-                    self.back_filt_mode = 'raw'
-                    self.back_stale = True
-                elif self.back_mode == 'grad' and self.back_filt_mode == 'raw':
-                    self.back_filt_mode = 'norm'
-                elif self.back_mode == 'grad' and self.back_filt_mode == 'norm':
-                    self.back_mode = 'deconv'
-                    self.back_filt_mode = 'raw'
-                    self.back_stale = True
-                else:
-                    self.back_enabled = False
+                self.back_mode = (self.back_mode + 1) % BackpropMode.NUMBER_OF_MODES
+                self.back_enabled = (self.back_mode != BackpropMode.OFF)
+                self.back_stale = True
+
             elif tag == 'prev_ez_back_mode_loop':
-                    # Cycle:
-                    # off -> grad (raw) -> grad(gray) -> grad(norm) -> grad(normblur) -> deconv
-                    if not self.back_enabled:
-                        self.back_enabled = True
-                        self.back_mode = 'deconv'
-                        self.back_filt_mode = 'raw'
-                        self.back_stale = True
-                    elif self.back_mode == 'deconv':
-                        self.back_mode = 'grad'
-                        self.back_filt_mode = 'norm'
-                        self.back_stale = True
-                    elif self.back_mode == 'grad' and self.back_filt_mode == 'norm':
-                        self.back_filt_mode = 'raw'
-                    else:
-                        self.back_enabled = False
+                self.back_mode = (self.back_mode - 1 + BackpropMode.NUMBER_OF_MODES) % BackpropMode.NUMBER_OF_MODES
+                self.back_enabled = (self.back_mode != BackpropMode.OFF)
+                self.back_stale = True
+
+            elif tag == 'next_back_view_option':
+                self.back_view_option = (self.back_view_option + 1) % BackpropViewOption.NUMBER_OF_OPTIONS
+
+            elif tag == 'prev_back_view_option':
+                self.back_view_option = (self.back_view_option - 1 + BackpropViewOption.NUMBER_OF_OPTIONS) % BackpropViewOption.NUMBER_OF_OPTIONS
+
             elif tag == 'freeze_back_unit':
                 # Freeze selected layer/unit as backprop unit
                 self.backprop_selection_frozen = not self.backprop_selection_frozen
@@ -307,10 +320,10 @@ class CaffeVisAppState(object):
             with self.lock:
                 self.back_enabled = False
 
-    def deconv_from_layer(self, net, backprop_layer_def, backprop_unit):
+    def deconv_from_layer(self, net, backprop_layer_def, backprop_unit, deconv_type):
 
         try:
-            return SiameseHelper.deconv_from_layer(net, backprop_layer_def, backprop_unit, self.siamese_input_mode)
+            return SiameseHelper.deconv_from_layer(net, backprop_layer_def, backprop_unit, self.siamese_input_mode, deconv_type)
         except AttributeError:
             print 'ERROR: required bindings (deconv_from_layer) not found! Try using the deconv-deep-vis-toolbox branch as described here: https://github.com/yosinski/deep-visualization-toolbox'
             raise
