@@ -443,7 +443,7 @@ optimize_image_output_prefix = locals().get('optimize_image_output_prefix', 'out
 optimize_image_generate_plus_mean = locals().get('optimize_image_generate_plus_mean', False)
 
 # batch size used in optimize_image.py
-optimize_image_batch_size = locals().get('optimize_image_batch_size', 9)
+optimize_image_batch_size = locals().get('optimize_image_batch_size', 1)
 
 # channels to generate in optimize_image.py, if list is empty we generate all the channels in the layer
 optimize_image_channels = locals().get('optimize_image_channels', [])
