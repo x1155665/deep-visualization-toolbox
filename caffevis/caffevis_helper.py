@@ -196,9 +196,8 @@ def set_mean(caffevis_data_mean, generate_channelwise_mean, net):
     if generate_channelwise_mean:
         data_mean = data_mean.mean(1).mean(1)
 
-    print 'Using mean with shape:', data_mean.shape
-
     if data_mean is not None:
+        print 'Using mean with shape:', data_mean.shape
         net.transformer.set_mean(net.inputs[0], data_mean)
 
     return data_mean

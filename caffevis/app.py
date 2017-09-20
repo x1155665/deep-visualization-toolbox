@@ -62,9 +62,9 @@ class CaffeVisApp(BaseApp):
         self.net = caffe.Classifier(
             settings.caffevis_deploy_prototxt,
             settings.caffevis_network_weights,
-            mean = None, # Set to None for now, assign later
-            channel_swap = self._net_channel_swap,
-            raw_scale = settings.caffe_net_raw_scale,
+            mean=None, # Set to None for now, assign later
+            channel_swap=self._net_channel_swap,
+            raw_scale=settings.caffe_net_raw_scale,
             image_dims=settings.caffe_net_image_dims,
         )
 
