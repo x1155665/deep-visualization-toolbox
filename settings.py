@@ -4,11 +4,9 @@
 # settings, define them in settings_local.py rather than changing them
 # here.
 
+# Import network settings. Turn off creation of X.pyc to avoid stale settings if X.py is removed.
 import os
 import sys
-
-# Import local / overridden settings. Turn off creation of settings_local.pyc to avoid stale settings if settings_local.py is removed.
-
 sys.dont_write_bytecode = True
 try:
     from settings_local import *
@@ -27,6 +25,9 @@ sys.dont_write_bytecode = False
 #  General settings
 #
 ####################################
+
+# base folder for paths defined in the settings
+base_folder = locals().get('base_folder', '')
 
 # Which device to use for webcam input. On Mac the default device, 0,
 # works for builtin camera or external USB webcam, if plugged in. If
