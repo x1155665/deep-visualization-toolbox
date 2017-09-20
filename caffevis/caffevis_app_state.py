@@ -69,7 +69,6 @@ class CaffeVisAppState(object):
         return headers
 
     def _reset_user_state(self):
-        self.siamese_input_mode = SiameseInputMode.BOTH_IMAGES
         self.show_maximal_score = False
         self.show_input_overlay_in_aux_pane = False
         self.layer_idx = 0
@@ -79,10 +78,13 @@ class CaffeVisAppState(object):
         self.layer_boost_gamma = self.layer_boost_gamma_choices[self.layer_boost_gamma_idx]
         self.cursor_area = 'top'   # 'top' or 'bottom'
         self.selected_unit = 0
+        self.siamese_input_mode = SiameseInputMode.BOTH_IMAGES
+
         # Which layer and unit (or channel) to use for backprop
         self.backprop_layer_idx = self.layer_idx
         self.backprop_unit = self.selected_unit
         self.backprop_selection_frozen = False    # If false, backprop unit tracks selected unit
+        self.backprop_siamese_input_mode = SiameseInputMode.BOTH_IMAGES
         self.back_enabled = False
         self.back_mode = 'grad'      # 'grad' or 'deconv'
         self.back_filt_mode = 'raw'  # 'raw', 'gray', 'norm', 'normblur'
@@ -217,7 +219,8 @@ class CaffeVisAppState(object):
                 if self.backprop_selection_frozen:
                     # Grap layer/selected_unit upon transition from non-frozen -> frozen
                     self.backprop_layer_idx = self.layer_idx
-                    self.backprop_unit = self.selected_unit                    
+                    self.backprop_unit = self.selected_unit
+                    self.backprop_siamese_input_mode = self.siamese_input_mode
             elif tag == 'zoom_mode':
                 self.layers_pane_zoom_mode = (self.layers_pane_zoom_mode + 1) % 3
                 if self.layers_pane_zoom_mode == 2 and not self.back_enabled:
@@ -232,6 +235,7 @@ class CaffeVisAppState(object):
 
             elif tag == 'siamese_input_mode':
                 self.siamese_input_mode = (self.siamese_input_mode + 1) % SiameseInputMode.NUMBER_OF_MODES
+
 
             elif tag == 'toggle_maximal_score':
                 self.show_maximal_score = not self.show_maximal_score
@@ -378,9 +382,10 @@ class CaffeVisAppState(object):
         # Backward selection
         if not self.backprop_selection_frozen:
             # If backprop_selection is not frozen, backprop layer/unit follows selected unit
-            if not (self.backprop_layer_idx == self.layer_idx and self.backprop_unit == self.selected_unit):
+            if not (self.backprop_layer_idx == self.layer_idx and self.backprop_unit == self.selected_unit and self.backprop_siamese_input_mode == self.siamese_input_mode):
                 self.backprop_layer_idx = self.layer_idx
                 self.backprop_unit = self.selected_unit
+                self.backprop_siamese_input_mode = self.siamese_input_mode
                 self.back_stale = True    # If there is any change, back diffs are now stale
 
     def fill_layers_list(self, net):

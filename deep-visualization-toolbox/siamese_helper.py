@@ -283,7 +283,6 @@ class SiameseHelper(object):
         '''
         function used to extract both blobs according to the specified layer and siamese input mode and
         blob selector.
-        note that it is invalid to call this function when siamese input mode is not BOTH
         this is the main function which contains logic on the siamese network internal format structure
         :param net: network containing the blob to extract
         :param layer_def: layer requested
@@ -291,8 +290,6 @@ class SiameseHelper(object):
         :param blob_selector:
         :return: first_blob, second_blob
         '''
-
-        assert siamese_input_mode == SiameseInputMode.BOTH_IMAGES
 
         if layer_def['format'] == 'normal':
             raise Exception('function get_siamese_blobs() should not be called when layer is in normal format')
@@ -387,7 +384,10 @@ class SiameseHelper(object):
     @staticmethod
     def deconv_from_layer(net, backprop_layer_def, backprop_unit, siamese_input_mode):
 
-        if SiameseHelper.siamese_input_mode_has_two_images(backprop_layer_def, siamese_input_mode):
+        # if we are in siamese_batch_pair, we don't care of siamese_input_mode since we must do deconv on the 2-batch
+        # otherwise, if we are in siamese_layer_pair, we do it on both layers only if both deconv are requested
+        if (backprop_layer_def['format'] == 'siamese_batch_pair') or \
+            (backprop_layer_def['format'] == 'siamese_layer_pair' and siamese_input_mode == SiameseInputMode.BOTH_IMAGES):
 
             diffs0, diffs1 = SiameseHelper.get_siamese_selected_diff_blobs(net, backprop_layer_def, siamese_input_mode)
             diffs0, diffs1 = diffs0 * 0, diffs1 * 0
