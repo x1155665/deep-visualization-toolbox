@@ -347,7 +347,10 @@ class SiameseHelper(object):
     @staticmethod
     def backward_from_layer(net, backprop_layer_def, backprop_unit, siamese_input_mode):
 
-        if SiameseHelper.siamese_input_mode_has_two_images(backprop_layer_def, siamese_input_mode):
+        # if we are in siamese_batch_pair, we don't care of siamese_input_mode since we must do deconv on the 2-batch
+        # otherwise, if we are in siamese_layer_pair, we do it on both layers only if backprop deconv are requested
+        if (backprop_layer_def['format'] == 'siamese_batch_pair') or \
+            (backprop_layer_def['format'] == 'siamese_layer_pair' and siamese_input_mode == SiameseInputMode.BOTH_IMAGES):
 
             diffs0, diffs1 = SiameseHelper.get_siamese_selected_diff_blobs(net, backprop_layer_def, siamese_input_mode)
             diffs0, diffs1 = diffs0 * 0, diffs1 * 0
