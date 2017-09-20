@@ -28,6 +28,7 @@ from caffevis_app_state import CaffeVisAppState, SiameseInputMode, PatternMode
 from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, \
     check_force_backward_true, set_mean, get_image_from_files
 from caffe_misc import layer_name_to_top_name, save_caffe_image
+from siamese_helper import SiameseHelper
 
 class CaffeVisApp(BaseApp):
     '''App to visualize using caffe.'''
@@ -140,6 +141,8 @@ class CaffeVisApp(BaseApp):
             self.state.next_label = input_label
             if self.debug_level > 1:
                 print 'CaffeVisApp.handle_input: caffe_net_state is:', self.state.caffe_net_state
+
+            self.state.last_frame = input_image
     
     def redraw_needed(self):
         return self.state.redraw_needed()
@@ -490,6 +493,11 @@ class CaffeVisApp(BaseApp):
                 display_2D_resize = ensure_uint255_and_resize_to_fit(unit_data, pane.data.shape)
             else:
                 display_2D_resize = ensure_uint255_and_resize_without_fit(unit_data, pane.data.shape)
+
+            if self.state.show_input_overlay_in_aux_pane and self.state.pattern_mode == PatternMode.OFF:
+                input_image = SiameseHelper.get_image_from_frame(self.state.last_frame, self.state.settings.is_siamese, pane.data.shape, self.state.siamese_input_mode)
+                normalized_mask = display_2D_resize / 255.0
+                display_2D_resize = normalized_mask * input_image + (1 - normalized_mask) * display_2D_resize
 
         elif state_layers_pane_zoom_mode == 2 and not is_layer_summary_loaded:
             # Mode 2: zoomed backprop pane
@@ -988,6 +996,12 @@ class CaffeVisApp(BaseApp):
                 unit_data_resize = ensure_uint255_and_resize_to_fit(unit_data, pane.data.shape)
             else:
                 unit_data_resize = ensure_uint255_and_resize_without_fit(unit_data, pane.data.shape)
+
+            if self.state.show_input_overlay_in_aux_pane and self.state.pattern_mode == PatternMode.OFF:
+                input_image = SiameseHelper.get_image_from_frame(self.state.last_frame, self.state.settings.is_siamese, pane.data.shape, self.state.siamese_input_mode)
+                normalized_mask = unit_data_resize / 255.0
+                unit_data_resize = normalized_mask * input_image + (1-normalized_mask) * unit_data_resize
+
             pane.data[0:unit_data_resize.shape[0], 0:unit_data_resize.shape[1], :] = unit_data_resize
         elif mode == 'prob_labels':
             self._draw_prob_labels_pane(pane)
@@ -1186,7 +1200,7 @@ class CaffeVisApp(BaseApp):
             
         for tag in ('sel_layer_left', 'sel_layer_right', 'zoom_mode', 'next_pattern_mode','pattern_first_only',
                     'next_ez_back_mode_loop', 'freeze_back_unit', 'show_back', 'back_mode', 'back_filt_mode',
-                    'boost_gamma', 'boost_individual', 'reset_state', 'siamese_input_mode', 'show_maximal_score'):
+                    'boost_gamma', 'boost_individual', 'reset_state', 'siamese_input_mode', 'toggle_maximal_score', 'toggle_input_overlay_in_aux_pane'):
             key_strings, help_string = self.bindings.get_key_help(tag)
             label = '%10s:' % (','.join(key_strings))
             lines.append([FormattedString(label, defaults, width=120, align='right'),

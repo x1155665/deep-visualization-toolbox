@@ -322,7 +322,6 @@ class LiveVis(object):
         if self.settings.is_siamese and ((type(frame),len(frame)) == (tuple,2)):
             frame1 = frame[0]
             frame2 = frame[1]
-            # half_pane_shape = (full_pane_shape[0] / 2, full_pane_shape[1])
             half_pane_shape = (full_pane_shape[0], full_pane_shape[1]/2)
             frame_disp1 = resize_without_fit(frame1[:], half_pane_shape)
             frame_disp2 = resize_without_fit(frame2[:], half_pane_shape)

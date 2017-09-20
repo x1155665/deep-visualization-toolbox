@@ -2,6 +2,7 @@ import os
 # import numpy as np
 from numpy import expand_dims, concatenate
 from caffe_misc import layer_name_to_top_name
+from image_misc import resize_without_fit
 
 class SiameseInputMode:
     FIRST_IMAGE = 0
@@ -418,3 +419,25 @@ class SiameseHelper(object):
 
             selected_backprop_layer_name = SiameseHelper._get_single_selected_layer_name(backprop_layer_def, siamese_input_mode)
             net.deconv_from_layer(selected_backprop_layer_name, diffs, zero_higher=True)
+
+    @staticmethod
+    def get_image_from_frame(frame, is_siamese, image_shape, siamese_input_mode):
+
+        if is_siamese and ((type(frame),len(frame)) == (tuple,2)):
+
+            if siamese_input_mode == SiameseInputMode.BOTH_IMAGES:
+                frame1 = frame[0]
+                frame2 = frame[1]
+                half_pane_shape = (image_shape[0], image_shape[1]/2)
+                frame_disp1 = resize_without_fit(frame1[:], half_pane_shape)
+                frame_disp2 = resize_without_fit(frame2[:], half_pane_shape)
+                frame_disp = concatenate((frame_disp1, frame_disp2), axis=1)
+            elif siamese_input_mode == SiameseInputMode.FIRST_IMAGE:
+                frame_disp = resize_without_fit(frame[0], image_shape)
+            elif siamese_input_mode == SiameseInputMode.SECOND_IMAGE:
+                frame_disp = resize_without_fit(frame[1], image_shape)
+
+        else:
+            frame_disp = resize_without_fit(frame[:], image_shape)
+
+        return frame_disp

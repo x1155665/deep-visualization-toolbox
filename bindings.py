@@ -133,8 +133,10 @@ _.add('toggle_unit_jpgs', '9',
 _.add('siamese_input_mode', 'v',
         'Cycle between siamese input modes {first image, second image, both images}')
 
-_.add('show_maximal_score', 'r',
+_.add('toggle_maximal_score', 'r',
         'Toggle showing maximal score overlays {on, off}')
+_.add('toggle_input_overlay_in_aux_pane', 'y',
+        'Toggle showing input overlay in aux pane {on, off}')
 
 
 bindings = _
