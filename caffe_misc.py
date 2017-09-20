@@ -2,7 +2,7 @@
 
 import skimage.io
 import numpy as np
-
+from image_misc import norm01c
 
 
 def shownet(net):
@@ -126,19 +126,6 @@ class RegionComputer(object):
         return ret
 
 
-
-def norm01c(arr, center):
-    '''Maps the input range to [0,1] such that the center value maps to .5'''
-    arr = arr.copy()
-    arr -= center
-    arr /= max(2 * arr.max(), -2 * arr.min()) + 1e-10
-    arr += .5
-    assert arr.min() >= 0
-    assert arr.max() <= 1
-    return arr
-
-
-
 def save_caffe_image(img, filename, autoscale = True, autoscale_center = None):
     '''Takes an image in caffe format (01) or (c01, BGR) and saves it to a file'''
     if len(img.shape) == 2:
@@ -254,21 +241,3 @@ def extract_patch_from_image(data, net, selected_input_index, settings,
                                                                        data_ii_start:data_ii_end,
                                                                        data_jj_start:data_jj_end]
     return out_arr
-
-
-# def get_top_to_layer_dict(net):
-#
-#     top_to_layer = dict()
-#
-#     # go over layers
-#     for layer_name in list(net._layer_names):
-#
-#         if len(net.top_names[layer_name]) == 1 and len(net.bottom_names[layer_name]) == 1 and net.top_names[layer_name][0] == net.bottom_names[layer_name][0]:
-#             # skip inplace layers
-#             continue
-#
-#         # go over tops
-#         for top_name in net.top_names[layer_name]:
-#             top_to_layer[top_name] = layer_name
-#
-#     return top_to_layer

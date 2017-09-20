@@ -8,6 +8,71 @@ from copy import deepcopy
 
 from misc import WithTimer
 
+def softmax_image(arr):
+    '''Maps the input range to [0,1] using softmax'''
+
+    arr = arr.copy()
+    exp_arr = np.exp(arr)
+    sum_exp_arr = np.sum(exp_arr, axis=(0,1))
+    normalized_exp_arr = exp_arr / sum_exp_arr
+
+    print "arr", arr
+    print "exp_arr", exp_arr
+    print "sum_exp_arr", sum_exp_arr
+    print "normalized_exp_arr", normalized_exp_arr
+
+
+    print "arr.shape", arr.shape, arr.max(), arr.min()
+    print "exp_arr.shape", exp_arr.shape, exp_arr.max(), exp_arr.min()
+    print "sum_exp_arr.shape", sum_exp_arr.shape, sum_exp_arr.max(), sum_exp_arr.min()
+    print "normalized_exp_arr.shape", normalized_exp_arr.shape, normalized_exp_arr.max(), normalized_exp_arr.min()
+
+    assert normalized_exp_arr.min() >= 0
+    assert normalized_exp_arr.max() <= 1
+    return normalized_exp_arr
+
+
+def fig2data(fig):
+    """
+    @brief Convert a Matplotlib figure to a 3D numpy array with RGB channels and return it
+    @param fig a matplotlib figure
+    @return a numpy 3D array of RGB values
+    """
+    # draw the renderer
+    fig.canvas.draw()
+
+    # Get the RGB buffer from the figure
+    w, h = fig.canvas.get_width_height()
+    buf = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    buf.shape = (w, h, 3)
+
+    return buf
+
+
+def array_histogram(arr, histogram_pane_shape, title, xlabel, ylabel):
+
+    from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+    from matplotlib.figure import Figure
+    fig = Figure(figsize=(10, 10))
+    canvas = FigureCanvas(fig)
+    ax = fig.add_subplot(111)
+
+    # generate histogram
+    values = arr.flatten()
+    hist, bin_edges = np.histogram(values, bins=50)
+
+    width = 0.7 * (bin_edges[1] - bin_edges[0])
+    center = (bin_edges[:-1] + bin_edges[1:]) / 2
+    ax.bar(center, hist, align='center', width=width, color='g')
+
+    fig.suptitle(title)
+    ax.xaxis.label.set_text(xlabel)
+    ax.yaxis.label.set_text(ylabel)
+
+    figure_buffer = fig2data(fig)
+    # result = ensure_uint255_and_resize_without_fit(figure_buffer, histogram_pane_shape)
+    return figure_buffer
+
 
 def norm01(arr):
     arr = arr.copy()

@@ -34,17 +34,21 @@ class BackpropMode:
         return 'n/a'
 
 class BackpropViewOption:
-    RAW = 0
-    RAW_POS = 1
-    RAW_NEG = 2
-    GRAY = 3
-    NORM = 4
-    NORM_BLUR = 5
-    NUMBER_OF_OPTIONS = 6
+    SOFTMAX_RAW = 0
+    RAW = 1
+    RAW_POS = 2
+    RAW_NEG = 3
+    GRAY = 4
+    NORM = 5
+    NORM_BLUR = 6
+    HISTOGRAM = 7
+    NUMBER_OF_OPTIONS = 8
 
     @staticmethod
     def to_string(back_view_option):
-        if back_view_option == BackpropViewOption.RAW:
+        if back_view_option == BackpropViewOption.SOFTMAX_RAW:
+            return 'softmax raw'
+        elif back_view_option == BackpropViewOption.RAW:
             return 'raw'
         elif back_view_option == BackpropViewOption.RAW_POS:
             return 'raw>0'
@@ -56,6 +60,8 @@ class BackpropViewOption:
             return 'norm'
         elif back_view_option == BackpropViewOption.NORM_BLUR:
             return 'normblur'
+        elif back_view_option == BackpropViewOption.HISTOGRAM:
+            return 'histogram'
 
         return 'n/a'
 

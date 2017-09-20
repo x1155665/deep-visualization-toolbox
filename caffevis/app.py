@@ -18,9 +18,9 @@ sys.modules['max_tracker'] = find_maxes.max_tracker
 from misc import WithTimer, mkdir_p
 from numpy_cache import FIFOLimitedArrayCache
 from app_base import BaseApp
-from image_misc import norm01, norm01c, norm0255, tile_images_normalize, ensure_float01, tile_images_make_tiles, \
-    ensure_uint255_and_resize_to_fit, get_tiles_height_width, get_tiles_height_width_ratio, resize_without_fit, \
-    cv2_read_file_rgb, caffe_load_image, ensure_uint255_and_resize_without_fit
+from image_misc import norm01, norm01c, tile_images_normalize, ensure_float01, tile_images_make_tiles, \
+    ensure_uint255_and_resize_to_fit, resize_without_fit, \
+    caffe_load_image, ensure_uint255_and_resize_without_fit, softmax_image, array_histogram, fig2data
 from image_misc import FormattedString, cv2_typeset_text, to_255
 from caffe_proc_thread import CaffeProcThread
 from jpg_vis_loading_thread import JPGVisLoadingThread
@@ -670,22 +670,6 @@ class CaffeVisApp(BaseApp):
             display_3D = layer_dat_3D * 0  # nothing to show
         return display_3D
 
-    def fig2data(self, fig):
-        """
-        @brief Convert a Matplotlib figure to a 3D numpy array with RGB channels and return it
-        @param fig a matplotlib figure
-        @return a numpy 3D array of RGB values
-        """
-        # draw the renderer
-        fig.canvas.draw()
-
-        # Get the RGB buffer from the figure
-        w, h = fig.canvas.get_width_height()
-        buf = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8)
-        buf.shape = (w, h, 3)
-
-        return buf
-
 
     def load_weights_histograms(self, net, layer_name, layer_dat_3D, n_channels, pane, tile_cols, tile_rows, show_layer_summary):
 
@@ -740,7 +724,7 @@ class CaffeVisApp(BaseApp):
                 ax.xaxis.label.set_text('weight value')
                 ax.yaxis.label.set_text('count')
 
-                figure_buffer = self.fig2data(fig)
+                figure_buffer = fig2data(fig)
 
                 display_3D_highres[channel_idx, :, ::] = figure_buffer
 
@@ -750,7 +734,7 @@ class CaffeVisApp(BaseApp):
             try:
 
                 # handle generation of results container
-                figure_buffer = self.fig2data(fig)
+                figure_buffer = fig2data(fig)
                 first_shape = figure_buffer.shape
                 display_3D_highres = np.zeros((n_channels, first_shape[0], first_shape[1], first_shape[2]), dtype=np.uint8)
 
@@ -815,7 +799,7 @@ class CaffeVisApp(BaseApp):
                         ax.xaxis.label.set_text('weight value')
                         ax.yaxis.label.set_text('count')
 
-                        figure_buffer = self.fig2data(fig)
+                        figure_buffer = fig2data(fig)
                         display_3D_highres_summary_weights = ensure_uint255_and_resize_without_fit(figure_buffer, half_pane_shape)
 
                         ax.cla()
@@ -832,7 +816,7 @@ class CaffeVisApp(BaseApp):
                         ax.xaxis.label.set_text('bias value')
                         ax.yaxis.label.set_text('count')
 
-                        figure_buffer = self.fig2data(fig)
+                        figure_buffer = fig2data(fig)
                         display_3D_highres_summary_bias = ensure_uint255_and_resize_without_fit(figure_buffer, half_pane_shape)
 
                         display_3D_highres_summary = np.concatenate((display_3D_highres_summary_weights, display_3D_highres_summary_bias), axis=1)
@@ -930,7 +914,7 @@ class CaffeVisApp(BaseApp):
                 display_3D_highres_list = [display_3D_highres, display_3D_highres]
 
                 def process_channel_figure(channel_idx, fig):
-                    figure_buffer = self.fig2data(fig)
+                    figure_buffer = fig2data(fig)
 
                     # handle first generation of results container
                     if display_3D_highres_list[0] is None:
@@ -943,7 +927,7 @@ class CaffeVisApp(BaseApp):
                     pass
 
                 def process_layer_figure(fig):
-                    figure_buffer = self.fig2data(fig)
+                    figure_buffer = fig2data(fig)
                     display_3D_highres_list[1] = ensure_uint255_and_resize_without_fit(figure_buffer, pane_shape)
                     display_3D_highres_list[1] = np.expand_dims(display_3D_highres_list[1], 0)
                     pass
@@ -1033,7 +1017,7 @@ class CaffeVisApp(BaseApp):
                 grad_img = grad_blob[:, :, self._net_channel_swap_inv]  # e.g. BGR -> RGB
 
             # define helper function ro run processing once or twice, in case of siamese network
-            def run_processing_once_or_twice(image, process_image_fn):
+            def run_processing_once_or_twice(image, resize_shape, process_image_fn):
 
                 # if siamese network, run processing twice
                 if self.settings.is_siamese:
@@ -1058,8 +1042,7 @@ class CaffeVisApp(BaseApp):
                         image1 = process_image_fn(image1)
 
                         # resize each gradient image to half the pane size
-                        half_pane_shape = (image.shape[0], image.shape[1] / 2)
-                        # half_pane_shape = (pane.data.shape[1] / 2, pane.data.shape[0])
+                        half_pane_shape = (resize_shape[0], resize_shape[1] / 2)
 
                         image0 = resize_without_fit(image0[:], half_pane_shape)
                         image1 = resize_without_fit(image1[:], half_pane_shape)
@@ -1074,27 +1057,34 @@ class CaffeVisApp(BaseApp):
 
                 raise Exception("flow should not arrive here")
 
-            if back_view_option == BackpropViewOption.RAW:
-                grad_img = run_processing_once_or_twice(grad_img, lambda grad_img: norm01c(grad_img, 0))
+            if back_view_option == BackpropViewOption.SOFTMAX_RAW:
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: softmax_image(grad_img))
+
+            elif back_view_option == BackpropViewOption.RAW:
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: norm01c(grad_img, 0))
 
             elif back_view_option == BackpropViewOption.RAW_POS:
-                grad_img = run_processing_once_or_twice(grad_img, lambda grad_img: norm01c(grad_img, 0) * (grad_img > 0) + (0.5) * (grad_img <= 0))
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: norm01c(grad_img, 0) * (grad_img > 0) + (0.5) * (grad_img <= 0))
 
             elif back_view_option == BackpropViewOption.RAW_NEG:
-                grad_img = run_processing_once_or_twice(grad_img, lambda grad_img: norm01c(grad_img, 0) * (grad_img < 0) + (0.5) * (grad_img >= 0))
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: norm01c(grad_img, 0) * (grad_img < 0) + (0.5) * (grad_img >= 0))
 
             elif back_view_option == BackpropViewOption.GRAY:
-                grad_img = run_processing_once_or_twice(grad_img, lambda grad_img: norm01c(grad_img.mean(axis=2), 0))
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: norm01c(grad_img.mean(axis=2), 0))
 
             elif back_view_option == BackpropViewOption.NORM:
-                grad_img = run_processing_once_or_twice(grad_img, lambda grad_img: norm01(np.linalg.norm(grad_img, axis=2)))
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: norm01(np.linalg.norm(grad_img, axis=2)))
 
             elif back_view_option == BackpropViewOption.NORM_BLUR:
                 def do_norm_blur(grad_img):
                     grad_img = np.linalg.norm(grad_img, axis=2)
                     cv2.GaussianBlur(grad_img, (0, 0), self.settings.caffevis_grad_norm_blur_radius, grad_img)
                     return norm01(grad_img)
-                grad_img = run_processing_once_or_twice(grad_img, do_norm_blur)
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, do_norm_blur)
+
+            elif back_view_option == BackpropViewOption.HISTOGRAM:
+                half_pane_shape = (pane.data.shape[0],pane.data.shape[1]/2,3)
+                grad_img = run_processing_once_or_twice(grad_img, pane.data.shape, lambda grad_img: array_histogram(grad_img, half_pane_shape, BackpropMode.to_string(back_mode)+' histogram', 'values', 'count'))
 
             else:
                 raise Exception('Invalid option for back_view_option: %s' % (back_view_option))
