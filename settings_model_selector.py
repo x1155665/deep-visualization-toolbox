@@ -20,4 +20,3 @@ if model_to_load == 'caffenet_yos':
 
 elif model_to_load == 'other_model':
     from models.other_model.settings_other_model import *
-

@@ -41,7 +41,8 @@ def get_layer_info(settings, layer_name):
 
     # go over layers
 
-    previous_layer = None
+    previous_layer = (None, None, None, None, None, None, None)
+    current_layer = (None, None, None, None, None, None, None)
     for (name, type, input, output, filter, stride, pad) in settings.max_tracker_layers_list:
         if name == layer_name:
             current_layer = (name, type, input, output, filter, stride, pad)
@@ -49,3 +50,5 @@ def get_layer_info(settings, layer_name):
 
         # update previous layer
         previous_layer = (name, type, input, output, filter, stride, pad)
+
+    return current_layer, previous_layer

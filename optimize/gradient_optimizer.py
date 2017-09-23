@@ -176,7 +176,7 @@ class GradientOptimizer(object):
                 self.channel_swap_to_rgb = arange(3)  # Don't change order
 
         # since we have a batch of same data mean images, we can just take the first
-        if batched_data_mean:
+        if batched_data_mean is not None:
             self._data_mean_rgb_img = self.batched_data_mean[0, self.channel_swap_to_rgb].transpose((1,2,0))  # Store as (227,227,3) in RGB order.
         else:
             self._data_mean_rgb_img = None
@@ -205,7 +205,7 @@ class GradientOptimizer(object):
         if params.start_at == 'mean_plus_rand':
             x0 = np.random.normal(0, 10, input_shape)
         elif params.start_at == 'randu':
-            if self.batched_data_mean:
+            if self.batched_data_mean is not None:
                 x0 = uniform(0, 255, input_shape) - self.batched_data_mean
             else:
                 x0 = uniform(0, 255, input_shape)
@@ -258,7 +258,7 @@ class GradientOptimizer(object):
         obj = np.zeros(params.batch_size)
         for ii in range(params.max_iter):
             # 0. Crop data
-            if self.batched_data_mean:
+            if self.batched_data_mean is not None:
                 xx = minimum(255.0, maximum(0.0, xx + self.batched_data_mean)) - self.batched_data_mean     # Crop all values to [0,255]
             else:
                 xx = minimum(255.0, maximum(0.0, xx)) # Crop all values to [0,255]
@@ -352,7 +352,7 @@ class GradientOptimizer(object):
             max_grad = np.amax(reshaped_grad, axis=1)
 
             for batch_index in range(params.batch_size):
-                print ' batch_index: %d         min grad: %f, max grad: %f, norm grad: %f' % (batch_index, min_grad[batch_index], max_grad[batch_index], norm_grad[batch_index])
+                print ' layer: %s, channel: %d, batch_index: %d    min grad: %f, max grad: %f, norm grad: %f' % (params.push_layer, params.push_unit[0], batch_index, min_grad[batch_index], max_grad[batch_index], norm_grad[batch_index])
                 if norm_grad[batch_index] == 0:
                     print ' batch_index: %d, Grad exactly 0, failed' % batch_index
                     results[batch_index].meta_result = 'Metaresult: grad 0 failure'

@@ -277,6 +277,7 @@ class NetMaxTracker(object):
 
         for layer_name in self.layers:
 
+            print 'init layer: ', layer_name
             top_name = layer_name_to_top_name(net, layer_name)
             blob = net.blobs[top_name].data
 
@@ -488,11 +489,14 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
             print '%s   Pair %d/%d' % (datetime.now().ctime(), batch[batch_index].image_idx, len(image_filenames))
 
         with WithTimer('Load image', quiet=not do_print):
-            im1 = cv2_read_file_rgb(os.path.join(datadir, filename1), as_grayscale=settings._calculated_is_gray_model)
-            im2 = cv2_read_file_rgb(os.path.join(datadir, filename2), as_grayscale=settings._calculated_is_gray_model)
-            im1 = resize_without_fit(im1, net_input_dims)
-            im2 = resize_without_fit(im2, net_input_dims)
-            batch[batch_index].im = np.concatenate((im1, im2), axis=2)
+            try:
+                im1 = cv2_read_file_rgb(os.path.join(datadir, filename1), as_grayscale=settings._calculated_is_gray_model)
+                im2 = cv2_read_file_rgb(os.path.join(datadir, filename2), as_grayscale=settings._calculated_is_gray_model)
+                im1 = resize_without_fit(im1, net_input_dims)
+                im2 = resize_without_fit(im2, net_input_dims)
+                batch[batch_index].im = np.concatenate((im1, im2), axis=2)
+            except:
+                continue
 
         batch_index += 1
 

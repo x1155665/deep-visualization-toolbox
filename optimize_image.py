@@ -176,7 +176,7 @@ def main():
     if settings.caffevis_labels:
         labels = read_label_file(settings.caffevis_labels)
 
-    if data_mean:
+    if data_mean is not None:
         if len(data_mean.shape) == 3:
             batched_data_mean = np.repeat(data_mean[np.newaxis, :, :, :], args.batch_size, axis=0)
         elif len(data_mean.shape) == 1:

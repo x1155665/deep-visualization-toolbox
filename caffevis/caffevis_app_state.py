@@ -141,7 +141,11 @@ class CaffeVisAppState(object):
             # Conv example: (1, 96, 55, 55)
             # FC example: (1, 1000)
             blob_shape = net.blobs[key].data.shape
-            assert len(blob_shape) in (2,4), 'Expected either 2 for FC or 4 for conv layer'
+
+            # handle case when output is a single number per image in the batch
+            if (len(blob_shape) == 1):
+                blob_shape = (blob_shape[0], 1)
+
             self.net_blob_info[key]['isconv'] = (len(blob_shape) == 4)
             self.net_blob_info[key]['data_shape'] = blob_shape[1:]  # Chop off batch size
             self.net_blob_info[key]['n_tiles'] = blob_shape[1]
