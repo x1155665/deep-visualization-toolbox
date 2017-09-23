@@ -194,7 +194,7 @@ class SiameseHelper(object):
         return default_layer_name
 
     @staticmethod
-    def _get_single_selected_layer_name(layer_def, siamese_input_mode):
+    def get_single_selected_layer_name(layer_def, siamese_input_mode):
 
         if layer_def['format'] == 'normal':
             return layer_def['name/s']
@@ -379,7 +379,7 @@ class SiameseHelper(object):
             # add batch dimension
             diffs = expand_dims(diffs, 0)
 
-            selected_backprop_layer_name = SiameseHelper._get_single_selected_layer_name(backprop_layer_def, siamese_input_mode)
+            selected_backprop_layer_name = SiameseHelper.get_single_selected_layer_name(backprop_layer_def, siamese_input_mode)
             net.backward_from_layer(selected_backprop_layer_name, diffs, zero_higher=True)
 
         pass
@@ -420,7 +420,7 @@ class SiameseHelper(object):
             # add batch dimension
             diffs = expand_dims(diffs, 0)
 
-            selected_backprop_layer_name = SiameseHelper._get_single_selected_layer_name(backprop_layer_def, siamese_input_mode)
+            selected_backprop_layer_name = SiameseHelper.get_single_selected_layer_name(backprop_layer_def, siamese_input_mode)
             net.deconv_from_layer(selected_backprop_layer_name, diffs, zero_higher=True, deconv_type=deconv_type)
 
     @staticmethod

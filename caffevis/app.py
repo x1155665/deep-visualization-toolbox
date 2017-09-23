@@ -1073,7 +1073,18 @@ class CaffeVisApp(BaseApp):
 
         else: # One of the backprop modes is enabled and the back computation (gradient or deconv) is up to date
 
-            grad_blob = self.net.blobs['data'].diff
+            # if selection is not frozen we use the input layer as target for visualization
+            if not self.state.backprop_selection_frozen:
+                grad_blob = self.net.blobs['data'].diff
+            else: # otherwise, we use the currently selected layer as target for visualization
+                selected_layer_def = self.state.get_current_layer_definition()
+                selected_layer_name = SiameseHelper.get_single_selected_layer_name(selected_layer_def, self.state.siamese_input_mode)
+
+                if self.net.blobs.has_key(selected_layer_name) and len(self.net.blobs[selected_layer_name].diff.shape) == 4:
+                    grad_blob = self.net.blobs[selected_layer_name].diff
+                else:
+                    # fallback to input layer
+                    grad_blob = self.net.blobs['data'].diff
 
             # Manually deprocess (skip mean subtraction and rescaling)
             #grad_img = self.net.deprocess('data', diff_blob)
