@@ -207,7 +207,7 @@ class CaffeVisApp(BaseApp):
         clr_0 = to_255(self.settings.caffevis_class_clr_0)
         clr_1 = to_255(self.settings.caffevis_class_clr_1)
 
-        probs_flat = self.net.blobs[self.settings.caffevis_prob_layer].data.flatten()
+        probs_flat = self.net.blobs[layer_name_to_top_name(self.net, self.settings.caffevis_prob_layer)].data.flatten()
         top_5 = probs_flat.argsort()[-1:-6:-1]
 
         strings = []
@@ -1079,9 +1079,9 @@ class CaffeVisApp(BaseApp):
             else: # otherwise, we use the currently selected layer as target for visualization
                 selected_layer_def = self.state.get_current_layer_definition()
                 selected_layer_name = SiameseHelper.get_single_selected_layer_name(selected_layer_def, self.state.siamese_input_mode)
-
-                if self.net.blobs.has_key(selected_layer_name) and len(self.net.blobs[selected_layer_name].diff.shape) == 4:
-                    grad_blob = self.net.blobs[selected_layer_name].diff
+                selected_top_name = layer_name_to_top_name(self.net, selected_layer_name)
+                if self.net.blobs.has_key(selected_top_name) and len(self.net.blobs[selected_top_name].diff.shape) == 4:
+                    grad_blob = self.net.blobs[selected_top_name].diff
                 else:
                     # fallback to input layer
                     grad_blob = self.net.blobs['data'].diff

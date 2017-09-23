@@ -295,10 +295,10 @@ class SiameseHelper(object):
             raise Exception('function get_siamese_blobs() should not be called when layer is in normal format')
 
         elif layer_def['format'] == 'siamese_layer_pair':
-            return blob_selector(net.blobs[layer_def['name/s'][0]])[0], blob_selector(net.blobs[layer_def['name/s'][1]])[0]
+            return blob_selector(net.blobs[layer_name_to_top_name(net, layer_def['name/s'][0])])[0], blob_selector(net.blobs[layer_name_to_top_name(net, layer_def['name/s'][1])])[0]
 
         elif layer_def['format'] == 'siamese_batch_pair':
-            return blob_selector(net.blobs[layer_def['name/s']])[0], blob_selector(net.blobs[layer_def['name/s']])[1]
+            return blob_selector(net.blobs[layer_name_to_top_name(net, layer_def['name/s'])])[0], blob_selector(net.blobs[layer_name_to_top_name(net, layer_def['name/s'])])[1]
 
         else:
             raise Exception("get_siamese_blobs() got invalid layer_def['format']=%s" % layer_def['format'])
