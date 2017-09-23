@@ -425,9 +425,14 @@ def scan_images_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
             print '%s   Image %d/%d' % (datetime.now().ctime(), batch[batch_index].image_idx, len(image_filenames))
 
         with WithTimer('Load image', quiet = not do_print):
-            batch[batch_index].im = cv2_read_file_rgb(os.path.join(datadir, batch[batch_index].filename), as_grayscale=settings._calculated_is_gray_model)
-            batch[batch_index].im = resize_without_fit(batch[batch_index].im, net_input_dims)
-            batch[batch_index].im = batch[batch_index].im.astype(np.float32)
+            try:
+                batch[batch_index].im = cv2_read_file_rgb(os.path.join(datadir, batch[batch_index].filename), as_grayscale=settings._calculated_is_gray_model)
+                batch[batch_index].im = resize_without_fit(batch[batch_index].im, net_input_dims)
+                batch[batch_index].im = batch[batch_index].im.astype(np.float32)
+            except:
+                # skip bad/missing inputs
+                print "WARNING: skipping bad/missing input:", batch[batch_index].filename
+                continue
 
         batch_index += 1
 
@@ -496,6 +501,8 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
                 im2 = resize_without_fit(im2, net_input_dims)
                 batch[batch_index].im = np.concatenate((im1, im2), axis=2)
             except:
+                # skip bad/missing inputs
+                print "WARNING: skipping bad/missing inputs:", filename1, filename2
                 continue
 
         batch_index += 1
