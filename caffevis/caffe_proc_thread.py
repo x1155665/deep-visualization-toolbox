@@ -87,9 +87,15 @@ class CaffeProcThread(CodependentThread):
                     frame1 = frame[0]
                     frame2 = frame[1]
 
-                    im_small1 = resize_without_fit(frame1, self.input_dims)
-                    im_small2 = resize_without_fit(frame2, self.input_dims)
-                    im_small = np.concatenate( (im_small1, im_small2), axis=2)
+                    if self.settings.siamese_input_mode == 'concat_channelwise':
+                        im_small1 = resize_without_fit(frame1, self.input_dims)
+                        im_small2 = resize_without_fit(frame2, self.input_dims)
+                        im_small = np.concatenate( (im_small1, im_small2), axis=2)
+                    elif self.settings.siamese_input_mode == 'concat_along_width':
+                        half_input_dims = (self.input_dims[0],self.input_dims[1]/2)
+                        im_small1 = resize_without_fit(frame1, half_input_dims)
+                        im_small2 = resize_without_fit(frame2, half_input_dims)
+                        im_small = np.concatenate( (im_small1, im_small2), axis=1)
 
                 else:
                     im_small = resize_without_fit(frame, self.input_dims)

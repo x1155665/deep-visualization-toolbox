@@ -217,6 +217,7 @@ def extract_patch_from_image(data, net, selected_input_index, settings,
 
         # input is first image so select first 3 channels
         if selected_input_index == 0:
+
             out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
             out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = data[0:3,
                                                                            data_ii_start:data_ii_end,
@@ -229,13 +230,21 @@ def extract_patch_from_image(data, net, selected_input_index, settings,
                                                                            data_jj_start:data_jj_end]
         # input is both images so select concatenate data horizontally
         elif selected_input_index == -1:
-            out_arr = np.zeros((3, size_ii, size_jj * 2), dtype='float32')
-            out_arr[:, out_ii_start:out_ii_end, (0 + out_jj_start):(0 + out_jj_end)] = data[0:3,
-                                                                                       data_ii_start:data_ii_end,
-                                                                                       data_jj_start:data_jj_end]
-            out_arr[:, out_ii_start:out_ii_end, (size_jj + out_jj_start):(size_jj + out_jj_end)] = data[3:6,
-                                                                                                   data_ii_start:data_ii_end,
-                                                                                                   data_jj_start:data_jj_end]
+
+            if settings.siamese_input_mode == 'concat_channelwise':
+                out_arr = np.zeros((3, size_ii, size_jj * 2), dtype='float32')
+                out_arr[:, out_ii_start:out_ii_end, (0 + out_jj_start):(0 + out_jj_end)] = data[0:3,
+                                                                                           data_ii_start:data_ii_end,
+                                                                                           data_jj_start:data_jj_end]
+                out_arr[:, out_ii_start:out_ii_end, (size_jj + out_jj_start):(size_jj + out_jj_end)] = data[3:6,
+                                                                                                       data_ii_start:data_ii_end,
+                                                                                                       data_jj_start:data_jj_end]
+            elif settings.siamese_input_mode == 'concat_along_width':
+                out_arr = np.zeros((3, size_ii, size_jj), dtype='float32')
+                out_arr[:, out_ii_start:out_ii_end, out_jj_start:out_jj_end] = data[:,
+                                                                               data_ii_start:data_ii_end,
+                                                                               data_jj_start:data_jj_end]
+
         else:
             print "Error: invalid value for selected_input_index (", selected_input_index, ")"
     else:

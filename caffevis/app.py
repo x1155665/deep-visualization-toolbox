@@ -1102,8 +1102,14 @@ class CaffeVisApp(BaseApp):
                 if self.settings.is_siamese:
 
                     # split image to image0 and image1
-                    image0 = image[:, :, 0:3]
-                    image1 = image[:, :, 3:6]
+                    if self.settings.siamese_input_mode == 'concat_channelwise':
+                        image0 = image[:, :, 0:3]
+                        image1 = image[:, :, 3:6]
+
+                    elif self.settings.siamese_input_mode == 'concat_along_width':
+                        half_width = image.shape[1] / 2
+                        image0 = image[:, :half_width, :]
+                        image1 = image[:, half_width:, :]
 
                     # combine image0 and image1
                     if self.state.siamese_input_mode == SiameseInputMode.FIRST_IMAGE:

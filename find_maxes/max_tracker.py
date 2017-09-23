@@ -497,9 +497,18 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
             try:
                 im1 = cv2_read_file_rgb(os.path.join(datadir, filename1), as_grayscale=settings._calculated_is_gray_model)
                 im2 = cv2_read_file_rgb(os.path.join(datadir, filename2), as_grayscale=settings._calculated_is_gray_model)
-                im1 = resize_without_fit(im1, net_input_dims)
-                im2 = resize_without_fit(im2, net_input_dims)
-                batch[batch_index].im = np.concatenate((im1, im2), axis=2)
+
+                if settings.siamese_input_mode == 'concat_channelwise':
+                    im1 = resize_without_fit(im1, net_input_dims)
+                    im2 = resize_without_fit(im2, net_input_dims)
+                    batch[batch_index].im = np.concatenate((im1, im2), axis=2)
+
+                elif settings.siamese_input_mode == 'concat_along_width':
+                    half_input_dims = (net_input_dims[0], net_input_dims[1] / 2)
+                    im1 = resize_without_fit(im1, half_input_dims)
+                    im2 = resize_without_fit(im2, half_input_dims)
+                    batch[batch_index].im = np.concatenate((im1, im2), axis=1)
+
             except:
                 # skip bad/missing inputs
                 print "WARNING: skipping bad/missing inputs:", filename1, filename2
@@ -752,12 +761,27 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                     im1 = cv2_read_file_rgb(os.path.join(datadir, filename1), as_grayscale=settings._calculated_is_gray_model)
                     im2 = cv2_read_file_rgb(os.path.join(datadir, filename2), as_grayscale=settings._calculated_is_gray_model)
 
-                    # resize images according to input dimension
-                    im1 = resize_without_fit(im1, net_input_dims)
-                    im2 = resize_without_fit(im2, net_input_dims)
+                    if settings.siamese_input_mode == 'concat_channelwise':
 
-                    # concatenate channelwise
-                    batch[batch_index].im = np.concatenate((im1, im2), axis=2)
+                        # resize images according to input dimension
+                        im1 = resize_without_fit(im1, net_input_dims)
+                        im2 = resize_without_fit(im2, net_input_dims)
+
+                        # concatenate channelwise
+                        batch[batch_index].im = np.concatenate((im1, im2), axis=2)
+
+                        # convert to float to avoid caffe destroying the image in the scaling phase
+                        batch[batch_index].im = batch[batch_index].im.astype(np.float32)
+
+                    elif settings.siamese_input_mode == 'concat_along_width':
+                        half_input_dims = (net_input_dims[0], net_input_dims[1] / 2)
+                        im1 = resize_without_fit(im1, half_input_dims)
+                        im2 = resize_without_fit(im2, half_input_dims)
+                        batch[batch_index].im = np.concatenate((im1, im2), axis=1)
+
+                        # convert to float to avoid caffe destroying the image in the scaling phase
+                        batch[batch_index].im = batch[batch_index].im.astype(np.float32)
+
                 else:
                     # load image
                     batch[batch_index].im = cv2_read_file_rgb(os.path.join(datadir, batch[batch_index].filename), as_grayscale=settings._calculated_is_gray_model)

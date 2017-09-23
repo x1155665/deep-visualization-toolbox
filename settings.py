@@ -119,6 +119,9 @@ is_siamese = locals().get('is_siamese', False)
 # siamese network format, can be either 'siamese_layer_pair' or 'siamese_batch_pair'
 siamese_network_format = locals().get('siamese_network_format', 'siamese_layer_pair')
 
+# siamese input mode, can be either 'concat_channelwise' or 'concat_along_width'
+siamese_input_mode = locals().get('siamese_input_mode', 'concat_channelwise')
+
 # contains the input mode for reading static images, can be: 'directory', 'image_list'
 static_files_input_mode = locals().get('static_files_input_mode', 'directory')
 

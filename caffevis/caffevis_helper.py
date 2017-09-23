@@ -26,16 +26,6 @@ def net_preproc_forward(settings, net, img, data_hw):
     data_blob = data_blob[np.newaxis,:,:,:]                   # e.g. (1, 3, 227, 227)
     output = net.forward(data=data_blob)
 
-    # DEBUG CODE
-    if False:
-        print "*** hidden1.weights.shape:", net.params['linear_logits'][0].data.shape
-        print "*** hidden1.weights.data:\n", net.params['linear_logits'][0].data
-        print "*** hidden1.bias.shape:", net.params['linear_logits'][1].data.shape
-        print "*** hidden1.bias.data:\n", net.params['linear_logits'][1].data
-        print "*** hidden1.shape:", net.blobs['hidden1'].data.shape
-        print "*** hidden1.data:\n", net.blobs['hidden1'].data
-        print "*** calculated prediction:", (np.dot(net.params['linear_logits'][0].data, net.blobs['hidden1'].data.transpose()) + net.params['linear_logits'][1].data)
-
     return output
 
 
