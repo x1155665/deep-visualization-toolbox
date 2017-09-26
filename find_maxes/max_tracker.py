@@ -8,7 +8,7 @@ import cv2
 
 import numpy as np
 from misc import mkdir_p, get_files_list
-from image_misc import cv2_read_file_rgb, resize_without_fit
+from image_misc import resize_without_fit
 from caffe_misc import RegionComputer, save_caffe_image, get_max_data_extent, extract_patch_from_image, \
     compute_data_layer_focus_area, layer_name_to_top_name
 from siamese_helper import SiameseHelper
@@ -221,13 +221,6 @@ class MaxTracker(object):
             else:
                 self.max_locs[ii,idx-1] = (image_idx, image_class, selected_input_index)
 
-    def run_post_processing(self, layer_name, outdir, do_histograms):
-
-        if do_histograms:
-            self.calculate_histogram(layer_name, outdir)
-
-        pass
-
     def calculate_histogram(self, layer_name, outdir):
 
         # convert list of arrays to numpy array
@@ -360,17 +353,17 @@ class NetMaxTracker(object):
 
         pass
 
-    def run_post_processing(self, outdir, do_histograms):
+    def calculate_histograms(self, outdir):
 
-        print "run_post_processing on network"
+        print "calculate_histograms on network"
         for layer_name in self.layers:
-            print "run_post_processing on layer %s" % layer_name
+            print "calculate_histogram on layer %s" % layer_name
 
             # normalize layer name, this is used for siamese networks where we want layers "conv_1" and "conv_1_p" to
             # count as the same layer in terms of activations
             normalized_layer_name = self.siamese_helper.normalize_layer_name_for_max_tracker(layer_name)
 
-            self.max_trackers[normalized_layer_name].run_post_processing(layer_name, outdir, do_histograms)
+            self.max_trackers[normalized_layer_name].calculate_histogram(layer_name, outdir)
 
         pass
 
@@ -392,7 +385,7 @@ class NetMaxTracker(object):
         self.settings = None
         self.siamese_helper = None
 
-def scan_images_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
+def scan_images_for_maxes(settings, net, datadir, n_top, outdir):
     image_filenames, image_labels = get_files_list(settings, True)
     print 'Scanning %d files' % len(image_filenames)
     print '  First file', os.path.join(datadir, image_filenames[0])
@@ -426,7 +419,7 @@ def scan_images_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
 
         with WithTimer('Load image', quiet = not do_print):
             try:
-                batch[batch_index].im = cv2_read_file_rgb(os.path.join(datadir, batch[batch_index].filename), as_grayscale=settings._calculated_is_gray_model)
+                batch[batch_index].im = caffe.io.load_image(os.path.join(datadir, batch[batch_index].filename), color=not settings._calculated_is_gray_model)
                 batch[batch_index].im = resize_without_fit(batch[batch_index].im, net_input_dims)
                 batch[batch_index].im = batch[batch_index].im.astype(np.float32)
             except:
@@ -453,13 +446,11 @@ def scan_images_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
 
             batch_index = 0
 
-    tracker.run_post_processing(outdir, do_histograms)
-
     print 'done!'
     return tracker
 
 
-def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
+def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir):
     image_filenames, image_labels = get_files_list(settings, True)
     print 'Scanning %d pairs' % len(image_filenames)
     print '  First pair', image_filenames[0]
@@ -495,9 +486,9 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
 
         with WithTimer('Load image', quiet=not do_print):
             try:
-                im1 = cv2_read_file_rgb(os.path.join(datadir, filename1), as_grayscale=settings._calculated_is_gray_model)
-                im2 = cv2_read_file_rgb(os.path.join(datadir, filename2), as_grayscale=settings._calculated_is_gray_model)
-
+                im1 = caffe.io.load_image(os.path.join(datadir, filename1), color=not settings._calculated_is_gray_model)
+                im2 = caffe.io.load_image(os.path.join(datadir, filename2), color=not settings._calculated_is_gray_model)
+                
                 if settings.siamese_input_mode == 'concat_channelwise':
                     im1 = resize_without_fit(im1, net_input_dims)
                     im2 = resize_without_fit(im2, net_input_dims)
@@ -508,7 +499,7 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
                     im1 = resize_without_fit(im1, half_input_dims)
                     im2 = resize_without_fit(im2, half_input_dims)
                     batch[batch_index].im = np.concatenate((im1, im2), axis=1)
-
+                    
             except:
                 # skip bad/missing inputs
                 print "WARNING: skipping bad/missing inputs:", filename1, filename2
@@ -530,8 +521,6 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, do_histograms):
                     tracker.update(net, batch[i].image_idx, batch[i].image_class, net_unique_input_source=batch[i].images_pair, batch_index=i)
 
             batch_index = 0
-
-    tracker.run_post_processing(outdir, do_histograms)
 
     print 'done!'
     return tracker
@@ -562,7 +551,7 @@ def save_representations(settings, net, datadir, filelist, layer_name, first_N =
         if do_print:
             print '%s   Image %d/%d' % (datetime.now().ctime(), image_idx, len(image_indices))
         with WithTimer('Load image', quiet = not do_print):
-            im = cv2_read_file_rgb(os.path.join(datadir, filename), as_grayscale=settings._calculated_is_gray_model)
+            im = caffe.io.load_image(os.path.join(datadir, filename), color=not settings._calculated_is_gray_model)
         with WithTimer('Predict   ', quiet = not do_print):
             net.predict([im], oversample = False)   # Just take center crop
         with WithTimer('Store     ', quiet = not do_print):
@@ -758,8 +747,8 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                     filename2 = batch[batch_index].filename[1]
 
                     # load both images
-                    im1 = cv2_read_file_rgb(os.path.join(datadir, filename1), as_grayscale=settings._calculated_is_gray_model)
-                    im2 = cv2_read_file_rgb(os.path.join(datadir, filename2), as_grayscale=settings._calculated_is_gray_model)
+                    im1 = caffe.io.load_image(os.path.join(datadir, filename1), color=not settings._calculated_is_gray_model)
+                    im2 = caffe.io.load_image(os.path.join(datadir, filename2), color=not settings._calculated_is_gray_model)
 
                     if settings.siamese_input_mode == 'concat_channelwise':
 
@@ -784,7 +773,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
 
                 else:
                     # load image
-                    batch[batch_index].im = cv2_read_file_rgb(os.path.join(datadir, batch[batch_index].filename), as_grayscale=settings._calculated_is_gray_model)
+                    batch[batch_index].im = caffe.io.load_image(os.path.join(datadir, batch[batch_index].filename), color=not settings._calculated_is_gray_model)
 
                     # resize images according to input dimension
                     batch[batch_index].im = resize_without_fit(batch[batch_index].im, net_input_dims)

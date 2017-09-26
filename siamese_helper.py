@@ -1,10 +1,10 @@
 import os
-# import numpy as np
+import numpy as np
 from numpy import expand_dims, concatenate
 from caffe_misc import layer_name_to_top_name
 from image_misc import resize_without_fit
 
-class SiameseInputMode:
+class SiameseViewMode:
     FIRST_IMAGE = 0
     SECOND_IMAGE = 1
     BOTH_IMAGES = 2
@@ -194,18 +194,18 @@ class SiameseHelper(object):
         return default_layer_name
 
     @staticmethod
-    def get_single_selected_layer_name(layer_def, siamese_input_mode):
+    def get_single_selected_layer_name(layer_def, siamese_view_mode):
 
         if layer_def['format'] == 'normal':
             return layer_def['name/s']
 
         elif layer_def['format'] == 'siamese_layer_pair':
-            if siamese_input_mode == SiameseInputMode.FIRST_IMAGE:
+            if siamese_view_mode == SiameseViewMode.FIRST_IMAGE:
                 return layer_def['name/s'][0]
-            elif siamese_input_mode == SiameseInputMode.SECOND_IMAGE:
+            elif siamese_view_mode == SiameseViewMode.SECOND_IMAGE:
                 return layer_def['name/s'][1]
             else:
-                raise Exception('in get_single_selected_blob() siamese_input_mode cant be BOTH')
+                raise Exception('in get_single_selected_blob() siamese_view_mode cant be BOTH')
 
         elif layer_def['format'] == 'siamese_batch_pair':
             return layer_def['name/s']
@@ -214,7 +214,7 @@ class SiameseHelper(object):
             raise Exception("get_single_selected_blob() got invalid layer_def['format']=%s" % layer_def['format'])
 
     @staticmethod
-    def _get_single_selected_blob(net, layer_def, siamese_input_mode, blob_selector):
+    def _get_single_selected_blob(net, layer_def, siamese_view_mode, blob_selector):
         '''
         function used to extract the single selected blob according to the specified layer and siamese input mode and
         blob selector.
@@ -222,7 +222,7 @@ class SiameseHelper(object):
         this is the main function which contains logic on the siamese network internal format structure
         :param net: network containing the blob to extract
         :param layer_def: layer requested
-        :param siamese_input_mode: siamese input mode
+        :param siamese_view_mode: siamese view mode
         :param blob_selector: lambda function which lets us choose between data and diff blobs
         :return: requested single blob
         '''
@@ -231,21 +231,21 @@ class SiameseHelper(object):
             return blob_selector(net.blobs[layer_name_to_top_name(net, layer_def['name/s'])])[0]
 
         elif layer_def['format'] == 'siamese_layer_pair':
-            if siamese_input_mode == SiameseInputMode.FIRST_IMAGE:
+            if siamese_view_mode == SiameseViewMode.FIRST_IMAGE:
                 selected_layer_name = layer_def['name/s'][0]
-            elif siamese_input_mode == SiameseInputMode.SECOND_IMAGE:
+            elif siamese_view_mode == SiameseViewMode.SECOND_IMAGE:
                 selected_layer_name = layer_def['name/s'][1]
             else:
-                raise Exception('in get_single_selected_blob() siamese_input_mode cant be BOTH')
+                raise Exception('in get_single_selected_blob() siamese_view_mode cant be BOTH')
             return blob_selector(net.blobs[layer_name_to_top_name(net, selected_layer_name)])[0]
 
         elif layer_def['format'] == 'siamese_batch_pair':
-            if siamese_input_mode == SiameseInputMode.FIRST_IMAGE:
+            if siamese_view_mode == SiameseViewMode.FIRST_IMAGE:
                 selected_batch_index = 0
-            elif siamese_input_mode == SiameseInputMode.SECOND_IMAGE:
+            elif siamese_view_mode == SiameseViewMode.SECOND_IMAGE:
                 selected_batch_index = 1
             else:
-                raise Exception('in get_single_selected_blob() siamese_input_mode cant be BOTH')
+                raise Exception('in get_single_selected_blob() siamese_view_mode cant be BOTH')
             return blob_selector(net.blobs[layer_name_to_top_name(net, layer_def['name/s'])])[selected_batch_index]
 
         else:
@@ -253,40 +253,40 @@ class SiameseHelper(object):
 
 
     @staticmethod
-    def get_single_selected_data_blob(net, layer_def, siamese_input_mode):
+    def get_single_selected_data_blob(net, layer_def, siamese_view_mode):
         '''
         function used to extract the single selected DATA blob according to the specified layer and siamese input mode
          note that it is invalid to call this function when siamese input mode is BOTH
         :param net: network containing the blob to extract
         :param layer_def: layer requested
-        :param siamese_input_mode: siamese input mode
+        :param siamese_view_mode: siamese view mode
         :return: requested single data blob
         '''
 
-        return SiameseHelper._get_single_selected_blob(net, layer_def, siamese_input_mode, blob_selector=lambda layer_object: layer_object.data)
+        return SiameseHelper._get_single_selected_blob(net, layer_def, siamese_view_mode, blob_selector=lambda layer_object: layer_object.data)
 
     @staticmethod
-    def get_single_selected_diff_blob(net, layer_def, siamese_input_mode):
+    def get_single_selected_diff_blob(net, layer_def, siamese_view_mode):
         '''
         function used to extract the single selected DIFF blob according to the specified layer and siamese input mode
          note that it is invalid to call this function when siamese input mode is BOTH
         :param net: network containing the blob to extract
         :param layer_def: layer requested
-        :param siamese_input_mode: siamese input mode
+        :param siamese_view_mode: siamese view mode
         :return: requested single diff blob
         '''
 
-        return SiameseHelper._get_single_selected_blob(net, layer_def, siamese_input_mode, blob_selector=lambda layer_object: layer_object.diff)
+        return SiameseHelper._get_single_selected_blob(net, layer_def, siamese_view_mode, blob_selector=lambda layer_object: layer_object.diff)
 
     @staticmethod
-    def _get_siamese_selected_blobs(net, layer_def, siamese_input_mode, blob_selector):
+    def _get_siamese_selected_blobs(net, layer_def, siamese_view_mode, blob_selector):
         '''
         function used to extract both blobs according to the specified layer and siamese input mode and
         blob selector.
         this is the main function which contains logic on the siamese network internal format structure
         :param net: network containing the blob to extract
         :param layer_def: layer requested
-        :param siamese_input_mode: siamese input mode
+        :param siamese_view_mode: siamese view mode
         :param blob_selector:
         :return: first_blob, second_blob
         '''
@@ -304,30 +304,30 @@ class SiameseHelper(object):
             raise Exception("get_siamese_blobs() got invalid layer_def['format']=%s" % layer_def['format'])
 
     @staticmethod
-    def get_siamese_selected_data_blobs(net, layer_def, siamese_input_mode):
+    def get_siamese_selected_data_blobs(net, layer_def, siamese_view_mode):
         '''
         function used to extract both DATA blobs according to the specified layer and siamese input mode
          note that it is invalid to call this function when siamese input mode is not BOTH
         :param net: network containing the blob to extract
         :param layer_def: layer requested
-        :param siamese_input_mode: siamese input mode
+        :param siamese_view_mode: siamese view mode
         :return: first_blob, second_blob
         '''
 
-        return SiameseHelper._get_siamese_selected_blobs(net, layer_def, siamese_input_mode, blob_selector=lambda layer_object: layer_object.data)
+        return SiameseHelper._get_siamese_selected_blobs(net, layer_def, siamese_view_mode, blob_selector=lambda layer_object: layer_object.data)
 
     @staticmethod
-    def get_siamese_selected_diff_blobs(net, layer_def, siamese_input_mode):
+    def get_siamese_selected_diff_blobs(net, layer_def, siamese_view_mode):
         '''
         function used to extract both DIFF blobs according to the specified layer and siamese input mode
          note that it is invalid to call this function when siamese input mode is not BOTH
         :param net: network containing the blob to extract
         :param layer_def: layer requested
-        :param siamese_input_mode: siamese input mode
+        :param siamese_view_mode: siamese view mode
         :return: first_blob, second_blob
         '''
 
-        return SiameseHelper._get_siamese_selected_blobs(net, layer_def, siamese_input_mode, blob_selector=lambda layer_object: layer_object.diff)
+        return SiameseHelper._get_siamese_selected_blobs(net, layer_def, siamese_view_mode, blob_selector=lambda layer_object: layer_object.diff)
 
     @staticmethod
     def is_pair_of_layers(layer_def):
@@ -335,26 +335,26 @@ class SiameseHelper(object):
         return layer_def['format'] in ['siamese_layer_pair', 'siamese_batch_pair']
 
     @staticmethod
-    def siamese_input_mode_has_two_images(layer_def, siamese_input_mode):
+    def siamese_view_mode_has_two_images(layer_def, siamese_view_mode):
         '''
         helper function which checks whether the input mode is two images, and the provided layer contains two layer names
         :param layer: can be a single string layer name, or a pair of layer names
         :return: True if both the input mode is BOTH_IMAGES and layer contains two layer names, False oherwise
         '''
 
-        return siamese_input_mode == SiameseInputMode.BOTH_IMAGES and SiameseHelper.is_pair_of_layers(layer_def)
+        return siamese_view_mode == SiameseViewMode.BOTH_IMAGES and SiameseHelper.is_pair_of_layers(layer_def)
 
     @staticmethod
-    def backward_from_layer(net, backprop_layer_def, backprop_unit, siamese_input_mode):
+    def backward_from_layer(net, backprop_layer_def, backprop_unit, siamese_view_mode):
 
-        # if we are in siamese_batch_pair, we don't care of siamese_input_mode since we must do deconv on the 2-batch
+        # if we are in siamese_batch_pair, we don't care of siamese_view_mode since we must do deconv on the 2-batch
         # otherwise, if we are in siamese_layer_pair, we do it on both layers only if backprop deconv are requested
         if (backprop_layer_def['format'] == 'siamese_batch_pair') or \
-            (backprop_layer_def['format'] == 'siamese_layer_pair' and siamese_input_mode == SiameseInputMode.BOTH_IMAGES):
+            (backprop_layer_def['format'] == 'siamese_layer_pair' and siamese_view_mode == SiameseViewMode.BOTH_IMAGES):
 
-            diffs0, diffs1 = SiameseHelper.get_siamese_selected_diff_blobs(net, backprop_layer_def, siamese_input_mode)
+            diffs0, diffs1 = SiameseHelper.get_siamese_selected_diff_blobs(net, backprop_layer_def, siamese_view_mode)
             diffs0, diffs1 = diffs0 * 0, diffs1 * 0
-            data0, data1 = SiameseHelper.get_siamese_selected_data_blobs(net, backprop_layer_def, siamese_input_mode)
+            data0, data1 = SiameseHelper.get_siamese_selected_data_blobs(net, backprop_layer_def, siamese_view_mode)
             diffs0[backprop_unit], diffs1[backprop_unit] = data0[backprop_unit], data1[backprop_unit]
 
             # add batch dimension
@@ -371,30 +371,30 @@ class SiameseHelper(object):
                 net.backward_from_layer(backprop_layer_def['name/s'], diffs, zero_higher=True)
         else:
 
-            diffs = SiameseHelper.get_single_selected_diff_blob(net, backprop_layer_def, siamese_input_mode)
+            diffs = SiameseHelper.get_single_selected_diff_blob(net, backprop_layer_def, siamese_view_mode)
             diffs = diffs * 0
-            data = SiameseHelper.get_single_selected_data_blob(net, backprop_layer_def, siamese_input_mode)
+            data = SiameseHelper.get_single_selected_data_blob(net, backprop_layer_def, siamese_view_mode)
             diffs[backprop_unit] = data[backprop_unit]
 
             # add batch dimension
             diffs = expand_dims(diffs, 0)
 
-            selected_backprop_layer_name = SiameseHelper.get_single_selected_layer_name(backprop_layer_def, siamese_input_mode)
+            selected_backprop_layer_name = SiameseHelper.get_single_selected_layer_name(backprop_layer_def, siamese_view_mode)
             net.backward_from_layer(selected_backprop_layer_name, diffs, zero_higher=True)
 
         pass
 
     @staticmethod
-    def deconv_from_layer(net, backprop_layer_def, backprop_unit, siamese_input_mode, deconv_type):
+    def deconv_from_layer(net, backprop_layer_def, backprop_unit, siamese_view_mode, deconv_type, unique=False):
 
-        # if we are in siamese_batch_pair, we don't care of siamese_input_mode since we must do deconv on the 2-batch
+        # if we are in siamese_batch_pair, we don't care of siamese_view_mode since we must do deconv on the 2-batch
         # otherwise, if we are in siamese_layer_pair, we do it on both layers only if both deconv are requested
         if (backprop_layer_def['format'] == 'siamese_batch_pair') or \
-            (backprop_layer_def['format'] == 'siamese_layer_pair' and siamese_input_mode == SiameseInputMode.BOTH_IMAGES):
+            (backprop_layer_def['format'] == 'siamese_layer_pair' and siamese_view_mode == SiameseViewMode.BOTH_IMAGES):
 
-            diffs0, diffs1 = SiameseHelper.get_siamese_selected_diff_blobs(net, backprop_layer_def, siamese_input_mode)
+            diffs0, diffs1 = SiameseHelper.get_siamese_selected_diff_blobs(net, backprop_layer_def, siamese_view_mode)
             diffs0, diffs1 = diffs0 * 0, diffs1 * 0
-            data0, data1 = SiameseHelper.get_siamese_selected_data_blobs(net, backprop_layer_def, siamese_input_mode)
+            data0, data1 = SiameseHelper.get_siamese_selected_data_blobs(net, backprop_layer_def, siamese_view_mode)
             diffs0[backprop_unit], diffs1[backprop_unit] = data0[backprop_unit], data1[backprop_unit]
 
             # add batch dimension
@@ -402,45 +402,153 @@ class SiameseHelper(object):
             diffs1 = expand_dims(diffs1, 0)
 
             if backprop_layer_def['format'] == 'siamese_layer_pair':
-                net.deconv_from_layer(backprop_layer_def['name/s'][0], diffs0, zero_higher=True, deconv_type=deconv_type)
-                net.deconv_from_layer(backprop_layer_def['name/s'][1], diffs1, zero_higher=True, deconv_type=deconv_type)
+                if not unique:
+                    net.deconv_from_layer(backprop_layer_def['name/s'][0], diffs0, zero_higher=True, deconv_type=deconv_type)
+                    net.deconv_from_layer(backprop_layer_def['name/s'][1], diffs1, zero_higher=True, deconv_type=deconv_type)
+                else:
+                    SiameseHelper.siamese_unique_deconv_from_layer(net, backprop_layer_def['name/s'][0], backprop_layer_def['name/s'][1], diffs0, diffs1, deconv_type)
 
             elif backprop_layer_def['format'] == 'siamese_batch_pair':
                 # combine them to 2-batch and send once
                 diffs = concatenate((diffs0, diffs1), axis=0)
-                net.deconv_from_layer(backprop_layer_def['name/s'], diffs, zero_higher=True, deconv_type=deconv_type)
 
-        else:
+                if not unique:
+                    net.deconv_from_layer(backprop_layer_def['name/s'], diffs, zero_higher=True, deconv_type=deconv_type)
 
-            diffs = SiameseHelper.get_single_selected_diff_blob(net, backprop_layer_def, siamese_input_mode)
+                else:  # unique deconv
+                    SiameseHelper.unique_deconv_from_layer(net, backprop_layer_def['name/s'], diffs, deconv_type)
+
+        else: # normal layer, or siamese layer but siamese input mode is 'first' or 'second'
+
+            diffs = SiameseHelper.get_single_selected_diff_blob(net, backprop_layer_def, siamese_view_mode)
             diffs = diffs * 0
-            data = SiameseHelper.get_single_selected_data_blob(net, backprop_layer_def, siamese_input_mode)
+            data = SiameseHelper.get_single_selected_data_blob(net, backprop_layer_def, siamese_view_mode)
             diffs[backprop_unit] = data[backprop_unit]
 
             # add batch dimension
             diffs = expand_dims(diffs, 0)
 
-            selected_backprop_layer_name = SiameseHelper.get_single_selected_layer_name(backprop_layer_def, siamese_input_mode)
-            net.deconv_from_layer(selected_backprop_layer_name, diffs, zero_higher=True, deconv_type=deconv_type)
+            selected_backprop_layer_name = SiameseHelper.get_single_selected_layer_name(backprop_layer_def, siamese_view_mode)
+
+            if not unique:
+                net.deconv_from_layer(selected_backprop_layer_name, diffs, zero_higher=True, deconv_type=deconv_type)
+
+            else: # unique deconv
+                SiameseHelper.unique_deconv_from_layer(net, selected_backprop_layer_name, diffs, deconv_type)
 
     @staticmethod
-    def get_image_from_frame(frame, is_siamese, image_shape, siamese_input_mode):
+    def unique_deconv_from_layer(net, selected_backprop_layer_name, diffs, deconv_type):
+        try:
+            # invert weights of selected layer
+            net.params[selected_backprop_layer_name][0].data[...] *= -1
+            # run deconv using invereted weights on last layer
+            net.deconv_from_layer(selected_backprop_layer_name, diffs, zero_higher=True, deconv_type=deconv_type)
+            # save gradients of first selected unit
+            first_dict = dict()
+            for key in net.blobs.keys():
+                # L1 normalize first signal
+                first = net.blobs[key].diff.copy()
+                sum_first = np.sum(np.abs(first))
+                first /= (sum_first + np.finfo(np.float32).eps)
+
+                # keep first signal
+                first_dict[key] = first
+
+            # invert weights back
+            net.params[selected_backprop_layer_name][0].data[...] *= -1
+            # run deconv using normal weights on last layer
+            net.deconv_from_layer(selected_backprop_layer_name, diffs, zero_higher=True, deconv_type=deconv_type)
+            for key in net.blobs.keys():
+                # L1 normalize current signal
+                current = net.blobs[key].diff.copy()
+                sum_current = np.sum(np.abs(current))
+                current /= (sum_current + np.finfo(np.float32).eps)
+
+                # get normalized first signal
+                first = first_dict[key]
+
+                net.blobs[key].diff[...] = current - first
+        except Exception as err:
+            print "ERROR while running unique_deconv_from_layer(), error:", str(err)
+            for key in net.blobs.keys():
+                net.blobs[key].diff[...] = 0
+
+    @staticmethod
+    def siamese_unique_deconv_from_layer(net, backprop_layer_name1, backprop_layer_name2, diffs1, diffs2, deconv_type):
+        try:
+            # invert weights of selected layer
+            # note: we only need to inverse the weights of the first layer, since they are shared
+            net.params[backprop_layer_name1][0].data[...] *= -1
+            # run deconv using invereted weights on last layer
+            net.deconv_from_layer(backprop_layer_name1, diffs1, zero_higher=True, deconv_type=deconv_type)
+            net.deconv_from_layer(backprop_layer_name2, diffs2, zero_higher=True, deconv_type=deconv_type)
+            # save gradients of first selected unit
+            first_dict = dict()
+            for key in net.blobs.keys():
+                # L1 normalize first signal
+                first = net.blobs[key].diff.copy()
+                sum_first = np.sum(np.abs(first))
+                first /= (sum_first + np.finfo(np.float32).eps)
+
+                # keep first signal
+                first_dict[key] = first
+
+            # invert weights back
+            net.params[backprop_layer_name1][0].data[...] *= -1
+            # run deconv using normal weights on last layer
+            net.deconv_from_layer(backprop_layer_name1, diffs1, zero_higher=True, deconv_type=deconv_type)
+            net.deconv_from_layer(backprop_layer_name2, diffs2, zero_higher=True, deconv_type=deconv_type)
+            for key in net.blobs.keys():
+                # L1 normalize current signal
+                current = net.blobs[key].diff.copy()
+                sum_current = np.sum(np.abs(current))
+                current /= (sum_current + np.finfo(np.float32).eps)
+
+                # get normalized first signal
+                first = first_dict[key]
+
+                net.blobs[key].diff[...] = current - first
+
+        except Exception as err:
+            print "ERROR while running siamese_unique_deconv_from_layer(), error:", str(err)
+            for key in net.blobs.keys():
+                net.blobs[key].diff[...] = 0
+
+    @staticmethod
+    def get_image_from_frame(frame, is_siamese, image_shape, siamese_view_mode):
 
         if is_siamese and ((type(frame),len(frame)) == (tuple,2)):
 
-            if siamese_input_mode == SiameseInputMode.BOTH_IMAGES:
+            if siamese_view_mode == SiameseViewMode.BOTH_IMAGES:
                 frame1 = frame[0]
                 frame2 = frame[1]
                 half_pane_shape = (image_shape[0], image_shape[1]/2)
                 frame_disp1 = resize_without_fit(frame1[:], half_pane_shape)
                 frame_disp2 = resize_without_fit(frame2[:], half_pane_shape)
                 frame_disp = concatenate((frame_disp1, frame_disp2), axis=1)
-            elif siamese_input_mode == SiameseInputMode.FIRST_IMAGE:
+
+            elif siamese_view_mode == SiameseViewMode.FIRST_IMAGE:
                 frame_disp = resize_without_fit(frame[0], image_shape)
-            elif siamese_input_mode == SiameseInputMode.SECOND_IMAGE:
+
+            elif siamese_view_mode == SiameseViewMode.SECOND_IMAGE:
                 frame_disp = resize_without_fit(frame[1], image_shape)
 
         else:
             frame_disp = resize_without_fit(frame[:], image_shape)
 
         return frame_disp
+
+    @staticmethod
+    def convert_image_pair_to_network_input_format(frame_pair, resize_shape, siamese_input_mode):
+
+        if siamese_input_mode == 'concat_channelwise':
+            im_small1 = resize_without_fit(frame_pair[0], resize_shape)
+            im_small2 = resize_without_fit(frame_pair[1], resize_shape)
+            im_small = np.concatenate((im_small1, im_small2), axis=2)
+        elif siamese_input_mode == 'concat_along_width':
+            half_input_dims = (resize_shape[0], resize_shape[1] / 2)
+            im_small1 = resize_without_fit(frame_pair[0], half_input_dims)
+            im_small2 = resize_without_fit(frame_pair[1], half_input_dims)
+            im_small = np.concatenate((im_small1, im_small2), axis=1)
+
+        return im_small

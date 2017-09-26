@@ -17,7 +17,7 @@ from siamese_helper import SiameseHelper
 from jby_misc import WithTimer
 from max_tracker import output_max_patches
 from find_max_acts import load_max_tracker_from_file
-from settings_misc import deduce_calculated_settings
+from settings_misc import load_network
 
 
 def main():
@@ -41,27 +41,10 @@ def main():
     parser.add_argument('--outdir',       type = str, default = settings.max_tracker_output_dir, help = 'Which output directory to use. Files are output into outdir/layer/unit_%%04d/{maxes,deconv,backprop}_%%03d.png')
     args = parser.parse_args()
 
-    sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
-    import caffe
+    settings.caffevis_deploy_prototxt = args.net_prototxt
+    settings.caffevis_network_weights = args.net_weights
 
-    if args.gpu:
-        caffe.set_mode_gpu()
-        print 'crop_max_patches mode (in main thread):     GPU'
-
-    else:
-        caffe.set_mode_cpu()
-        print 'crop_max_patches mode (in main thread):     CPU'
-
-    net = caffe.Classifier(args.net_prototxt,
-                           args.net_weights,
-                           mean=None,
-                           channel_swap=settings.caffe_net_channel_swap,
-                           raw_scale=settings.caffe_net_raw_scale,
-                           image_dims=settings.caffe_net_image_dims)
-
-    data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
-
-    deduce_calculated_settings(settings, net)
+    net, data_mean = load_network(settings)
 
     # validate batch size
     if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':

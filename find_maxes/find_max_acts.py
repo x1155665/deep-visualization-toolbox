@@ -16,7 +16,8 @@ import settings
 from caffevis.caffevis_helper import set_mean
 from jby_misc import WithTimer
 from max_tracker import scan_images_for_maxes, scan_pairs_for_maxes
-from settings_misc import deduce_calculated_settings
+from settings_misc import load_network
+
 from misc import mkdir_p
 
 def pickle_to_text(pickle_filename):
@@ -45,27 +46,10 @@ def main():
 
     args = parser.parse_args()
 
-    sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
-    import caffe
+    settings.caffevis_deploy_prototxt = args.net_prototxt
+    settings.caffevis_network_weights = args.net_weights
 
-    if args.gpu:
-        caffe.set_mode_gpu()
-        print 'find_max_acts mode (in main thread):     GPU'
-
-    else:
-        caffe.set_mode_cpu()
-        print 'find_max_acts mode (in main thread):     CPU'
-
-    net = caffe.Classifier(args.net_prototxt,
-                           args.net_weights,
-                           mean=None,
-                           channel_swap=settings.caffe_net_channel_swap,
-                           raw_scale=settings.caffe_net_raw_scale,
-                           image_dims=settings.caffe_net_image_dims)
-
-    data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
-
-    deduce_calculated_settings(settings, net)
+    net, data_mean = load_network(settings)
 
     # validate batch size
     if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
@@ -80,11 +64,15 @@ def main():
 
     with WithTimer('Scanning images'):
         if settings.is_siamese:
-            net_max_tracker = scan_pairs_for_maxes(settings, net, args.datadir, args.N, args.outdir, args.do_histograms)
+            net_max_tracker = scan_pairs_for_maxes(settings, net, args.datadir, args.N, args.outdir)
         else: # normal operation
-            net_max_tracker = scan_images_for_maxes(settings, net, args.datadir, args.N, args.outdir, args.do_histograms)
+            net_max_tracker = scan_images_for_maxes(settings, net, args.datadir, args.N, args.outdir)
 
     save_max_tracker_to_file(args.outfile, net_max_tracker)
+
+    if args.do_histograms:
+        net_max_tracker.calculate_histograms(args.outdir)
+
 
 
 def save_max_tracker_to_file(filename, net_max_tracker):

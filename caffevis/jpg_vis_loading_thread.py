@@ -7,13 +7,11 @@ import glob
 import math
 
 from codependent_thread import CodependentThread
-from image_misc import caffe_load_image, ensure_uint255_and_resize_to_fit, cv2_read_file_rgb, \
+from image_misc import caffe_load_image, ensure_uint255_and_resize_to_fit, \
     ensure_uint255_and_resize_without_fit
 from caffevis_helper import crop_to_corner, get_image_from_files
 
-
-
-
+import caffe
 
 class JPGVisLoadingThread(CodependentThread):
     '''Loads JPGs necessary for caffevis_jpgvis pane in separate
@@ -37,7 +35,7 @@ class JPGVisLoadingThread(CodependentThread):
                                 file_pattern % (state_layer_name, state_selected_unit))
 
         try:
-            img = cv2_read_file_rgb(jpg_path)
+            img = caffe.io.load_image(jpg_path)
 
             if should_crop_to_corner:
                 img = crop_to_corner(img, 2)

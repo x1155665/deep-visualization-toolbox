@@ -117,9 +117,9 @@ _.add('freeze_back_unit', 'd',
 _.add('show_back', 'a',
        'Toggle between showing forward activations and back/deconv diffs')
 _.add('next_back_view_option', 'n',
-       'Cycle through backprop view options (raw, raw>0, raw<0, gray, norm, normblur, max abs, histogram)')
+       'Cycle through backprop view options (raw, raw>0, raw<0, gray, norm, normblur, sum>0, histogram)')
 _.add('prev_back_view_option', 'N',
-       'Cycle through backprop view options (raw, raw>0, raw<0, gray, norm, normblur, max abs, histogram)')
+       'Cycle through backprop view options (raw, raw>0, raw<0, gray, norm, normblur, sum>0, histogram)')
 _.add('next_color_map', 'm',
        'Cycle through colormaps options (grayscale, jet, plasma)')
 _.add('prev_color_map', 'M',
@@ -134,8 +134,8 @@ _.add('toggle_label_predictions', '8',
 _.add('toggle_unit_jpgs', '9',
        'Turn on or off display of loaded jpg visualization')
 
-_.add('siamese_input_mode', 'v',
-        'Cycle between siamese input modes {first image, second image, both images}')
+_.add('siamese_view_mode', 'v',
+        'Cycle between siamese view modes {first image, second image, both images}')
 
 _.add('toggle_maximal_score', 'r',
         'Toggle showing maximal score overlays {on, off}')

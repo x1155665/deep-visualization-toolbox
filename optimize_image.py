@@ -8,7 +8,8 @@ import numpy as np
 import settings
 from optimize.gradient_optimizer import GradientOptimizer, FindParams
 from caffevis.caffevis_helper import check_force_backward_true, read_label_file, set_mean
-from settings_misc import deduce_calculated_settings, get_layer_info
+from settings_misc import load_network, get_layer_info
+
 
 LR_POLICY_CHOICES = ('constant', 'progress', 'progress01')
 
@@ -137,28 +138,10 @@ def main():
     lr_params = parse_and_validate_lr_params(parser, args.lr_policy, args.lr_params)
     push_spatial = parse_and_validate_push_spatial(parser, args.push_spatial)
 
-    # Load network
-    sys.path.insert(0, os.path.join(args.caffe_root, 'python'))
-    import caffe
-    if settings.caffevis_mode_gpu:
-        caffe.set_mode_gpu()
-        print 'optimize_image mode (in main thread):     GPU'
-    else:
-        caffe.set_mode_cpu()
-        print 'optimize_image mode (in main thread):     CPU'
+    settings.caffevis_deploy_prototxt = args.deploy_proto
+    settings.caffevis_network_weights = args.net_weights
 
-    net = caffe.Classifier(
-        args.deploy_proto,
-        args.net_weights,
-        mean=None,  # Set to None for now, assign later
-        channel_swap=settings.caffe_net_channel_swap,
-        raw_scale=settings.caffe_net_raw_scale,
-        image_dims=settings.caffe_net_image_dims,
-    )
-
-    data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
-
-    deduce_calculated_settings(settings, net)
+    net, data_mean = load_network(settings)
 
     # validate batch size
     if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':

@@ -355,8 +355,15 @@ caffevis_clear_negative_activations = locals().get('caffevis_clear_negative_acti
 # caffe net parameter - channel swap
 caffe_net_channel_swap = locals().get('caffe_net_channel_swap', (2,1,0))
 
-# caffe net parameter - raw scale
-caffe_net_raw_scale = locals().get('caffe_net_raw_scale', 1.0)
+# caffe net parameter - transpose, used to convert HxWxK to KxHxW, when None uses caffe default which is (2,0,1)
+# this parameter should rarely change
+caffe_net_transpose = locals().get('caffe_net_transpose', None)
+
+# caffe net parameter - raw scale, multiplies input BEFORE mean subtraction
+caffe_net_raw_scale = locals().get('caffe_net_raw_scale', None)
+
+# caffe net parameter - input scale, multiplies input AFTER mean subtraction
+caffe_net_input_scale = locals().get('caffe_net_input_scale', None)
 
 # caffe net parameter - image dims
 caffe_net_image_dims = locals().get('caffe_net_image_dims', None)

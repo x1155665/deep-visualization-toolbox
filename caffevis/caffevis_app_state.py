@@ -1,7 +1,7 @@
 import os
 import time
 from threading import Lock
-from siamese_helper import SiameseInputMode, SiameseHelper
+from siamese_helper import SiameseViewMode, SiameseHelper
 from caffe_misc import layer_name_to_top_name
 from image_misc import get_tiles_height_width_ratio, gray_to_colormap
 
@@ -18,7 +18,8 @@ class BackpropMode:
     GRAD = 1
     DECONV_ZF = 2
     DECONV_GB = 3
-    NUMBER_OF_MODES = 4
+    DECONV_UGB = 4
+    NUMBER_OF_MODES = 5
 
     @staticmethod
     def to_string(back_mode):
@@ -30,6 +31,8 @@ class BackpropMode:
             return 'deconv zf'
         elif back_mode == BackpropMode.DECONV_GB:
             return 'deconv gb'
+        elif back_mode == BackpropMode.DECONV_UGB:
+            return 'deconv ugb'
 
         return 'n/a'
 
@@ -41,7 +44,7 @@ class BackpropViewOption:
     GRAY = 3
     NORM = 4
     NORM_BLUR = 5
-    MAX_ABS = 6
+    POS_SUM = 6
     HISTOGRAM = 7
     NUMBER_OF_OPTIONS = 8
 
@@ -63,8 +66,8 @@ class BackpropViewOption:
             return 'normblur'
         elif back_view_option == BackpropViewOption.HISTOGRAM:
             return 'histogram'
-        elif back_view_option == BackpropViewOption.MAX_ABS:
-            return 'max abs'
+        elif back_view_option == BackpropViewOption.POS_SUM:
+            return 'sum>0'
 
         return 'n/a'
 
@@ -171,13 +174,13 @@ class CaffeVisAppState(object):
         self.layer_boost_gamma = self.layer_boost_gamma_choices[self.layer_boost_gamma_idx]
         self.cursor_area = 'top'   # 'top' or 'bottom'
         self.selected_unit = 0
-        self.siamese_input_mode = SiameseInputMode.BOTH_IMAGES
+        self.siamese_view_mode = SiameseViewMode.BOTH_IMAGES
 
         # Which layer and unit (or channel) to use for backprop
         self.backprop_layer_idx = self.layer_idx
         self.backprop_unit = self.selected_unit
         self.backprop_selection_frozen = False    # If false, backprop unit tracks selected unit
-        self.backprop_siamese_input_mode = SiameseInputMode.BOTH_IMAGES
+        self.backprop_siamese_view_mode = SiameseViewMode.BOTH_IMAGES
         self.back_enabled = False
         self.back_mode = BackpropMode.OFF
         self.back_view_option = BackpropViewOption.RAW
@@ -287,7 +290,7 @@ class CaffeVisAppState(object):
                     # Grap layer/selected_unit upon transition from non-frozen -> frozen
                     self.backprop_layer_idx = self.layer_idx
                     self.backprop_unit = self.selected_unit
-                    self.backprop_siamese_input_mode = self.siamese_input_mode
+                    self.backprop_siamese_view_mode = self.siamese_view_mode
             elif tag == 'zoom_mode':
                 self.layers_pane_zoom_mode = (self.layers_pane_zoom_mode + 1) % 3
                 if self.layers_pane_zoom_mode == 2 and not self.back_enabled:
@@ -300,9 +303,8 @@ class CaffeVisAppState(object):
             elif tag == 'toggle_unit_jpgs':
                 self.show_unit_jpgs = not self.show_unit_jpgs
 
-            elif tag == 'siamese_input_mode':
-                self.siamese_input_mode = (self.siamese_input_mode + 1) % SiameseInputMode.NUMBER_OF_MODES
-
+            elif tag == 'siamese_view_mode':
+                self.siamese_view_mode = (self.siamese_view_mode + 1) % SiameseViewMode.NUMBER_OF_MODES
 
             elif tag == 'toggle_maximal_score':
                 self.show_maximal_score = not self.show_maximal_score
@@ -338,7 +340,7 @@ class CaffeVisAppState(object):
         if layer_def is None:
             layer_def = self.get_current_layer_definition()
 
-        return self.siamese_helper.get_single_selected_data_blob(net, layer_def, self.siamese_input_mode)
+        return self.siamese_helper.get_single_selected_data_blob(net, layer_def, self.siamese_view_mode)
 
     def get_single_selected_diff_blob(self, net, layer_def = None):
 
@@ -346,7 +348,7 @@ class CaffeVisAppState(object):
         if layer_def is None:
             layer_def = self.get_current_layer_definition()
 
-        return self.siamese_helper.get_single_selected_diff_blob(net, layer_def, self.siamese_input_mode)
+        return self.siamese_helper.get_single_selected_diff_blob(net, layer_def, self.siamese_view_mode)
 
     def get_siamese_selected_data_blobs(self, net, layer_def = None):
 
@@ -354,7 +356,7 @@ class CaffeVisAppState(object):
         if layer_def is None:
             layer_def = self.get_current_layer_definition()
 
-        return self.siamese_helper.get_siamese_selected_data_blobs(net, layer_def, self.siamese_input_mode)
+        return self.siamese_helper.get_siamese_selected_data_blobs(net, layer_def, self.siamese_view_mode)
 
     def get_siamese_selected_diff_blobs(self, net, layer_def = None):
 
@@ -362,13 +364,13 @@ class CaffeVisAppState(object):
         if layer_def is None:
             layer_def = self.get_current_layer_definition()
 
-        return self.siamese_helper.get_siamese_selected_diff_blobs(net, layer_def, self.siamese_input_mode)
+        return self.siamese_helper.get_siamese_selected_diff_blobs(net, layer_def, self.siamese_view_mode)
 
 
     def backward_from_layer(self, net, backprop_layer_def, backprop_unit):
 
         try:
-            return SiameseHelper.backward_from_layer(net, backprop_layer_def, backprop_unit, self.siamese_input_mode)
+            return SiameseHelper.backward_from_layer(net, backprop_layer_def, backprop_unit, self.siamese_view_mode)
         except AttributeError:
             print 'ERROR: required bindings (backward_from_layer) not found! Try using the deconv-deep-vis-toolbox branch as described here: https://github.com/yosinski/deep-visualization-toolbox'
             raise
@@ -377,10 +379,10 @@ class CaffeVisAppState(object):
             with self.lock:
                 self.back_enabled = False
 
-    def deconv_from_layer(self, net, backprop_layer_def, backprop_unit, deconv_type):
+    def deconv_from_layer(self, net, backprop_layer_def, backprop_unit, deconv_type, unique=False):
 
         try:
-            return SiameseHelper.deconv_from_layer(net, backprop_layer_def, backprop_unit, self.siamese_input_mode, deconv_type)
+            return SiameseHelper.deconv_from_layer(net, backprop_layer_def, backprop_unit, self.siamese_view_mode, deconv_type, unique)
         except AttributeError:
             print 'ERROR: required bindings (deconv_from_layer) not found! Try using the deconv-deep-vis-toolbox branch as described here: https://github.com/yosinski/deep-visualization-toolbox'
             raise
@@ -397,7 +399,7 @@ class CaffeVisAppState(object):
 
         return self.siamese_helper.get_default_layer_name(layer_def)
 
-    def siamese_input_mode_has_two_images(self, layer_def = None):
+    def siamese_view_mode_has_two_images(self, layer_def = None):
         '''
         helper function which checks whether the input mode is two images, and the provided layer contains two layer names
         :param layer: can be a single string layer name, or a pair of layer names
@@ -407,7 +409,7 @@ class CaffeVisAppState(object):
         if layer_def is None:
             layer_def = self.get_current_layer_definition()
 
-        return SiameseHelper.siamese_input_mode_has_two_images(layer_def, self.siamese_input_mode)
+        return SiameseHelper.siamese_view_mode_has_two_images(layer_def, self.siamese_view_mode)
 
     def move_selection(self, direction, dist = 1):
 
@@ -452,10 +454,10 @@ class CaffeVisAppState(object):
         # Backward selection
         if not self.backprop_selection_frozen:
             # If backprop_selection is not frozen, backprop layer/unit follows selected unit
-            if not (self.backprop_layer_idx == self.layer_idx and self.backprop_unit == self.selected_unit and self.backprop_siamese_input_mode == self.siamese_input_mode):
+            if not (self.backprop_layer_idx == self.layer_idx and self.backprop_unit == self.selected_unit and self.backprop_siamese_view_mode == self.siamese_view_mode):
                 self.backprop_layer_idx = self.layer_idx
                 self.backprop_unit = self.selected_unit
-                self.backprop_siamese_input_mode = self.siamese_input_mode
+                self.backprop_siamese_view_mode = self.siamese_view_mode
                 self.back_stale = True    # If there is any change, back diffs are now stale
 
     def fill_layers_list(self, net):
@@ -493,3 +495,6 @@ class CaffeVisAppState(object):
 
         elif self.color_map_option == ColorMapOption.PLASMA:
             return gray_to_colormap('plasma', gray_image)
+
+    def convert_image_pair_to_network_input_format(self, settings, frame_pair, resize_shape):
+        return SiameseHelper.convert_image_pair_to_network_input_format(frame_pair, resize_shape, settings.siamese_input_mode)

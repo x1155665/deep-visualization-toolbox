@@ -83,19 +83,7 @@ class CaffeProcThread(CodependentThread):
                 self.frames_processed_fwd += 1
 
                 if self.settings.is_siamese and ((type(frame), len(frame)) == (tuple, 2)):
-
-                    frame1 = frame[0]
-                    frame2 = frame[1]
-
-                    if self.settings.siamese_input_mode == 'concat_channelwise':
-                        im_small1 = resize_without_fit(frame1, self.input_dims)
-                        im_small2 = resize_without_fit(frame2, self.input_dims)
-                        im_small = np.concatenate( (im_small1, im_small2), axis=2)
-                    elif self.settings.siamese_input_mode == 'concat_along_width':
-                        half_input_dims = (self.input_dims[0],self.input_dims[1]/2)
-                        im_small1 = resize_without_fit(frame1, half_input_dims)
-                        im_small2 = resize_without_fit(frame2, half_input_dims)
-                        im_small = np.concatenate( (im_small1, im_small2), axis=1)
+                    im_small = self.state.convert_image_pair_to_network_input_format(self.settings, frame, self.input_dims)
 
                 else:
                     im_small = resize_without_fit(frame, self.input_dims)
@@ -116,6 +104,10 @@ class CaffeProcThread(CodependentThread):
                 elif back_mode == BackpropMode.DECONV_GB:
                     with WithTimer('CaffeProcThread:deconv', quiet=self.debug_level < 1):
                         self.state.deconv_from_layer(self.net, backprop_layer_def, backprop_unit, 'Guided Backprop')
+
+                elif back_mode == BackpropMode.DECONV_UGB:
+                    with WithTimer('CaffeProcThread:deconv', quiet=self.debug_level < 1):
+                        self.state.deconv_from_layer(self.net, backprop_layer_def, backprop_unit, 'Guided Backprop', unique=True)
 
                 with self.state.lock:
                     self.state.back_stale = False
