@@ -140,7 +140,7 @@ class InputImageFetcher(CodependentThread):
 
                         self._increment_and_set_frame(im, True)
                 else:
-                    frame_full = read_cam_frame(self.bound_cap_device)
+                    frame_full = read_cam_frame(self.bound_cap_device, color=not self.settings._calculated_is_gray_model)
                     #print '====> just read frame', frame_full.shape
                     frame = crop_to_square(frame_full)
                     with self.lock:

@@ -149,12 +149,18 @@ def cv2_read_file_rgb(filename, as_grayscale = False):
     return im
 
     
-def read_cam_frame(cap, saveto = None):
+def read_cam_frame(cap, saveto = None, color = True):
     #frame = np.array(cv2_read_cap_rgb(cap, saveto = saveto), dtype='float32')
     frame = cv2_read_cap_rgb(cap, saveto = saveto)
+    if not color:
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        frame = frame[:, :, np.newaxis]
+
     frame = frame[:,::-1,:]  # flip L-R for display
     frame -= frame.min()
-    frame = frame * (255.0 / (frame.max() + 1e-6))
+    frame = frame * (1.0 / (frame.max() + 1e-6))
+
+
     return frame
 
 
