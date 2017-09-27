@@ -510,13 +510,12 @@ class GradientOptimizer(object):
                 [temp_ii, temp_jj] = results[batch_index].idxmax[results[batch_index].best_ii][1:3]
 
                 is_conv = params.layer_is_conv
-                rc = RegionComputer(self.settings.max_tracker_layers_list)
                 layer_name = params.push_layer
-                size_ii, size_jj = get_max_data_extent(self.net, layer_name, rc, is_conv)
+                size_ii, size_jj = get_max_data_extent(self.net, self.settings, layer_name, is_conv)
                 data_size_ii, data_size_jj = self.net.blobs['data'].data.shape[2:4]
 
                 [out_ii_start, out_ii_end, out_jj_start, out_jj_end, data_ii_start, data_ii_end, data_jj_start, data_jj_end] = \
-                    compute_data_layer_focus_area(is_conv, temp_ii, temp_jj, rc, self.settings, layer_name, size_ii, size_jj, data_size_ii, data_size_jj)
+                    compute_data_layer_focus_area(is_conv, temp_ii, temp_jj, self.settings, layer_name, size_ii, size_jj, data_size_ii, data_size_jj)
 
                 selected_input_index = self.find_selected_input_index(layer_name)
 

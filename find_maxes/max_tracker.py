@@ -607,7 +607,6 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
     import caffe
 
     mt = max_tracker
-    rc = RegionComputer(settings.max_tracker_layers_list)
 
     image_filenames, image_labels = get_files_list(settings)
 
@@ -624,7 +623,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
     assert num_top <= num_top_in_mt, 'Requested %d top images but MaxTracker contains only %d' % (num_top, num_top_in_mt)
     assert idx_end >= idx_begin, 'Range error'
 
-    size_ii, size_jj = get_max_data_extent(net, layer_name, rc, mt.is_conv)
+    size_ii, size_jj = get_max_data_extent(net, settings, layer_name, mt.is_conv)
     data_size_ii, data_size_jj = net.blobs['data'].data.shape[2:4]
 
     net_input_dims = net.blobs['data'].data.shape[2:4]
@@ -708,7 +707,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                 print '%s   Output file/image(s) %d/%d   layer %s channel %d' % (datetime.now().ctime(), batch[batch_index].cc * num_top, n_total_images, layer_name, batch[batch_index].channel_idx)
 
 
-            # print "DEBUG: (mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, rc, layer_name, size_ii, size_jj, data_size_ii, data_size_jj)", str((mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, rc, layer_name, size_ii, size_jj, data_size_ii, data_size_jj))
+            # print "DEBUG: (mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, layer_name, size_ii, size_jj, data_size_ii, data_size_jj)", str((mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, rc, layer_name, size_ii, size_jj, data_size_ii, data_size_jj))
 
             [batch[batch_index].out_ii_start,
              batch[batch_index].out_ii_end,
@@ -718,7 +717,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
              batch[batch_index].data_ii_end,
              batch[batch_index].data_jj_start,
              batch[batch_index].data_jj_end] = \
-                compute_data_layer_focus_area(mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, rc, settings, layer_name,
+                compute_data_layer_focus_area(mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, settings, layer_name,
                                               size_ii, size_jj, data_size_ii, data_size_jj)
 
             # print "DEBUG: channel:%d out_ii_start:%d out_ii_end:%d out_jj_start:%d out_jj_end:%d data_ii_start:%d data_ii_end:%d data_jj_start:%d data_jj_end:%d" % \

@@ -26,108 +26,47 @@ def shownet(net):
         print '(%g, %g)' % (v.diff.min(), v.diff.max())
 
 
-
-def region_converter(top_slice, bot_size, top_size, filter_width = (1,1), stride = (1,1), pad = (0,0), crop_to_boundary = True):
-    '''
-    Works for conv or pool
-
-vector<int> ConvolutionLayer<Dtype>::JBY_region_of_influence(const vector<int>& slice) {
-    +  CHECK_EQ(slice.size(), 4) << "slice must have length 4 (ii_start, ii_end, jj_start, jj_end)";
-    +  // Crop region to output size
-    +  vector<int> sl = vector<int>(slice);
-    +  sl[0] = max(0, min(height_out_, slice[0]));
-    +  sl[1] = max(0, min(height_out_, slice[1]));
-    +  sl[2] = max(0, min(width_out_, slice[2]));
-    +  sl[3] = max(0, min(width_out_, slice[3]));
-    +  vector<int> roi;
-    +  roi.resize(4);
-    +  roi[0] = sl[0] * stride_h_ - pad_h_;
-    +  roi[1] = (sl[1]-1) * stride_h_ + kernel_h_ - pad_h_;
-    +  roi[2] = sl[2] * stride_w_ - pad_w_;
-    +  roi[3] = (sl[3]-1) * stride_w_ + kernel_w_ - pad_w_;
-    +  return roi;
-    +}
-    '''
-    assert len(top_slice) == 4
-    assert len(filter_width) == 2
-    assert len(stride) == 2
-    assert len(pad) == 2
-
-    # Crop top slice to allowable region
-    top_slice = [ss for ss in top_slice]   # Copy list or array -> list
-
-    # should we crop to boundary
-    if crop_to_boundary:
-        assert len(bot_size) == 2
-        assert len(top_size) == 2
-
-        top_slice[0] = max(0, min(top_size[0], top_slice[0]))
-        top_slice[1] = max(0, min(top_size[0], top_slice[1]))
-        top_slice[2] = max(0, min(top_size[1], top_slice[2]))
-        top_slice[3] = max(0, min(top_size[1], top_slice[3]))
-
-    bot_slice = [-123] * 4
-
-    bot_slice[0] = top_slice[0] * stride[0] - pad[0]
-    bot_slice[1] = top_slice[1] * stride[0] - pad[0] + filter_width[0] - 1
-    bot_slice[2] = top_slice[2] * stride[1] - pad[1]
-    bot_slice[3] = top_slice[3] * stride[1] - pad[1] + filter_width[1] - 1
-
-    return bot_slice
-
-
-def get_conv_converter(bot_size, top_size, filter_width = (1,1), stride = (1,1), pad = (0,0)):
-    return lambda top_slice, crop_to_boundary : region_converter(top_slice, bot_size, top_size, filter_width, stride, pad, crop_to_boundary)
-
-
-def get_pool_converter(bot_size, top_size, filter_width = (1,1), stride = (1,1), pad = (0,0)):
-    return lambda top_slice, crop_to_boundary : region_converter(top_slice, bot_size, top_size, filter_width, stride, pad, crop_to_boundary)
-
-
-
 class RegionComputer(object):
     '''Computes regions of possible influcence from higher layers to lower layers.'''
 
-    def __init__(self, layers_list):
-        #self.net = net
-
-        _tmp = []
-
-        (previous_name, previous_type, previous_input, previous_output, previous_filter, previous_stride, previous_pad) = (None, None, None, None, None, None, None)
-        for (current_name, current_type, current_input, current_output, current_filter, current_stride, current_pad) in layers_list:
-            if current_type == 'Input':
-                _tmp.append((current_name, None))
-            elif current_type == 'Convolution':
-                _tmp.append((current_name, get_conv_converter(current_input[0:2], current_output[0:2], current_filter, current_stride, current_pad)))
-            elif current_type == 'Pooling':
-                _tmp.append((current_name, get_pool_converter(current_input[0:2], current_output[0:2], current_filter, current_stride, current_pad)))
-            elif current_type == 'Eltwise' and previous_type == 'Convolution':
-                _tmp.append((current_name, get_conv_converter(previous_input[0:2], previous_output[0:2], previous_filter, previous_stride, previous_pad)))
-
-            (previous_name, previous_type, previous_input, previous_output, previous_filter, previous_stride, previous_pad) = (current_name, current_type, current_input, current_output, current_filter, current_stride, current_pad)
-
-        self.names = [tt[0] for tt in _tmp]
-        self.converters = [tt[1] for tt in _tmp]
-
-    def convert_region(self, from_layer, to_layer, region, verbose = False, crop_to_boundary = True):
-        '''region is the slice of the from_layer in the following Python
-            index format: (ii_start, ii_end, jj_start, jj_end)
+    @staticmethod
+    def region_converter(top_slice, filter_width=(1, 1), stride=(1, 1), pad=(0, 0)):
         '''
+        Works for conv or pool
 
-        from_idx = self.names.index(from_layer)
-        to_idx = self.names.index(to_layer)
-        assert from_idx >= to_idx, 'wrong order of from_layer and to_layer'
+        vector<int> ConvolutionLayer<Dtype>::JBY_region_of_influence(const vector<int>& slice) {
+        +  CHECK_EQ(slice.size(), 4) << "slice must have length 4 (ii_start, ii_end, jj_start, jj_end)";
+        +  // Crop region to output size
+        +  vector<int> sl = vector<int>(slice);
+        +  sl[0] = max(0, min(height_out_, slice[0]));
+        +  sl[1] = max(0, min(height_out_, slice[1]));
+        +  sl[2] = max(0, min(width_out_, slice[2]));
+        +  sl[3] = max(0, min(width_out_, slice[3]));
+        +  vector<int> roi;
+        +  roi.resize(4);
+        +  roi[0] = sl[0] * stride_h_ - pad_h_;
+        +  roi[1] = (sl[1]-1) * stride_h_ + kernel_h_ - pad_h_;
+        +  roi[2] = sl[2] * stride_w_ - pad_w_;
+        +  roi[3] = (sl[3]-1) * stride_w_ + kernel_w_ - pad_w_;
+        +  return roi;
+        +}
+        '''
+        assert len(top_slice) == 4
+        assert len(filter_width) == 2
+        assert len(stride) == 2
+        assert len(pad) == 2
 
-        ret = region
-        for ii in range(from_idx, to_idx, -1):
-            converter = self.converters[ii]
-            if verbose:
-                print 'pushing', self.names[ii], 'region', ret, 'through converter'
-            ret = converter(ret, crop_to_boundary)
-        if verbose:
-            print 'Final region at ', self.names[to_idx], 'is', ret
+        # Crop top slice to allowable region
+        top_slice = [ss for ss in top_slice]  # Copy list or array -> list
 
-        return ret
+        bot_slice = [-123] * 4
+
+        bot_slice[0] = top_slice[0] * stride[0] - pad[0]
+        bot_slice[1] = top_slice[1] * stride[0] - pad[0] + filter_width[0] - 1
+        bot_slice[2] = top_slice[2] * stride[1] - pad[1]
+        bot_slice[3] = top_slice[3] * stride[1] - pad[1] + filter_width[1] - 1
+
+        return bot_slice
 
 
     @staticmethod
@@ -144,81 +83,6 @@ class RegionComputer(object):
         merged_region = (merged_x_start, merged_x_end, merged_y_start, merged_y_end)
 
         return merged_region
-
-
-    @staticmethod
-    def convert_region_dag_v1(settings, from_layer, to_layer, region, verbose = False, crop_to_boundary = True):
-
-        total_region = None
-
-        # handle leaf
-        if from_layer == to_layer:
-            total_region = region
-
-        else:
-            # get all the layers which have their bottom blob set to one of the from_layer top blobs
-            tops = settings._layer_to_tops[to_layer]
-
-            for top in tops:
-
-                # get next layers, excluding inplace layers
-                next_layers = list(set(settings._bottom_to_layers[top]) - set(settings._inplace_layers))
-
-                for next_layer in next_layers:
-
-                    # calculate convert_region_dag on each one
-                    current_region = RegionComputer.convert_region_dag(settings, from_layer, next_layer, region, verbose, crop_to_boundary)
-
-                    # aggregate results
-                    if total_region is None:
-                        total_region = current_region
-                    else:
-                        total_region = RegionComputer.merge_regions(total_region, current_region)
-
-        if to_layer not in settings._layer_name_to_def:
-            # fallback to doing nothing
-            return total_region
-
-        # do final step by layer type
-        layer_def = settings._layer_name_to_def[to_layer]
-
-        if layer_def.type == 'Convolution':
-            filter = list(layer_def.convolution_param.kernel_size)
-            if len(filter) == 1:
-                filter *= 2
-            pad = list(layer_def.convolution_param.pad)
-            if len(pad) == 0:
-                pad = [0, 0]
-            elif len(pad) == 1:
-                pad *= 2
-            stride = list(layer_def.convolution_param.stride)
-            if len(stride) == 0:
-                stride = [1, 1]
-            elif len(stride) == 1:
-                stride *= 2
-            return region_converter(total_region, None, None, filter, stride, pad, crop_to_boundary=False)
-
-        elif layer_def.type == 'Pooling':
-            filter = [layer_def.pooling_param.kernel_size]
-            if len(filter) == 1:
-                filter *= 2
-            pad = [layer_def.pooling_param.pad]
-            if len(pad) == 0:
-                pad = [0, 0]
-            elif len(pad) == 1:
-                pad *= 2
-            stride = [layer_def.pooling_param.stride]
-            if len(stride) == 0:
-                stride = [1, 1]
-            elif len(stride) == 1:
-                stride *= 2
-            return region_converter(total_region, None, None, filter, stride, pad, crop_to_boundary=False)
-
-        else:
-            # fallback to doing nothing
-            return total_region
-
-        return total_region
 
 
     @staticmethod
@@ -248,7 +112,7 @@ class RegionComputer(object):
                     stride = [1, 1]
                 elif len(stride) == 1:
                     stride *= 2
-                step_region = region_converter(region, None, None, filter, stride, pad, crop_to_boundary=False)
+                step_region = RegionComputer.region_converter(region, filter, stride, pad)
 
             elif layer_def.type == 'Pooling':
                 filter = [layer_def.pooling_param.kernel_size]
@@ -264,7 +128,7 @@ class RegionComputer(object):
                     stride = [1, 1]
                 elif len(stride) == 1:
                     stride *= 2
-                step_region = region_converter(region, None, None, filter, stride, pad, crop_to_boundary=False)
+                step_region = RegionComputer.region_converter(region, filter, stride, pad)
 
             else:
                 # fallback to doing nothing
@@ -317,7 +181,7 @@ def layer_name_to_top_name(net, layer_name):
     return net.top_names[layer_name][0]
 
 
-def get_max_data_extent(net, layer_name, rc, is_conv):
+def get_max_data_extent(net, settings, layer_name, is_conv):
     '''Gets the maximum size of the data layer that can influence a unit on layer.'''
 
     data_size = net.blobs['data'].data.shape[2:4]  # e.g. (227,227) for fc6,fc7,fc8,prop
@@ -326,7 +190,7 @@ def get_max_data_extent(net, layer_name, rc, is_conv):
         top_name = layer_name_to_top_name(net, layer_name)
         conv_size = net.blobs[top_name].data.shape[2:4]        # e.g. (13,13) for conv5
         layer_slice_middle = (conv_size[0]/2,conv_size[0]/2+1, conv_size[1]/2,conv_size[1]/2+1)   # e.g. (6,7,6,7,), the single center unit
-        data_slice = rc.convert_region(layer_name, 'data', layer_slice_middle, crop_to_boundary = False)
+        data_slice = RegionComputer.convert_region_dag(settings, layer_name, 'data', layer_slice_middle, crop_to_boundary=False)
         data_slice_size = data_slice[1]-data_slice[0], data_slice[3]-data_slice[2]   # e.g. (163, 163) for conv5
         # crop data slice size to data size
         data_slice_size = min(data_slice_size[0], data_size[0]), min(data_slice_size[1], data_size[1])
@@ -336,46 +200,21 @@ def get_max_data_extent(net, layer_name, rc, is_conv):
         return data_size
 
 
-def compute_data_layer_focus_area(is_conv, ii, jj, region_computer, settings, layer_name, size_ii, size_jj, data_size_ii, data_size_jj):
+def compute_data_layer_focus_area(is_conv, ii, jj, settings, layer_name, size_ii, size_jj, data_size_ii, data_size_jj):
 
     if is_conv:
 
         # Compute the focus area of the data layer
         layer_indices = (ii, ii + 1, jj, jj + 1)
-        data_indices = region_computer.convert_region(layer_name, 'data', layer_indices)
-        data_ii_start, data_ii_end, data_jj_start, data_jj_end = data_indices
-        data_indices2 = region_computer.convert_region(layer_name, 'data', layer_indices, crop_to_boundary=False)
-        data_ii_start2, data_ii_end2, data_jj_start2, data_jj_end2 = data_indices2
 
-        data_indices3 = RegionComputer.convert_region_dag(settings, layer_name, 'data', layer_indices, crop_to_boundary=False)
-        data_ii_start3, data_ii_end3, data_jj_start3, data_jj_end3 = data_indices3
+        data_indices = RegionComputer.convert_region_dag(settings, layer_name, 'data', layer_indices, crop_to_boundary=False)
+        data_ii_start, data_ii_end, data_jj_start, data_jj_end = data_indices
 
         # safe guard edges
         data_ii_start = max(data_ii_start, 0)
         data_jj_start = max(data_jj_start, 0)
         data_ii_end = min(data_ii_end, data_size_ii)
         data_jj_end = min(data_jj_end, data_size_jj)
-
-        data_ii_start2 = max(data_ii_start2, 0)
-        data_jj_start2 = max(data_jj_start2, 0)
-        data_ii_end2 = min(data_ii_end2, data_size_ii)
-        data_jj_end2 = min(data_jj_end2, data_size_jj)
-
-        data_ii_start3 = max(data_ii_start3, 0)
-        data_jj_start3 = max(data_jj_start3, 0)
-        data_ii_end3 = min(data_ii_end3, data_size_ii)
-        data_jj_end3 = min(data_jj_end3, data_size_jj)
-
-        assert(data_ii_start2 == data_ii_start)
-        assert(data_jj_start2 == data_jj_start)
-        assert(data_ii_end2 == data_ii_end)
-        assert(data_jj_end2 == data_jj_end)
-
-        assert(data_ii_start3 == data_ii_start)
-        assert(data_jj_start3 == data_jj_start)
-        assert(data_ii_end3 == data_ii_end)
-        assert(data_jj_end3 == data_jj_end)
-
 
         touching_imin = (data_ii_start == 0)
         touching_jmin = (data_jj_start == 0)
