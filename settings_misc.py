@@ -55,7 +55,7 @@ def process_network_proto(settings):
     with open(settings.caffevis_deploy_prototxt, 'r') as proto_file:
         with open(settings._processed_deploy_prototxt, 'w') as new_proto_file:
             if not found_force_backwards:
-                new_proto_file.write('force_backward: true')
+                new_proto_file.write('force_backward: true\n')
             for line in proto_file:
                 new_proto_file.write(line)
 
@@ -107,6 +107,7 @@ class LayerRecord:
     def __init__(self, layer_def):
 
         self.layer_def = layer_def
+        self.name = layer_def.name
         self.type = layer_def.type
 
         # keep filter, stride and pad
@@ -170,20 +171,10 @@ def read_network_dag(settings):
         text_format.Merge(str(proto_file.read()), network_def)
 
     # map layer name to layer record
-    layer_name_to_def = dict()
+    layer_name_to_record = dict()
     for layer_def in network_def.layer:
         if (len(layer_def.include) == 0) or (caffe_pb2.TEST in [item.phase for item in layer_def.include]):
-            layer_name_to_def[layer_def.name] = LayerRecord(layer_def)
-
-    # map blob name to list of layers having this blob name as input
-    bottom_to_layers = dict()
-    for layer in network_def.layer:
-        # no specific phase, or TEST phase is specifically asked for
-        if (len(layer.include) == 0) or (caffe_pb2.TEST in [item.phase for item in layer.include]):
-            for bottom in layer.bottom:
-                if bottom not in bottom_to_layers:
-                    bottom_to_layers[bottom] = list()
-                bottom_to_layers[bottom].append(layer.name)
+            layer_name_to_record[layer_def.name] = LayerRecord(layer_def)
 
     top_to_layers = dict()
     for layer in network_def.layer:
@@ -193,24 +184,22 @@ def read_network_dag(settings):
                 if top not in top_to_layers:
                     top_to_layers[top] = list()
                 top_to_layers[top].append(layer.name)
-    if 'data' not in top_to_layers:
-        top_to_layers['data'] = ['data']
 
     # find parents and children of all layers
-    for child_layer_name in layer_name_to_def.keys():
-        child_layer_def = layer_name_to_def[child_layer_name]
+    for child_layer_name in layer_name_to_record.keys():
+        child_layer_def = layer_name_to_record[child_layer_name]
         for bottom in child_layer_def.bottoms:
             for parent_layer_name in top_to_layers[bottom]:
-                if parent_layer_name in layer_name_to_def:
-                    parent_layer_def = layer_name_to_def[parent_layer_name]
+                if parent_layer_name in layer_name_to_record:
+                    parent_layer_def = layer_name_to_record[parent_layer_name]
                     if parent_layer_def not in child_layer_def.parents:
                         child_layer_def.parents.append(parent_layer_def)
                     if child_layer_def not in parent_layer_def.children:
                         parent_layer_def.children.append(child_layer_def)
 
     # update filter, strid, pad for maxout "structures"
-    for layer_name in layer_name_to_def.keys():
-        layer_def = layer_name_to_def[layer_name]
+    for layer_name in layer_name_to_record.keys():
+        layer_def = layer_name_to_record[layer_name]
         if layer_def.type == 'Eltwise' and \
            len(layer_def.parents) == 1 and \
            layer_def.parents[0].type == 'Slice' and \
@@ -220,18 +209,8 @@ def read_network_dag(settings):
             layer_def.stride = layer_def.parents[0].parents[0].stride
             layer_def.pad = layer_def.parents[0].parents[0].pad
 
-    inplace_layers = list()
-    for layer in network_def.layer:
-        if (len(layer.include) == 0) or (caffe_pb2.TEST in [item.phase for item in layer.include]):
-            if len(layer.top) == 1 and len(layer.bottom) == 1 and layer.top[0] == layer.bottom[0]:
-                inplace_layers.append(layer.name)
-
     # keep helper variables in settings
     settings._network_def = network_def
-    settings._layer_name_to_def = layer_name_to_def
-
-    settings._bottom_to_layers = bottom_to_layers
-    settings._top_to_layers = top_to_layers
-    settings._inplace_layers = inplace_layers
+    settings._layer_name_to_record = layer_name_to_record
 
     return

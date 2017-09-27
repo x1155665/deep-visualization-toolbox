@@ -107,6 +107,8 @@ def get_files_from_siamese_image_list(settings):
 
 def get_files_list(settings, should_convert_labels = False):
 
+    print 'Getting image list...'
+
     # available_files - local list of files
     if settings.static_files_input_mode == "directory":
         available_files = get_files_from_directory(settings)
@@ -121,5 +123,7 @@ def get_files_list(settings, should_convert_labels = False):
 
     if should_convert_labels and labels:
         labels = [settings.convert_label_fn(label) for label in labels]
+
+    print 'Getting image list... Done.'
 
     return available_files, labels

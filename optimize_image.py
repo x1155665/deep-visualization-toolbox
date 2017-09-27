@@ -186,7 +186,7 @@ def main():
         channels = blob.shape[1]
 
         # get layer definition
-        layer_def = settings._layer_name_to_def[push_layer]
+        layer_def = settings._layer_name_to_record[push_layer]
 
         if is_spatial:
             push_spatial = (layer_def.filter[0] / 2, layer_def.filter[1] / 2)

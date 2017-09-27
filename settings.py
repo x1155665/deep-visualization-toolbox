@@ -223,8 +223,8 @@ caffevis_maximum_activation_histogram_data_file = locals().get('caffevis_maximum
 # visualization? If a layer name (full name, not prettified) is given
 # here, we will try to load jpgs to visualize each unit. This is used
 # for pattern mode ('s' key by default) and for the right
-# caffevis_jpgvis pane ('9' key by default). Empty list to disable.
-caffevis_jpgvis_layers = locals().get('caffevis_jpgvis_layers', [])
+# caffevis_jpgvis pane ('9' key by default). None disables filtering (thus taking all), empty list to tries nothing
+caffevis_jpgvis_layers = locals().get('caffevis_jpgvis_layers', None)
 
 # Dict specifying string:string mapping. Steal pattern mode and right
 # jpgvis pane visualizations for certain layers (e.g. pool1) from

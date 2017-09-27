@@ -535,7 +535,7 @@ class CaffeVisApp(BaseApp):
         load_layer = default_layer_name
         if self.settings.caffevis_jpgvis_remap and load_layer in self.settings.caffevis_jpgvis_remap:
             load_layer = self.settings.caffevis_jpgvis_remap[load_layer]
-        if self.settings.caffevis_jpgvis_layers and load_layer in self.settings.caffevis_jpgvis_layers and self.settings.caffevis_unit_jpg_dir:
+        if ((self.settings.caffevis_jpgvis_layers and load_layer in self.settings.caffevis_jpgvis_layers) or (self.settings.caffevis_jpgvis_layers is None)) and self.settings.caffevis_unit_jpg_dir:
             jpg_path = os.path.join(self.settings.caffevis_unit_jpg_dir, 'regularized_opt', load_layer, 'whole_layer.jpg')
 
             # Get highres version
@@ -563,7 +563,7 @@ class CaffeVisApp(BaseApp):
         load_layer = default_layer_name
         if self.settings.caffevis_jpgvis_remap and load_layer in self.settings.caffevis_jpgvis_remap:
             load_layer = self.settings.caffevis_jpgvis_remap[load_layer]
-        if self.settings.caffevis_jpgvis_layers and load_layer in self.settings.caffevis_jpgvis_layers:
+        if (self.settings.caffevis_jpgvis_layers and load_layer in self.settings.caffevis_jpgvis_layers) or (self.settings.caffevis_jpgvis_layers is None):
 
             # get number of units
             units_num = layer_dat_3D.shape[0]
@@ -1255,19 +1255,13 @@ class CaffeVisApp(BaseApp):
         with self.state.lock:
             state_layer_name, state_selected_unit, cursor_area, show_unit_jpgs = self.state.get_default_layer_name(), self.state.selected_unit, self.state.cursor_area, self.state.show_unit_jpgs
 
-        try:
-            # Some may be missing this setting
-            self.settings.caffevis_jpgvis_layers
-        except:
-            print '\n\nNOTE: you need to upgrade your settings.py and settings_model_selector.py files. See README.md.\n\n'
-            raise
-            
         if self.settings.caffevis_jpgvis_remap and state_layer_name in self.settings.caffevis_jpgvis_remap:
             img_key_layer = self.settings.caffevis_jpgvis_remap[state_layer_name]
         else:
             img_key_layer = state_layer_name
 
-        if self.settings.caffevis_jpgvis_layers and img_key_layer in self.settings.caffevis_jpgvis_layers and cursor_area == 'bottom' and show_unit_jpgs:
+        if ((self.settings.caffevis_jpgvis_layers and img_key_layer in self.settings.caffevis_jpgvis_layers) or (self.settings.caffevis_jpgvis_layers is None)) and \
+                        cursor_area == 'bottom' and show_unit_jpgs:
             img_key = (img_key_layer, state_selected_unit, pane.data.shape, self.state.show_maximal_score)
             img_resize = self.img_cache.get(img_key, None)
             if img_resize is None:

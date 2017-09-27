@@ -90,7 +90,7 @@ class RegionComputer(object):
 
         step_region = None
 
-        layer_def = settings._layer_name_to_def[from_layer] if from_layer in settings._layer_name_to_def else None
+        layer_def = settings._layer_name_to_record[from_layer] if from_layer in settings._layer_name_to_record else None
 
         # do single step to convert according to from_layer
         if not layer_def:
@@ -112,23 +112,24 @@ class RegionComputer(object):
         # handle the rest
         total_region = None
 
-        bottoms = layer_def.bottoms if layer_def else []
+        if layer_def is not None:
+            for parent_layer in layer_def.parents:
 
-        for bottom in bottoms:
-
-            # get prev layers, excluding inplace layers
-            prev_layers = list(set(settings._top_to_layers[bottom]) - set(settings._inplace_layers))
-
-            for prev_layer in prev_layers:
+                # skip inplace layers
+                if len(parent_layer.tops) == 1 and len(parent_layer.bottoms) == 1 and parent_layer.tops[0] == parent_layer.bottoms[0]:
+                    continue
 
                 # calculate convert_region_dag on each one
-                current_region = RegionComputer.convert_region_dag(settings, prev_layer, to_layer, step_region, verbose, crop_to_boundary)
+                current_region = RegionComputer.convert_region_dag(settings, parent_layer.name, to_layer, step_region, verbose, crop_to_boundary)
 
                 # aggregate results
                 if total_region is None:
                     total_region = current_region
                 else:
                     total_region = RegionComputer.merge_regions(total_region, current_region)
+
+        if total_region is None:
+            return step_region
 
         return total_region
 
@@ -162,7 +163,7 @@ def get_max_data_extent(net, settings, layer_name, is_spatial):
         top_name = layer_name_to_top_name(net, layer_name)
         conv_size = net.blobs[top_name].data.shape[2:4]        # e.g. (13,13) for conv5
         layer_slice_middle = (conv_size[0]/2,conv_size[0]/2+1, conv_size[1]/2,conv_size[1]/2+1)   # e.g. (6,7,6,7,), the single center unit
-        data_slice = RegionComputer.convert_region_dag(settings, layer_name, 'data', layer_slice_middle, crop_to_boundary=False)
+        data_slice = RegionComputer.convert_region_dag(settings, layer_name, 'input', layer_slice_middle, crop_to_boundary=False)
         data_slice_size = data_slice[1]-data_slice[0], data_slice[3]-data_slice[2]   # e.g. (163, 163) for conv5
         # crop data slice size to data size
         data_slice_size = min(data_slice_size[0], data_size[0]), min(data_slice_size[1], data_size[1])
@@ -179,7 +180,7 @@ def compute_data_layer_focus_area(is_spatial, ii, jj, settings, layer_name, size
         # Compute the focus area of the data layer
         layer_indices = (ii, ii + 1, jj, jj + 1)
 
-        data_indices = RegionComputer.convert_region_dag(settings, layer_name, 'data', layer_indices, crop_to_boundary=False)
+        data_indices = RegionComputer.convert_region_dag(settings, layer_name, 'input', layer_indices, crop_to_boundary=False)
         data_ii_start, data_ii_end, data_jj_start, data_jj_end = data_indices
 
         # safe guard edges

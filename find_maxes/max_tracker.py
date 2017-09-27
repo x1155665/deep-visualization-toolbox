@@ -617,6 +617,10 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
     assert num_top <= num_top_in_mt, 'Requested %d top images but MaxTracker contains only %d' % (num_top, num_top_in_mt)
     assert idx_end >= idx_begin, 'Range error'
 
+    # minor fix for backwards compatability
+    if hasattr(mt, 'is_conv'):
+        mt.is_spatial = mt.is_conv
+
     size_ii, size_jj = get_max_data_extent(net, settings, layer_name, mt.is_spatial)
     data_size_ii, data_size_jj = net.blobs['data'].data.shape[2:4]
 
