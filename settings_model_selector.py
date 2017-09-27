@@ -15,8 +15,7 @@ sys.dont_write_bytecode = False
 
 caffevis_caffe_root = base_folder + '/caffe'
 
-if model_to_load == 'caffenet_yos':
-    from models.caffenet_yos.settings_caffenet_yos import *
-
-elif model_to_load == 'other_model':
-    from models.other_model.settings_other_model import *
+# the following code runs dynamically the import command:
+# from models.YOUR_MODEL.settings_YOUR_MODEL import *
+import_code = 'from models.' + model_to_load + '.settings_' + model_to_load + ' import *'
+exec (import_code, globals())
