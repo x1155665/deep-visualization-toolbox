@@ -38,6 +38,34 @@ def set_calculated_image_dims(settings, net):
         settings._calculated_image_dims = input_shape[2:4]
 
 
+def process_network_proto(settings):
+
+    settings._processed_deploy_prototxt = settings.caffevis_deploy_prototxt + ".processed_by_deepvis"
+
+    # check if force_backwards is missing
+    found_force_backwards = False
+    with open(settings.caffevis_deploy_prototxt, 'r') as proto_file:
+        for line in proto_file:
+            fields = line.strip().split()
+            if len(fields) == 2 and fields[0] == 'force_backward:' and fields[1] == 'true':
+                found_force_backwards = True
+                break
+
+    # write file, adding force_backward if needed
+    with open(settings.caffevis_deploy_prototxt, 'r') as proto_file:
+        with open(settings._processed_deploy_prototxt, 'w') as new_proto_file:
+            if not found_force_backwards:
+                new_proto_file.write('force_backward: true')
+            for line in proto_file:
+                new_proto_file.write(line)
+
+    # run upgrade tool on new file name (same output file)
+    upgrade_tool_command_line = settings.caffevis_caffe_root + '/build/tools/upgrade_net_proto_text.bin ' + settings._processed_deploy_prototxt + ' ' + settings._processed_deploy_prototxt
+    os.system(upgrade_tool_command_line)
+
+    return
+
+
 def load_network(settings):
 
     # Set the mode to CPU or GPU. Note: in the latest Caffe
@@ -53,8 +81,10 @@ def load_network(settings):
         caffe.set_mode_cpu()
         print 'CaffeVisApp mode (in main thread):     CPU'
 
+    process_network_proto(settings)
+
     net = caffe.Classifier(
-        settings.caffevis_deploy_prototxt,
+        settings._processed_deploy_prototxt,
         settings.caffevis_network_weights,
         image_dims=settings.caffe_net_image_dims,
         mean=None,  # Set to None for now, assign later
@@ -136,8 +166,8 @@ def read_network_dag(settings):
 
     # load prototxt file
     network_def = caffe_pb2.NetParameter()
-    f = open(settings.caffevis_deploy_prototxt, 'r')
-    text_format.Merge(str(f.read()), network_def)
+    with open(settings._processed_deploy_prototxt, 'r') as proto_file:
+        text_format.Merge(str(proto_file.read()), network_def)
 
     # map layer name to layer record
     layer_name_to_def = dict()
