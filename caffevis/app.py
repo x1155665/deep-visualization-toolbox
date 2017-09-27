@@ -20,7 +20,7 @@ from numpy_cache import FIFOLimitedArrayCache
 from app_base import BaseApp
 from image_misc import norm01, norm01c, tile_images_normalize, ensure_float01, tile_images_make_tiles, \
     ensure_uint255_and_resize_to_fit, resize_without_fit, ensure_uint255, \
-    caffe_load_image, ensure_uint255_and_resize_without_fit, softmax_image, array_histogram, fig2data
+    caffe_load_image, ensure_uint255_and_resize_without_fit, array_histogram, fig2data
 from image_misc import FormattedString, cv2_typeset_text, to_255
 from caffe_proc_thread import CaffeProcThread
 from caffevis_app_state import CaffeVisAppState, SiameseViewMode, PatternMode, BackpropMode, BackpropViewOption, \
@@ -1178,9 +1178,6 @@ class CaffeVisApp(BaseApp):
                     return process_image_fn(grad_blob, resize_shape, self.state.last_frame)
 
                 raise Exception("flow should not arrive here")
-
-            # if back_view_option == BackpropViewOption.SOFTMAX_RAW:
-            #     grad_img = run_processing_once_or_twice(pane.data.shape, lambda grad_img, resize_shape, input_image: softmax_image(norm01c(grad_img, 0)))
 
             if back_view_option == BackpropViewOption.RAW:
                 def do_raw(grad_blob, resize_shape, input_image):

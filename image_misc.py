@@ -9,29 +9,6 @@ import matplotlib.pyplot as plt
 
 from misc import WithTimer
 
-def softmax_image(arr):
-    '''Maps the input range to [0,1] using softmax'''
-
-    arr = arr.copy()
-    exp_arr = np.exp(arr)
-    sum_exp_arr = np.sum(exp_arr, axis=(0,1))
-    normalized_exp_arr = exp_arr / sum_exp_arr
-
-    print "arr", arr
-    print "exp_arr", exp_arr
-    print "sum_exp_arr", sum_exp_arr
-    print "normalized_exp_arr", normalized_exp_arr
-
-
-    print "arr.shape", arr.shape, arr.max(), arr.min()
-    print "exp_arr.shape", exp_arr.shape, exp_arr.max(), exp_arr.min()
-    print "sum_exp_arr.shape", sum_exp_arr.shape, sum_exp_arr.max(), sum_exp_arr.min()
-    print "normalized_exp_arr.shape", normalized_exp_arr.shape, normalized_exp_arr.max(), normalized_exp_arr.min()
-
-    assert normalized_exp_arr.min() >= 0
-    assert normalized_exp_arr.max() <= 1
-    return normalized_exp_arr
-
 
 def fig2data(fig):
     """
