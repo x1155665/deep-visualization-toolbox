@@ -49,8 +49,6 @@ vector<int> ConvolutionLayer<Dtype>::JBY_region_of_influence(const vector<int>& 
     +}
     '''
     assert len(top_slice) == 4
-    assert len(bot_size) == 2
-    assert len(top_size) == 2
     assert len(filter_width) == 2
     assert len(stride) == 2
     assert len(pad) == 2
@@ -60,6 +58,9 @@ vector<int> ConvolutionLayer<Dtype>::JBY_region_of_influence(const vector<int>& 
 
     # should we crop to boundary
     if crop_to_boundary:
+        assert len(bot_size) == 2
+        assert len(top_size) == 2
+
         top_slice[0] = max(0, min(top_size[0], top_slice[0]))
         top_slice[1] = max(0, min(top_size[0], top_slice[1]))
         top_slice[2] = max(0, min(top_size[1], top_slice[2]))
@@ -129,6 +130,173 @@ class RegionComputer(object):
         return ret
 
 
+    @staticmethod
+    def merge_regions(region1, region2):
+
+        region1_x_start, region1_x_end, region1_y_start, region1_y_end = region1
+        region2_x_start, region2_x_end, region2_y_start, region2_y_end = region2
+
+        merged_x_start = min(region1_x_start, region2_x_start)
+        merged_x_end = max(region1_x_end, region2_x_end)
+        merged_y_start = min(region1_y_start, region2_y_start)
+        merged_y_end = max(region1_y_end, region2_y_end)
+
+        merged_region = (merged_x_start, merged_x_end, merged_y_start, merged_y_end)
+
+        return merged_region
+
+
+    @staticmethod
+    def convert_region_dag_v1(settings, from_layer, to_layer, region, verbose = False, crop_to_boundary = True):
+
+        total_region = None
+
+        # handle leaf
+        if from_layer == to_layer:
+            total_region = region
+
+        else:
+            # get all the layers which have their bottom blob set to one of the from_layer top blobs
+            tops = settings._layer_to_tops[to_layer]
+
+            for top in tops:
+
+                # get next layers, excluding inplace layers
+                next_layers = list(set(settings._bottom_to_layers[top]) - set(settings._inplace_layers))
+
+                for next_layer in next_layers:
+
+                    # calculate convert_region_dag on each one
+                    current_region = RegionComputer.convert_region_dag(settings, from_layer, next_layer, region, verbose, crop_to_boundary)
+
+                    # aggregate results
+                    if total_region is None:
+                        total_region = current_region
+                    else:
+                        total_region = RegionComputer.merge_regions(total_region, current_region)
+
+        if to_layer not in settings._layer_name_to_def:
+            # fallback to doing nothing
+            return total_region
+
+        # do final step by layer type
+        layer_def = settings._layer_name_to_def[to_layer]
+
+        if layer_def.type == 'Convolution':
+            filter = list(layer_def.convolution_param.kernel_size)
+            if len(filter) == 1:
+                filter *= 2
+            pad = list(layer_def.convolution_param.pad)
+            if len(pad) == 0:
+                pad = [0, 0]
+            elif len(pad) == 1:
+                pad *= 2
+            stride = list(layer_def.convolution_param.stride)
+            if len(stride) == 0:
+                stride = [1, 1]
+            elif len(stride) == 1:
+                stride *= 2
+            return region_converter(total_region, None, None, filter, stride, pad, crop_to_boundary=False)
+
+        elif layer_def.type == 'Pooling':
+            filter = [layer_def.pooling_param.kernel_size]
+            if len(filter) == 1:
+                filter *= 2
+            pad = [layer_def.pooling_param.pad]
+            if len(pad) == 0:
+                pad = [0, 0]
+            elif len(pad) == 1:
+                pad *= 2
+            stride = [layer_def.pooling_param.stride]
+            if len(stride) == 0:
+                stride = [1, 1]
+            elif len(stride) == 1:
+                stride *= 2
+            return region_converter(total_region, None, None, filter, stride, pad, crop_to_boundary=False)
+
+        else:
+            # fallback to doing nothing
+            return total_region
+
+        return total_region
+
+
+    @staticmethod
+    def convert_region_dag(settings, from_layer, to_layer, region, verbose=False, crop_to_boundary=True):
+
+        step_region = None
+
+        # do single step to convert according to from_layer
+        if from_layer not in settings._layer_name_to_def:
+            # fallback to doing nothing
+            step_region = region
+        else:
+
+            layer_def = settings._layer_name_to_def[from_layer]
+
+            if layer_def.type == 'Convolution':
+                filter = list(layer_def.convolution_param.kernel_size)
+                if len(filter) == 1:
+                    filter *= 2
+                pad = list(layer_def.convolution_param.pad)
+                if len(pad) == 0:
+                    pad = [0, 0]
+                elif len(pad) == 1:
+                    pad *= 2
+                stride = list(layer_def.convolution_param.stride)
+                if len(stride) == 0:
+                    stride = [1, 1]
+                elif len(stride) == 1:
+                    stride *= 2
+                step_region = region_converter(region, None, None, filter, stride, pad, crop_to_boundary=False)
+
+            elif layer_def.type == 'Pooling':
+                filter = [layer_def.pooling_param.kernel_size]
+                if len(filter) == 1:
+                    filter *= 2
+                pad = [layer_def.pooling_param.pad]
+                if len(pad) == 0:
+                    pad = [0, 0]
+                elif len(pad) == 1:
+                    pad *= 2
+                stride = [layer_def.pooling_param.stride]
+                if len(stride) == 0:
+                    stride = [1, 1]
+                elif len(stride) == 1:
+                    stride *= 2
+                step_region = region_converter(region, None, None, filter, stride, pad, crop_to_boundary=False)
+
+            else:
+                # fallback to doing nothing
+                step_region = region
+
+        if from_layer == to_layer:
+            return step_region
+
+        # handle the rest
+        total_region = None
+
+        bottoms = settings._layer_to_bottoms[from_layer]
+
+        for bottom in bottoms:
+
+            # get prev layers, excluding inplace layers
+            prev_layers = list(set(settings._top_to_layers[bottom]) - set(settings._inplace_layers))
+
+            for prev_layer in prev_layers:
+
+                # calculate convert_region_dag on each one
+                current_region = RegionComputer.convert_region_dag(settings, prev_layer, to_layer, step_region, verbose, crop_to_boundary)
+
+                # aggregate results
+                if total_region is None:
+                    total_region = current_region
+                else:
+                    total_region = RegionComputer.merge_regions(total_region, current_region)
+
+        return total_region
+
+
 def save_caffe_image(img, filename, autoscale = True, autoscale_center = None):
     '''Takes an image in caffe format (01) or (c01, BGR) and saves it to a file'''
     if len(img.shape) == 2:
@@ -168,7 +336,7 @@ def get_max_data_extent(net, layer_name, rc, is_conv):
         return data_size
 
 
-def compute_data_layer_focus_area(is_conv, ii, jj, region_computer, layer_name, size_ii, size_jj, data_size_ii, data_size_jj):
+def compute_data_layer_focus_area(is_conv, ii, jj, region_computer, settings, layer_name, size_ii, size_jj, data_size_ii, data_size_jj):
 
     if is_conv:
 
@@ -176,12 +344,38 @@ def compute_data_layer_focus_area(is_conv, ii, jj, region_computer, layer_name, 
         layer_indices = (ii, ii + 1, jj, jj + 1)
         data_indices = region_computer.convert_region(layer_name, 'data', layer_indices)
         data_ii_start, data_ii_end, data_jj_start, data_jj_end = data_indices
+        data_indices2 = region_computer.convert_region(layer_name, 'data', layer_indices, crop_to_boundary=False)
+        data_ii_start2, data_ii_end2, data_jj_start2, data_jj_end2 = data_indices2
+
+        data_indices3 = RegionComputer.convert_region_dag(settings, layer_name, 'data', layer_indices, crop_to_boundary=False)
+        data_ii_start3, data_ii_end3, data_jj_start3, data_jj_end3 = data_indices3
 
         # safe guard edges
         data_ii_start = max(data_ii_start, 0)
         data_jj_start = max(data_jj_start, 0)
         data_ii_end = min(data_ii_end, data_size_ii)
         data_jj_end = min(data_jj_end, data_size_jj)
+
+        data_ii_start2 = max(data_ii_start2, 0)
+        data_jj_start2 = max(data_jj_start2, 0)
+        data_ii_end2 = min(data_ii_end2, data_size_ii)
+        data_jj_end2 = min(data_jj_end2, data_size_jj)
+
+        data_ii_start3 = max(data_ii_start3, 0)
+        data_jj_start3 = max(data_jj_start3, 0)
+        data_ii_end3 = min(data_ii_end3, data_size_ii)
+        data_jj_end3 = min(data_jj_end3, data_size_jj)
+
+        assert(data_ii_start2 == data_ii_start)
+        assert(data_jj_start2 == data_jj_start)
+        assert(data_ii_end2 == data_ii_end)
+        assert(data_jj_end2 == data_jj_end)
+
+        assert(data_ii_start3 == data_ii_start)
+        assert(data_jj_start3 == data_jj_start)
+        assert(data_ii_end3 == data_ii_end)
+        assert(data_jj_end3 == data_jj_end)
+
 
         touching_imin = (data_ii_start == 0)
         touching_jmin = (data_jj_start == 0)

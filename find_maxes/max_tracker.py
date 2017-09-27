@@ -718,7 +718,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
              batch[batch_index].data_ii_end,
              batch[batch_index].data_jj_start,
              batch[batch_index].data_jj_end] = \
-                compute_data_layer_focus_area(mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, rc, layer_name,
+                compute_data_layer_focus_area(mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, rc, settings, layer_name,
                                               size_ii, size_jj, data_size_ii, data_size_jj)
 
             # print "DEBUG: channel:%d out_ii_start:%d out_ii_end:%d out_jj_start:%d out_jj_end:%d data_ii_start:%d data_ii_end:%d data_jj_start:%d data_jj_end:%d" % \
