@@ -38,30 +38,6 @@ def set_calculated_image_dims(settings, net):
         settings._calculated_image_dims = input_shape[2:4]
 
 
-def get_layer_info(settings, layer_name):
-    '''
-        get layer info (name, type, input, output, filter, stride, pad) from settings
-
-    :param settings: contains script settings
-    :param layer_name: name of layer
-    :return: current_layer and previous_layer tuples of (name, type, input, output, filter, stride, pad)
-    '''
-
-    # go over layers
-
-    previous_layer = (None, None, None, None, None, None, None)
-    current_layer = (None, None, None, None, None, None, None)
-    for (name, type, input, output, filter, stride, pad) in settings.max_tracker_layers_list:
-        if name == layer_name:
-            current_layer = (name, type, input, output, filter, stride, pad)
-            return current_layer, previous_layer
-
-        # update previous layer
-        previous_layer = (name, type, input, output, filter, stride, pad)
-
-    return current_layer, previous_layer
-
-
 def load_network(settings):
 
     # Set the mode to CPU or GPU. Note: in the latest Caffe
@@ -96,6 +72,64 @@ def load_network(settings):
     return net, data_mean
 
 
+class LayerRecord:
+
+    def __init__(self, layer_def):
+
+        self.layer_def = layer_def
+        self.type = layer_def.type
+
+        # keep filter, stride and pad
+        if layer_def.type == 'Convolution':
+            self.filter = list(layer_def.convolution_param.kernel_size)
+            if len(self.filter) == 1:
+                self.filter *= 2
+            self.pad = list(layer_def.convolution_param.pad)
+            if len(self.pad) == 0:
+                self.pad = [0, 0]
+            elif len(self.pad) == 1:
+                self.pad *= 2
+            self.stride = list(layer_def.convolution_param.stride)
+            if len(self.stride) == 0:
+                self.stride = [1, 1]
+            elif len(self.stride) == 1:
+                self.stride *= 2
+
+        elif layer_def.type == 'Pooling':
+            self.filter = [layer_def.pooling_param.kernel_size]
+            if len(self.filter) == 1:
+                self.filter *= 2
+            self.pad = [layer_def.pooling_param.pad]
+            if len(self.pad) == 0:
+                self.pad = [0, 0]
+            elif len(self.pad) == 1:
+                self.pad *= 2
+            self.stride = [layer_def.pooling_param.stride]
+            if len(self.stride) == 0:
+                self.stride = [1, 1]
+            elif len(self.stride) == 1:
+                self.stride *= 2
+
+        else:
+            self.filter = [0, 0]
+            self.pad = [0, 0]
+            self.stride = [1, 1]
+
+        # keep tops
+        self.tops = list(layer_def.top)
+
+        # keep bottoms
+        self.bottoms = list(layer_def.bottom)
+
+        # list of parent layers
+        self.parents = []
+
+        # list of child layers
+        self.children = []
+
+    pass
+
+
 def read_network_dag(settings):
     from caffe.proto import caffe_pb2
     from google.protobuf import text_format
@@ -104,6 +138,12 @@ def read_network_dag(settings):
     network_def = caffe_pb2.NetParameter()
     f = open(settings.caffevis_deploy_prototxt, 'r')
     text_format.Merge(str(f.read()), network_def)
+
+    # map layer name to layer record
+    layer_name_to_def = dict()
+    for layer_def in network_def.layer:
+        if (len(layer_def.include) == 0) or (caffe_pb2.TEST in [item.phase for item in layer_def.include]):
+            layer_name_to_def[layer_def.name] = LayerRecord(layer_def)
 
     # map blob name to list of layers having this blob name as input
     bottom_to_layers = dict()
@@ -126,25 +166,29 @@ def read_network_dag(settings):
     if 'data' not in top_to_layers:
         top_to_layers['data'] = ['data']
 
-    layer_to_tops = dict()
-    for layer in network_def.layer:
-        if (len(layer.include) == 0) or (caffe_pb2.TEST in [item.phase for item in layer.include]):
-            for top in layer.top:
-                if layer.name not in layer_to_tops:
-                    layer_to_tops[layer.name] = list()
-                layer_to_tops[layer.name].append(top)
-    if 'data' not in layer_to_tops:
-        layer_to_tops['data'] = ['data']
+    # find parents and children of all layers
+    for child_layer_name in layer_name_to_def.keys():
+        child_layer_def = layer_name_to_def[child_layer_name]
+        for bottom in child_layer_def.bottoms:
+            for parent_layer_name in top_to_layers[bottom]:
+                if parent_layer_name in layer_name_to_def:
+                    parent_layer_def = layer_name_to_def[parent_layer_name]
+                    if parent_layer_def not in child_layer_def.parents:
+                        child_layer_def.parents.append(parent_layer_def)
+                    if child_layer_def not in parent_layer_def.children:
+                        parent_layer_def.children.append(child_layer_def)
 
-    layer_to_bottoms = dict()
-    for layer in network_def.layer:
-        if (len(layer.include) == 0) or (caffe_pb2.TEST in [item.phase for item in layer.include]):
-            for bottom in layer.bottom:
-                if layer.name not in layer_to_bottoms:
-                    layer_to_bottoms[layer.name] = list()
-                layer_to_bottoms[layer.name].append(bottom)
-    # if 'data' not in layer_to_bottoms:
-    #     layer_to_bottoms['data'] = ['data']
+    # update filter, strid, pad for maxout "structures"
+    for layer_name in layer_name_to_def.keys():
+        layer_def = layer_name_to_def[layer_name]
+        if layer_def.type == 'Eltwise' and \
+           len(layer_def.parents) == 1 and \
+           layer_def.parents[0].type == 'Slice' and \
+           len(layer_def.parents[0].parents) == 1 and \
+           layer_def.parents[0].parents[0].type in ['Convolution', 'InnerProduct']:
+            layer_def.filter = layer_def.parents[0].parents[0].filter
+            layer_def.stride = layer_def.parents[0].parents[0].stride
+            layer_def.pad = layer_def.parents[0].parents[0].pad
 
     inplace_layers = list()
     for layer in network_def.layer:
@@ -152,18 +196,12 @@ def read_network_dag(settings):
             if len(layer.top) == 1 and len(layer.bottom) == 1 and layer.top[0] == layer.bottom[0]:
                 inplace_layers.append(layer.name)
 
-    layer_name_to_def = dict()
-    for layer in network_def.layer:
-        if (len(layer.include) == 0) or (caffe_pb2.TEST in [item.phase for item in layer.include]):
-            layer_name_to_def[layer.name] = layer
-
     # keep helper variables in settings
     settings._network_def = network_def
+    settings._layer_name_to_def = layer_name_to_def
+
     settings._bottom_to_layers = bottom_to_layers
     settings._top_to_layers = top_to_layers
-    settings._layer_to_tops = layer_to_tops
-    settings._layer_to_bottoms = layer_to_bottoms
     settings._inplace_layers = inplace_layers
-    settings._layer_name_to_def = layer_name_to_def
 
     return

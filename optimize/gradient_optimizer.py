@@ -38,7 +38,7 @@ class FindParams(object):
             small_norm_percentile = None,
             px_benefit_percentile = None,
             px_abs_benefit_percentile = None,
-            layer_is_conv = False,
+            is_spatial = False,
 
             lr_policy = 'constant',
             lr_params = {'lr': 10.0},
@@ -235,9 +235,9 @@ class GradientOptimizer(object):
         top_name = layer_name_to_top_name(self.net, params.push_layer)
         data_shape = self.net.blobs[top_name].data.shape
         assert len(data_shape) in (2,4), 'Expected shape of length 2 (for FC) or 4 (for conv) layers but shape is %s' % repr(data_shape)
-        is_conv = (len(data_shape) == 4)
+        is_spatial = (len(data_shape) == 4)
 
-        if is_conv:
+        if is_spatial:
             if params.push_spatial == (0,0):
                 recommended_spatial = (data_shape[2]/2, data_shape[3]/2)
                 print ('WARNING: A unit on a conv layer (%s) is being optimized, but push_spatial\n'
@@ -271,7 +271,7 @@ class GradientOptimizer(object):
             # note: no batch support in 'siamese_batch_pair'
             if self.settings.is_siamese and self.settings.siamese_network_format == 'siamese_batch_pair' and acts.shape[0] == 2:
 
-                if not is_conv:
+                if not is_spatial:
                     # promote to 4D
                     acts = np.reshape(acts, (2, -1, 1, 1))
                 reshaped_acts = np.reshape(acts, (2, -1))
@@ -284,7 +284,7 @@ class GradientOptimizer(object):
 
             elif self.settings.is_siamese and self.settings.siamese_network_format == 'siamese_batch_pair' and acts.shape[0] == 1:
 
-                if not is_conv:
+                if not is_spatial:
                     # promote to 4D
                     acts = np.reshape(acts, (1, -1, 1, 1))
                 reshaped_acts = np.reshape(acts, (1, -1))
@@ -296,7 +296,7 @@ class GradientOptimizer(object):
                 obj[0] = acts[0, params.push_unit[0], params.push_unit[1], params.push_unit[2]]
 
             else:
-                if not is_conv:
+                if not is_spatial:
                     # promote to 4D
                     acts = np.reshape(acts, (params.batch_size, -1, 1, 1))
                 reshaped_acts = np.reshape(acts, (params.batch_size, -1))
@@ -333,7 +333,7 @@ class GradientOptimizer(object):
             # 4. Do backward pass to get gradient
             top_name = layer_name_to_top_name(self.net, params.push_layer)
             diffs = self.net.blobs[top_name].diff * 0
-            if not is_conv:
+            if not is_spatial:
                 # Promote bc -> bc01
                 diffs = diffs[:,:,np.newaxis,np.newaxis]
 
@@ -343,7 +343,7 @@ class GradientOptimizer(object):
                 diffs[0, params.push_unit[0], params.push_unit[1], params.push_unit[2]] = params.push_dir
             else:
                 diffs[np.arange(params.batch_size), params.push_unit[0], params.push_unit[1], params.push_unit[2]] = params.push_dir
-            backout = self.net.backward_from_layer(params.push_layer, diffs if is_conv else diffs[:,:,0,0])
+            backout = self.net.backward_from_layer(params.push_layer, diffs if is_spatial else diffs[:,:,0,0])
 
             grad = backout['data'].copy()
             reshaped_grad = np.reshape(grad, (params.batch_size, -1))
@@ -509,13 +509,13 @@ class GradientOptimizer(object):
                 # get center position, relative to layer, of best maximum
                 [temp_ii, temp_jj] = results[batch_index].idxmax[results[batch_index].best_ii][1:3]
 
-                is_conv = params.layer_is_conv
+                is_spatial = params.is_spatial
                 layer_name = params.push_layer
-                size_ii, size_jj = get_max_data_extent(self.net, self.settings, layer_name, is_conv)
+                size_ii, size_jj = get_max_data_extent(self.net, self.settings, layer_name, is_spatial)
                 data_size_ii, data_size_jj = self.net.blobs['data'].data.shape[2:4]
 
                 [out_ii_start, out_ii_end, out_jj_start, out_jj_end, data_ii_start, data_ii_end, data_jj_start, data_jj_end] = \
-                    compute_data_layer_focus_area(is_conv, temp_ii, temp_jj, self.settings, layer_name, size_ii, size_jj, data_size_ii, data_size_jj)
+                    compute_data_layer_focus_area(is_spatial, temp_ii, temp_jj, self.settings, layer_name, size_ii, size_jj, data_size_ii, data_size_jj)
 
                 selected_input_index = self.find_selected_input_index(layer_name)
 

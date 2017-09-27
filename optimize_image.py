@@ -8,7 +8,8 @@ import numpy as np
 import settings
 from optimize.gradient_optimizer import GradientOptimizer, FindParams
 from caffevis.caffevis_helper import check_force_backward_true, read_label_file, set_mean
-from settings_misc import load_network, get_layer_info
+from settings_misc import load_network
+from caffe_misc import layer_name_to_top_name
 
 
 LR_POLICY_CHOICES = ('constant', 'progress', 'progress01')
@@ -179,33 +180,18 @@ def main():
     # go over push layers
     for count, push_layer in enumerate(args.push_layers):
 
-        # get layer type
-        current_layer, previous_layer = get_layer_info(settings, push_layer)
-        (current_name, current_type, current_input, current_output, current_filter, current_stride, current_pad) = current_layer
-        (previous_name, previous_type, previous_input, previous_output, previous_filter, previous_stride, previous_pad) = previous_layer
+        top_name = layer_name_to_top_name(net, push_layer)
+        blob = net.blobs[top_name].data
+        is_spatial = (len(blob.shape) == 4)
+        channels = blob.shape[1]
 
-        if current_type == 'FullyConnected':
-            # get number of units
-            channels = current_output
+        # get layer definition
+        layer_def = settings._layer_name_to_def[push_layer]
+
+        if is_spatial:
+            push_spatial = (layer_def.filter[0] / 2, layer_def.filter[1] / 2)
+        else:
             push_spatial = (0, 0)
-            layer_is_conv = False
-
-        elif current_type == 'Convolution':
-            # get number of channels
-            channels = current_output[2]
-            push_spatial = (current_filter[0]/2, current_filter[1]/2)
-            layer_is_conv = True
-
-        elif current_type == 'Eltwise' and previous_type == 'FullyConnected':
-            channels = current_output
-            push_spatial = (0, 0)
-            layer_is_conv = False
-
-        elif current_type == 'Eltwise' and previous_type == 'Convolution':
-            # get number of channels
-            channels = current_output[2]
-            push_spatial = (previous_filter[0]/2, previous_filter[1]/2)
-            layer_is_conv = True
 
         # if channels defined in settings file, use them
         if settings.optimize_image_channels:
@@ -233,7 +219,7 @@ def main():
                 lr_policy = args.lr_policy,
                 lr_params = lr_params,
                 max_iter = args.max_iters[count % len(args.max_iters)],
-                layer_is_conv=layer_is_conv,
+                is_spatial = is_spatial,
             )
 
             optimizer.run_optimize(params, prefix_template = args.output_prefix,

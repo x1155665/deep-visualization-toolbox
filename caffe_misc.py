@@ -90,45 +90,17 @@ class RegionComputer(object):
 
         step_region = None
 
+        layer_def = settings._layer_name_to_def[from_layer] if from_layer in settings._layer_name_to_def else None
+
         # do single step to convert according to from_layer
-        if from_layer not in settings._layer_name_to_def:
+        if not layer_def:
             # fallback to doing nothing
             step_region = region
+
         else:
 
-            layer_def = settings._layer_name_to_def[from_layer]
-
-            if layer_def.type == 'Convolution':
-                filter = list(layer_def.convolution_param.kernel_size)
-                if len(filter) == 1:
-                    filter *= 2
-                pad = list(layer_def.convolution_param.pad)
-                if len(pad) == 0:
-                    pad = [0, 0]
-                elif len(pad) == 1:
-                    pad *= 2
-                stride = list(layer_def.convolution_param.stride)
-                if len(stride) == 0:
-                    stride = [1, 1]
-                elif len(stride) == 1:
-                    stride *= 2
-                step_region = RegionComputer.region_converter(region, filter, stride, pad)
-
-            elif layer_def.type == 'Pooling':
-                filter = [layer_def.pooling_param.kernel_size]
-                if len(filter) == 1:
-                    filter *= 2
-                pad = [layer_def.pooling_param.pad]
-                if len(pad) == 0:
-                    pad = [0, 0]
-                elif len(pad) == 1:
-                    pad *= 2
-                stride = [layer_def.pooling_param.stride]
-                if len(stride) == 0:
-                    stride = [1, 1]
-                elif len(stride) == 1:
-                    stride *= 2
-                step_region = RegionComputer.region_converter(region, filter, stride, pad)
+            if layer_def.type in ['Convolution', 'Pooling']:
+                step_region = RegionComputer.region_converter(region, layer_def.filter, layer_def.stride, layer_def.pad)
 
             else:
                 # fallback to doing nothing
@@ -140,7 +112,7 @@ class RegionComputer(object):
         # handle the rest
         total_region = None
 
-        bottoms = settings._layer_to_bottoms[from_layer]
+        bottoms = layer_def.bottoms if layer_def else []
 
         for bottom in bottoms:
 
@@ -181,12 +153,12 @@ def layer_name_to_top_name(net, layer_name):
     return net.top_names[layer_name][0]
 
 
-def get_max_data_extent(net, settings, layer_name, is_conv):
+def get_max_data_extent(net, settings, layer_name, is_spatial):
     '''Gets the maximum size of the data layer that can influence a unit on layer.'''
 
     data_size = net.blobs['data'].data.shape[2:4]  # e.g. (227,227) for fc6,fc7,fc8,prop
 
-    if is_conv:
+    if is_spatial:
         top_name = layer_name_to_top_name(net, layer_name)
         conv_size = net.blobs[top_name].data.shape[2:4]        # e.g. (13,13) for conv5
         layer_slice_middle = (conv_size[0]/2,conv_size[0]/2+1, conv_size[1]/2,conv_size[1]/2+1)   # e.g. (6,7,6,7,), the single center unit
@@ -200,9 +172,9 @@ def get_max_data_extent(net, settings, layer_name, is_conv):
         return data_size
 
 
-def compute_data_layer_focus_area(is_conv, ii, jj, settings, layer_name, size_ii, size_jj, data_size_ii, data_size_jj):
+def compute_data_layer_focus_area(is_spatial, ii, jj, settings, layer_name, size_ii, size_jj, data_size_ii, data_size_jj):
 
-    if is_conv:
+    if is_spatial:
 
         # Compute the focus area of the data layer
         layer_indices = (ii, ii + 1, jj, jj + 1)

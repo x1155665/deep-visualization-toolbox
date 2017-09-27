@@ -12,7 +12,6 @@ from image_misc import resize_without_fit
 from caffe_misc import RegionComputer, save_caffe_image, get_max_data_extent, extract_patch_from_image, \
     compute_data_layer_focus_area, layer_name_to_top_name
 from siamese_helper import SiameseHelper
-from settings_misc import get_layer_info
 
 from jby_misc import WithTimer
 
@@ -143,11 +142,11 @@ def prepare_max_histogram(layer_name, n_channels, channel_to_histogram_values, p
 
 class MaxTracker(object):
 
-    def __init__(self, is_conv, n_channels, n_top = 10, initial_val = -1e99, dtype = 'float32'):
-        self.is_conv = is_conv
+    def __init__(self, is_spatial, n_channels, n_top = 10, initial_val = -1e99, dtype = 'float32'):
+        self.is_spatial = is_spatial
         self.max_vals = np.ones((n_channels, n_top), dtype = dtype) * initial_val
         self.n_top = n_top
-        if is_conv:
+        if is_spatial:
             self.max_locs = -np.ones((n_channels, n_top, 5), dtype = 'int')   # image_idx, image_class, selected_input_index, i, j
         else:
             self.max_locs = -np.ones((n_channels, n_top, 3), dtype = 'int')   # image_idx, image_class, selected_input_index
@@ -191,7 +190,7 @@ class MaxTracker(object):
         self.seen_inputs.add(layer_unique_input_source)
 
         n_channels = data.shape[0]
-        data_unroll = data.reshape((n_channels, -1))          # Note: no copy eg (96,3025). Does nothing if not is_conv
+        data_unroll = data.reshape((n_channels, -1))          # Note: no copy eg (96,3025). Does nothing if not is_spatial
 
         max_indexes = data_unroll.argmax(1)   # maxes for each channel, eg. (96,)
 
@@ -216,7 +215,7 @@ class MaxTracker(object):
             # self.max_locs
             self.max_locs[ii,:idx-1] = self.max_locs[ii,1:idx]       # shift lower location data
             # store new location
-            if self.is_conv:
+            if self.is_spatial:
                 self.max_locs[ii,idx-1] = (image_idx, image_class, selected_input_index) + np.unravel_index(max_indexes[ii], data.shape[1:])
             else:
                 self.max_locs[ii,idx-1] = (image_idx, image_class, selected_input_index)
@@ -278,16 +277,11 @@ class NetMaxTracker(object):
             # count as the same layer in terms of activations
             normalized_layer_name = self.siamese_helper.normalize_layer_name_for_max_tracker(layer_name)
 
-            current_layer, previous_layer = get_layer_info(self.settings, normalized_layer_name)
-            (current_name, current_type, current_input, current_output, current_filter, current_stride, current_pad) = current_layer
-            (previous_name, previous_type, previous_input, previous_output, previous_filter, previous_stride, previous_pad) = previous_layer
-
-            is_conv = (current_type == 'Convolution') or (previous_type == 'Convolution' and current_type == 'Eltwise')
-            # is_conv = self.settings.is_conv_fn(layer_name)
+            is_spatial = (len(blob.shape) == 4)
 
             # only add normalized layer once
             if normalized_layer_name not in self.max_trackers:
-                self.max_trackers[normalized_layer_name] = MaxTracker(is_conv, blob.shape[1], n_top = self.n_top,
+                self.max_trackers[normalized_layer_name] = MaxTracker(is_spatial, blob.shape[1], n_top = self.n_top,
                                                                       initial_val = self.initial_val,
                                                                       dtype = blob.dtype)
 
@@ -623,7 +617,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
     assert num_top <= num_top_in_mt, 'Requested %d top images but MaxTracker contains only %d' % (num_top, num_top_in_mt)
     assert idx_end >= idx_begin, 'Range error'
 
-    size_ii, size_jj = get_max_data_extent(net, settings, layer_name, mt.is_conv)
+    size_ii, size_jj = get_max_data_extent(net, settings, layer_name, mt.is_spatial)
     data_size_ii, data_size_jj = net.blobs['data'].data.shape[2:4]
 
     net_input_dims = net.blobs['data'].data.shape[2:4]
@@ -673,7 +667,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
             channel_to_info_file[channel_idx].info_file = open(info_filename[0], 'w')
             channel_to_info_file[channel_idx].ref_count = num_top
 
-            print >> channel_to_info_file[channel_idx].info_file, '# is_conv val image_idx image_class selected_input_index i(if is_conv) j(if is_conv) filename'
+            print >> channel_to_info_file[channel_idx].info_file, '# is_spatial val image_idx image_class selected_input_index i(if is_spatial) j(if is_spatial) filename'
 
         # iterate through maxes from highest (at end) to lowest
         for max_idx_0 in range(num_top):
@@ -690,7 +684,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
             batch[batch_index].max_idx_0 = max_idx_0
             batch[batch_index].max_idx = num_top_in_mt - 1 - batch[batch_index].max_idx_0
 
-            if mt.is_conv:
+            if mt.is_spatial:
                 batch[batch_index].im_idx, batch[batch_index].im_class, batch[batch_index].selected_input_index, batch[batch_index].ii, batch[batch_index].jj = mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]
             else:
                 batch[batch_index].im_idx, batch[batch_index].im_class, batch[batch_index].selected_input_index = mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]
@@ -707,7 +701,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                 print '%s   Output file/image(s) %d/%d   layer %s channel %d' % (datetime.now().ctime(), batch[batch_index].cc * num_top, n_total_images, layer_name, batch[batch_index].channel_idx)
 
 
-            # print "DEBUG: (mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, layer_name, size_ii, size_jj, data_size_ii, data_size_jj)", str((mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, rc, layer_name, size_ii, size_jj, data_size_ii, data_size_jj))
+            # print "DEBUG: (mt.is_spatial, batch[batch_index].ii, batch[batch_index].jj, layer_name, size_ii, size_jj, data_size_ii, data_size_jj)", str((mt.is_spatial, batch[batch_index].ii, batch[batch_index].jj, rc, layer_name, size_ii, size_jj, data_size_ii, data_size_jj))
 
             [batch[batch_index].out_ii_start,
              batch[batch_index].out_ii_end,
@@ -717,7 +711,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
              batch[batch_index].data_ii_end,
              batch[batch_index].data_jj_start,
              batch[batch_index].data_jj_end] = \
-                compute_data_layer_focus_area(mt.is_conv, batch[batch_index].ii, batch[batch_index].jj, settings, layer_name,
+                compute_data_layer_focus_area(mt.is_spatial, batch[batch_index].ii, batch[batch_index].jj, settings, layer_name,
                                               size_ii, size_jj, data_size_ii, data_size_jj)
 
             # print "DEBUG: channel:%d out_ii_start:%d out_ii_end:%d out_jj_start:%d out_jj_end:%d data_ii_start:%d data_ii_end:%d data_jj_start:%d data_jj_end:%d" % \
@@ -728,8 +722,8 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
             #        batch[batch_index].data_jj_start, batch[batch_index].data_jj_end)
 
             if do_info:
-                print >> batch[batch_index].info_file, 1 if mt.is_conv else 0, '%.6f' % mt.max_vals[batch[batch_index].channel_idx, batch[batch_index].max_idx],
-                if mt.is_conv:
+                print >> batch[batch_index].info_file, 1 if mt.is_spatial else 0, '%.6f' % mt.max_vals[batch[batch_index].channel_idx, batch[batch_index].max_idx],
+                if mt.is_spatial:
                     print >> batch[batch_index].info_file, '%d %d %d %d %d' % tuple(mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]),
                 else:
                     print >> batch[batch_index].info_file, '%d %d %d' % tuple(mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]),
