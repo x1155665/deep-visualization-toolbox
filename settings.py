@@ -371,9 +371,6 @@ caffe_net_image_dims = locals().get('caffe_net_image_dims', None)
 # function used to convert a string label into something else, can be an integer
 convert_label_fn = locals().get('convert_label_fn', lambda label: int(label.strip()))
 
-# list of all the layer names which we want to track their maximal activations, usually convolutionals and fully-connecteds
-layers_for_max_tracker = locals().get('layers_for_max_tracker', ['conv1', 'conv2', 'conv3', 'conv4', 'conv5', 'fc6', 'fc7', 'fc8', 'prob'])
-
 # function used to check if a layer is a convolutional
 is_conv_fn = locals().get('is_conv_fn', lambda layer_name: 'conv' in layer_name)
 
@@ -404,11 +401,11 @@ max_tracker_do_histograms = locals().get('max_tracker_do_histograms', True)
 # default value for output_dir parameter in max tracker
 max_tracker_output_dir = locals().get('max_tracker_output_dir', './')
 
-# default value for layer parameter in max_tracker
-max_tracker_layers_to_output = locals().get('max_tracker_layers_to_output', [])
-
 # default batch size used in max_tracker
 max_tracker_batch_size = locals().get('max_tracker_batch_size', 1)
+
+# list of layers to output when using offlien scripts
+layers_to_output_in_offline_scripts = locals().get('layers_to_output_in_offline_scripts', [])
 
 # default value for list of layers used in max tracker
 # note the default is a hardcoded choice which was used in the original code,
@@ -431,9 +428,6 @@ layers_list = locals().get('layers_list', [])
 
 # rand-seed parameter for optimize_image.py
 optimize_image_rand_seed = locals().get('optimize_image_rand_seed', 0)
-
-# push-layer parameter for optimize_image.py
-optimize_image_push_layers = locals().get('optimize_image_push_layers', [])
 
 # decay parameter for optimize_image.py
 optimize_image_decay = locals().get('optimize_image_decay', 0)

@@ -63,7 +63,7 @@ def main():
 
     nmt = load_max_tracker_from_file(args.nmt_pkl)
 
-    for layer_name in settings.max_tracker_layers_to_output:
+    for layer_name in settings.layers_to_output_in_offline_scripts:
 
         print 'Started work on layer %s' % (layer_name)
 
