@@ -617,6 +617,8 @@ class CaffeVisApp(BaseApp):
             unit_folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, load_layer, "unit_%04d" % (unit_id), file_search_pattern)
 
             try:
+                if unit_id % 10 == 0:
+                    print "loading %s images for layer %s channel %d out of %d" % (file_search_pattern, load_layer, unit_id, units_num)
 
                 unit_first_image = get_image_from_files(self.settings, unit_folder_path, False, resize_shape, first_only)
 
@@ -693,8 +695,8 @@ class CaffeVisApp(BaseApp):
 
             def calculate_weights_histogram_for_specific_unit(channel_idx, fig, ax, do_print):
 
-                if do_print and channel_idx % 100 == 0:
-                    print "calculating weights histogram for channel %d out of %d" % (channel_idx, n_channels)
+                if do_print and channel_idx % 10 == 0:
+                    print "calculating weights histogram for layer %s channel %d out of %d" % (layer_name, channel_idx, n_channels)
 
                 # get vector of weights
                 weights = net.params[layer_name][0].data[channel_idx].flatten()
