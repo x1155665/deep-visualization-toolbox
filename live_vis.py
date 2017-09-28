@@ -61,7 +61,7 @@ class LiveVis(object):
             app = app_class(settings, self.bindings)
             self.apps[app_name] = app
         self.help_mode = False
-        self.window_name = 'Deep Visualization Toolbox'
+        self.window_name = 'Deep Visualization Toolbox    |    Model: %s' % (settings.model_to_load)
         self.quit = False
         self.debug_level = 0
 
@@ -189,12 +189,13 @@ class LiveVis(object):
                 redraw_needed |= app.redraw_needed()
 
             # Grab latest frame from input_updater thread
-            fr_idx,fr_data,fr_label = self.input_updater.get_frame()
+            fr_idx,fr_data,fr_label,fr_filename = self.input_updater.get_frame()
             is_new_frame = (fr_idx != latest_frame_idx and fr_data is not None)
             if is_new_frame:
                 latest_frame_idx = fr_idx
                 latest_frame_data = fr_data
                 latest_label = fr_label
+                latest_filename = fr_filename
                 frame_for_apps = fr_data
 
             if is_new_frame:
@@ -208,7 +209,7 @@ class LiveVis(object):
                 # Pass frame to apps for processing
                 for app_name, app in self.apps.iteritems():
                     with WithTimer('%s:handle_input' % app_name, quiet = self.debug_level < 1):
-                        app.handle_input(latest_frame_data, latest_label, self.panes)
+                        app.handle_input(latest_frame_data, latest_label, latest_filename, self.panes)
                 frame_for_apps = None
 
             # Tell each app to draw
@@ -344,14 +345,6 @@ class LiveVis(object):
         defaults = self.help_pane_defaults
         lines = []
         lines.append([FormattedString('~ ~ ~ Deep Visualization Toolbox ~ ~ ~', defaults, align='center', width=self.help_pane.j_size)])
-        lines.append([FormattedString('', defaults)])
-        lines.append([FormattedString('Base keys', defaults)])
-
-        for tag in ('help_mode', 'freeze_cam', 'toggle_input_mode', 'static_file_increment', 'static_file_decrement', 'stretch_mode', 'quit'):
-            key_strings, help_string = self.bindings.get_key_help(tag)
-            label = '%10s:' % (','.join(key_strings))
-            lines.append([FormattedString(label, defaults, width=120, align='right'),
-                          FormattedString(help_string, defaults)])
 
         locy = cv2_typeset_text(self.help_pane.data, lines, loc,
                                 line_spacing = self.settings.help_line_spacing)

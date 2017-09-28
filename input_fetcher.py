@@ -164,7 +164,7 @@ class InputImageFetcher(CodependentThread):
         is not valid.
         '''
         with self.lock:
-            return (self.latest_frame_idx, self.latest_frame_data, self.latest_label)
+            return (self.latest_frame_idx, self.latest_frame_data, self.latest_label, self.latest_static_filename)
 
     def increment_static_file_idx(self, amount = 1):
         with self.lock:

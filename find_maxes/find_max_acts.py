@@ -61,6 +61,7 @@ def main():
     current_input_shape = net.blobs[net.inputs[0]].shape
     current_input_shape[0] = settings.max_tracker_batch_size
     net.blobs[net.inputs[0]].reshape(*current_input_shape)
+    net.reshape()
 
     with WithTimer('Scanning images'):
         if settings.is_siamese:

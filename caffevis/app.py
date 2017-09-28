@@ -42,14 +42,20 @@ class CaffeVisApp(BaseApp):
         self.settings = settings
         self.bindings = key_bindings
 
-        self._net_channel_swap = settings.caffe_net_channel_swap
+        self.net, self._data_mean = load_network(settings)
+
+        # set network batch size to 1
+        current_input_shape = self.net.blobs[self.net.inputs[0]].shape
+        current_input_shape[0] = 1
+        self.net.blobs[self.net.inputs[0]].reshape(*current_input_shape)
+        self.net.reshape()
+
+        self._net_channel_swap = settings._calculated_channel_swap
 
         if self._net_channel_swap is None:
             self._net_channel_swap_inv = None
         else:
             self._net_channel_swap_inv = tuple([self._net_channel_swap.index(ii) for ii in range(len(self._net_channel_swap))])
-
-        self.net, self._data_mean = load_network(settings)
 
         check_force_backward_true(settings.caffevis_deploy_prototxt)
 
@@ -110,7 +116,7 @@ class CaffeVisApp(BaseApp):
     def _can_skip_all(self, panes):
         return ('caffevis_layers' not in panes.keys())
         
-    def handle_input(self, input_image, input_label, panes):
+    def handle_input(self, input_image, input_label, input_filename, panes):
         if self.debug_level > 1:
             print 'handle_input: frame number', self.handled_frames, 'is', 'None' if input_image is None else 'Available'
         self.handled_frames += 1
@@ -122,6 +128,7 @@ class CaffeVisApp(BaseApp):
                 print 'CaffeVisApp.handle_input: pushed frame'
             self.state.next_frame = input_image
             self.state.next_label = input_label
+            self.state.next_filename = input_filename
             if self.debug_level > 1:
                 print 'CaffeVisApp.handle_input: caffe_net_state is:', self.state.caffe_net_state
 
@@ -245,6 +252,7 @@ class CaffeVisApp(BaseApp):
         loc = self.settings.caffevis_status_loc[::-1]   # Reverse to OpenCV c,r order
 
         status = StringIO.StringIO()
+        status2 = StringIO.StringIO()
         fps = self.proc_thread.approx_fps()
         with self.state.lock:
             pattern_first_mode = "first" if self.state.pattern_first_only else "all"
@@ -279,12 +287,21 @@ class CaffeVisApp(BaseApp):
 
             if self.state.extra_msg:
                 print >>status, '|', self.state.extra_msg
-                self.state.extra_msg = ''
 
-        strings = [FormattedString(line, defaults) for line in status.getvalue().split('\n')]
+            print >> status2, 'Layer size: %s' % (self.state.get_layer_output_size_string())
 
-        cv2_typeset_text(pane.data, strings, loc,
+            print >> status2, '| Receptive field:', '%s' % str(self.settings._receptive_field_per_layer[default_layer_name]) if self.settings._receptive_field_per_layer.has_key(default_layer_name) else 'N/A'
+
+            print >> status2, '| Input: %s' % (str(self.state.next_filename))
+
+        strings_line1 = [FormattedString(line, defaults) for line in status.getvalue().split('\n')]
+        strings_line2 = [FormattedString(line, defaults) for line in status2.getvalue().split('\n')]
+
+        locy = cv2_typeset_text(pane.data, strings_line1, (loc[0], loc[1] + 5),
                          line_spacing = self.settings.caffevis_status_line_spacing)
+
+        locy = cv2_typeset_text(pane.data, strings_line2, (loc[0], locy),
+                         line_spacing=self.settings.caffevis_status_line_spacing)
 
     def prepare_tile_image(self, display_3D, highlight_selected, n_tiles, tile_rows, tile_cols):
 
@@ -487,9 +504,8 @@ class CaffeVisApp(BaseApp):
         pane.data[0:display_2D_resize.shape[0], 0:display_2D_resize.shape[1], :] = display_2D_resize
 
     def _add_label_or_score_overlay(self, default_layer_name, pane):
-        # check if label or score should be presented for the selected layer
-        if (default_layer_name in self.settings.caffevis_label_layers and self.state.cursor_area == 'bottom') or \
-                (default_layer_name in self.settings.caffevis_score_layers and self.state.cursor_area == 'bottom'):
+
+        if self.state.cursor_area == 'bottom':
 
             # Display label annotation atop layers pane (e.g. for fc8/prob)
             defaults = {'face': getattr(cv2, self.settings.caffevis_label_face),
@@ -502,27 +518,34 @@ class CaffeVisApp(BaseApp):
             if (self.labels) and (default_layer_name in self.settings.caffevis_label_layers):
                 text_to_display = self.labels[self.state.selected_unit] + " "
 
-            if (default_layer_name in self.settings.caffevis_score_layers):
-
+            if self.state.show_maximal_score:
                 if self.state.siamese_view_mode_has_two_images():
                     if self.state.layers_show_back:
                         blob1, blob2 = self.state.get_siamese_selected_diff_blobs(self.net)
-                        value1, value2 = blob1[self.state.selected_unit], blob2[self.state.selected_unit]
-                        text_to_display += 'grad: ' + str(value1) + " " + str(value2)
+
+                        if len(blob1.shape) == 1:
+                            value1, value2 = blob1[self.state.selected_unit], blob2[self.state.selected_unit]
+                            text_to_display += 'grad: ' + str(value1) + " " + str(value2)
                     else:
                         blob1, blob2 = self.state.get_siamese_selected_data_blobs(self.net)
-                        value1, value2 = blob1[self.state.selected_unit], blob2[self.state.selected_unit]
-                        text_to_display += 'act: ' + str(value1) + " " + str(value2)
+
+                        if len(blob1.shape) == 1:
+                            value1, value2 = blob1[self.state.selected_unit], blob2[self.state.selected_unit]
+                            text_to_display += 'act: ' + str(value1) + " " + str(value2)
 
                 else:
                     if self.state.layers_show_back:
                         blob = self.state.get_single_selected_diff_blob(self.net)
-                        value = blob[self.state.selected_unit]
-                        text_to_display += 'grad: ' + str(value)
+
+                        if len(blob.shape) == 1:
+                            value = blob[self.state.selected_unit]
+                            text_to_display += 'grad: ' + str(value)
                     else:
                         blob = self.state.get_single_selected_data_blob(self.net)
-                        value = blob[self.state.selected_unit]
-                        text_to_display += 'act: ' + str(value)
+
+                        if len(blob.shape) == 1:
+                            value = blob[self.state.selected_unit]
+                            text_to_display += 'act: ' + str(value)
 
             lines = [FormattedString(text_to_display, defaults)]
             cv2_typeset_text(pane.data, lines, loc_base)
@@ -966,6 +989,9 @@ class CaffeVisApp(BaseApp):
             unit_data_resize = resize_without_fit(unit_data, resize_shape)
 
         if self.state.pattern_mode == PatternMode.OFF:
+            if self.state.last_frame is None:
+                pass
+
             input_image = SiameseHelper.get_image_from_frame(self.state.last_frame, self.state.settings.is_siamese,
                                                              resize_shape, self.state.siamese_view_mode)
             normalized_mask = unit_data_resize
@@ -1305,8 +1331,7 @@ class CaffeVisApp(BaseApp):
         locx = loc_base[0]
 
         lines = []
-        lines.append([FormattedString('', defaults)])
-        lines.append([FormattedString('Caffevis keys', defaults)])
+        lines.append([FormattedString('DeepVis keys', defaults)])
         
         kl,_ = self.bindings.get_key_help('sel_left')
         kr,_ = self.bindings.get_key_help('sel_right')
@@ -1326,15 +1351,21 @@ class CaffeVisApp(BaseApp):
         nav_string = 'Navigate with %s%s. Use %s to move faster.' % (keys_nav_0, keys_nav_1, keys_nav_f)
         lines.append([FormattedString('', defaults, width=120, align='right'),
                       FormattedString(nav_string, defaults)])
-            
-        for tag in ('sel_layer_left', 'sel_layer_right', 'zoom_mode', 'next_pattern_mode','pattern_first_only',
-                    'next_input_overlay', 'next_ez_back_mode_loop', 'next_back_view_option', 'next_color_map',
-                    'freeze_back_unit', 'show_back', 'boost_gamma', 'boost_individual', 'siamese_view_mode',
-                    'toggle_maximal_score', 'reset_state'):
-            key_strings, help_string = self.bindings.get_key_help(tag)
-            label = '%10s:' % (','.join(key_strings))
-            lines.append([FormattedString(label, defaults, width=120, align='right'),
-                          FormattedString(help_string, defaults)])
+
+        for tag in ('help_mode', 'static_file_increment', 'static_file_decrement', 'sel_layer_left', 'sel_layer_right',
+                    '', 'next_pattern_mode', 'pattern_first_only', '', 'next_input_overlay', 'next_ez_back_mode_loop',
+                    'next_back_view_option', 'next_color_map', '', 'freeze_back_unit', 'show_back', 'zoom_mode',
+                    'siamese_view_mode', 'toggle_maximal_score', 'boost_gamma', 'boost_individual', 'freeze_cam',
+                    'toggle_input_mode', 'stretch_mode', '', 'reset_state', 'quit'):
+
+            if (tag == ''):
+                lines.append([FormattedString('', defaults)])
+
+            else:
+                key_strings, help_string = self.bindings.get_key_help(tag)
+                label = '%10s:' % (','.join(key_strings))
+                lines.append([FormattedString(label, defaults, width=120, align='right'),
+                              FormattedString(help_string, defaults)])
 
         locy = cv2_typeset_text(help_pane.data, lines, (locx, locy),
                                 line_spacing = self.settings.help_line_spacing)

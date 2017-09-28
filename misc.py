@@ -84,7 +84,7 @@ def get_files_from_image_list(settings):
         lines = image_list_file.readlines()
         # take first token from each line
         available_files = [tsplit(line, True, ' ', ',', '\t')[0] for line in lines if line.strip() != ""]
-        labels = [tsplit(line, True, ' ', ',', '\t')[1] for line in lines if line.strip() != ""]
+        labels = [tsplit(line, True, ' ', ',', '\t')[1].strip() for line in lines if line.strip() != ""]
 
     return available_files, labels
 
@@ -100,7 +100,7 @@ def get_files_from_siamese_image_list(settings):
         # take first and second tokens from each line
         available_files = [(tsplit(line, True, ' ', ',', '\t')[0], tsplit(line, True, ' ', ',', '\t')[1])
                            for line in lines if line.strip() != ""]
-        labels = [tsplit(line, True, ' ', ',', '\t')[2] for line in lines if line.strip() != ""]
+        labels = [tsplit(line, True, ' ', ',', '\t')[2].strip() for line in lines if line.strip() != ""]
 
     return available_files, labels
 

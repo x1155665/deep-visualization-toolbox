@@ -124,6 +124,7 @@ class CaffeVisAppState(object):
         self.back_stale = True       # back becomes stale whenever the last back diffs were not computed using the current backprop unit and method (bprop or deconv)
         self.next_frame = None
         self.next_label = None
+        self.next_filename = None
         self.last_frame = None
         self.jpgvis_to_load_key = None
         self.last_key_at = 0
@@ -162,7 +163,7 @@ class CaffeVisAppState(object):
         return headers
 
     def _reset_user_state(self):
-        self.show_maximal_score = False
+        self.show_maximal_score = True
         self.input_overlay_option = InputOverlayOption.OFF
         self.layer_idx = 0
         self.layer_boost_indiv_idx = self.settings.caffevis_boost_indiv_default_idx
@@ -495,3 +496,24 @@ class CaffeVisAppState(object):
 
     def convert_image_pair_to_network_input_format(self, settings, frame_pair, resize_shape):
         return SiameseHelper.convert_image_pair_to_network_input_format(frame_pair, resize_shape, settings.siamese_input_mode)
+
+    def get_layer_output_size(self, layer_def = None):
+
+        # if no layer specified, get current layer
+        if layer_def is None:
+            layer_def = self.get_current_layer_definition()
+
+        return SiameseHelper.get_layer_output_size(self.net, self.settings.is_siamese, layer_def, self.siamese_view_mode)
+
+    def get_layer_output_size_string(self, layer_def=None):
+
+        layer_output_size = self.get_layer_output_size(layer_def)
+
+        if len(layer_output_size) == 1:
+            return '(%d)' % (layer_output_size[0])
+        elif len(layer_output_size) == 2:
+            return '(%d,%d)' % (layer_output_size[0],layer_output_size[1])
+        elif len(layer_output_size) == 3:
+            return '(%d,%d,%d)' % (layer_output_size[0], layer_output_size[1], layer_output_size[2])
+        else:
+            return str(layer_output_size)

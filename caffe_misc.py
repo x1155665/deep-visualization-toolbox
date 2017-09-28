@@ -151,8 +151,12 @@ def save_caffe_image(img, filename, autoscale = True, autoscale_center = None):
 
 
 def layer_name_to_top_name(net, layer_name):
-    return net.top_names[layer_name][0]
 
+    if net.top_names.has_key(layer_name) and len(net.top_names[layer_name]) >= 1:
+        return net.top_names[layer_name][0]
+
+    else:
+        return None
 
 def get_max_data_extent(net, settings, layer_name, is_spatial):
     '''Gets the maximum size of the data layer that can influence a unit on layer.'''

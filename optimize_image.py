@@ -145,7 +145,7 @@ def main():
     net, data_mean = load_network(settings)
 
     # validate batch size
-    if settings.is_siamese and settings._calculated_siamese_network_format == 'siamese_batch_pair':
+    if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
         # currently, no batch support for siamese_batch_pair networks
         # it can be added by simply handle the batch indexes properly, but it should be thoroughly tested
         assert (settings.max_tracker_batch_size == 1)

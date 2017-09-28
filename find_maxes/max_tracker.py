@@ -106,6 +106,7 @@ def prepare_max_histogram(layer_name, n_channels, channel_to_histogram_values, p
 
                 break
 
+        fig.suptitle('max activations histgoram of layer %s channel %d' % (layer_name,channel_idx))
         ax.xaxis.label.set_text('max activation value')
         ax.yaxis.label.set_text('inputs count')
 
@@ -115,13 +116,13 @@ def prepare_max_histogram(layer_name, n_channels, channel_to_histogram_values, p
 
     # generate histogram for layer
     num_bins = 20
-    hist, bin_edges = np.histogram(percent_dead, bins=num_bins, range=(0, 100))
+    hist, bin_edges = np.histogram(100 - percent_dead, bins=num_bins, range=(0, 100))
     width = 0.7 * (bin_edges[1] - bin_edges[0])
     center = (bin_edges[:-1] + bin_edges[1:]) / 2
 
     bar_colors = [None] * num_bins
-    begin_color = np.array([0, 1.0, 0])
-    end_color = np.array([1.0, 0, 0])
+    begin_color = np.array([1.0, 0, 0])
+    end_color = np.array([0, 1.0, 0])
     color_step = (end_color - begin_color) / (num_bins - 1)
     current_color = begin_color
     for i in range(num_bins):
@@ -130,7 +131,8 @@ def prepare_max_histogram(layer_name, n_channels, channel_to_histogram_values, p
 
     ax.bar(center, hist, align='center', width=width, color=bar_colors)
 
-    ax.xaxis.label.set_text('percent of inactivity')
+    fig.suptitle('activity of layer %s' % (layer_name))
+    ax.xaxis.label.set_text('activity percent')
     ax.yaxis.label.set_text('channels count')
 
     process_layer_figure(fig)

@@ -56,6 +56,7 @@ def main():
     current_input_shape = net.blobs[net.inputs[0]].shape
     current_input_shape[0] = settings.max_tracker_batch_size
     net.blobs[net.inputs[0]].reshape(*current_input_shape)
+    net.reshape()
 
     assert args.do_maxes or args.do_deconv or args.do_deconv_norm or args.do_backprop or args.do_backprop_norm or args.do_info, 'Specify at least one do_* option to output.'
 

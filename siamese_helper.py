@@ -586,3 +586,18 @@ class SiameseHelper(object):
             im_small = np.concatenate((im_small1, im_small2), axis=1)
 
         return im_small
+
+    @staticmethod
+    def get_layer_output_size(net, is_siamese, layer_def, siamese_view_mode):
+
+        if (layer_def['format'] == 'siamese_batch_pair') or (layer_def['format'] == 'siamese_layer_pair' and siamese_view_mode == SiameseViewMode.BOTH_IMAGES):
+
+            data0, data1 = SiameseHelper.get_siamese_selected_data_blobs(net, layer_def, siamese_view_mode)
+            return data0.shape
+
+        else:
+
+            data = SiameseHelper.get_single_selected_data_blob(net, layer_def, siamese_view_mode)
+            return data.shape
+
+        pass

@@ -76,7 +76,7 @@ default_window_panes = (
     ('input',            (  0,    0,  300,   300)),    # This pane is required to show the input picture
     ('caffevis_aux',     (300,    0,  300,   300)),
     ('caffevis_back',    (600,    0,  300,   300)),
-    ('caffevis_status',  (900,    0,   30,  1500)),
+    ('caffevis_status',  (900,    0,  20*2 + 10,  1500)),
     ('caffevis_control', (  0,  300,   control_pane_height,   900)),
     ('caffevis_layers',  ( control_pane_height,  300,  900-control_pane_height,   900)),
     ('caffevis_jpgvis',  (  0, 1200,  900,   300)),
@@ -178,6 +178,9 @@ help_thick = locals().get('help_thick', 1)
 # Whether to use GPU mode (if True) or CPU mode (if False)
 caffevis_mode_gpu = locals().get('caffevis_mode_gpu', True)
 
+# ID of GPU to use, default is 0
+caffevis_gpu_id = locals().get('caffevis_gpu_id', 0)
+
 # Data mean, if any, to be subtracted from input image file / webcam
 # image. Specify as string path to file or tuple of one value per
 # channel or None.
@@ -194,9 +197,6 @@ caffevis_labels = locals().get('caffevis_labels', None)
 # in the caffevis_labels file? Annotate these units with label text
 # (when those neurons are selected). None to disable.
 caffevis_label_layers = locals().get('caffevis_label_layers', [])
-
-# Which layers should we print the channel score. makes sense for fully-connected layers. None to disable.
-caffevis_score_layers = locals().get('caffevis_score_layers', [])
 
 # Which layer to use for displaying class output numbers in left pane
 # (when no neurons are selected). None to disable.
@@ -344,8 +344,9 @@ caffevis_clear_negative_activations = locals().get('caffevis_clear_negative_acti
 # folder for generating and reading deep vis outputs
 caffevis_outputs_dir = locals().get('caffevis_outputs_dir', '.')
 
-# caffe net parameter - channel swap
-caffe_net_channel_swap = locals().get('caffe_net_channel_swap', (2,1,0))
+# caffe net parameter - channel swap, default is None which will make automatic decision according to other settings
+# the automatic setting is either (2,1,0) or (2,1,0,5,4,3) according to is_siamese value and siamese_input_mode
+caffe_net_channel_swap = locals().get('caffe_net_channel_swap', None)
 
 # caffe net parameter - transpose, used to convert HxWxK to KxHxW, when None uses caffe default which is (2,0,1)
 # this parameter should rarely change
@@ -359,9 +360,6 @@ caffe_net_input_scale = locals().get('caffe_net_input_scale', None)
 
 # caffe net parameter - image dims
 caffe_net_image_dims = locals().get('caffe_net_image_dims', None)
-
-# function used to check if a layer is a convolutional
-is_conv_fn = locals().get('is_conv_fn', lambda layer_name: 'conv' in layer_name)
 
 # default value for do_maxes parameter in max_tracker
 max_tracker_do_maxes = locals().get('max_tracker_do_maxes', True)
