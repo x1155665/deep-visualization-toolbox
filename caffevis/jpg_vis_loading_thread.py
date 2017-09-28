@@ -31,7 +31,7 @@ class JPGVisLoadingThread(CodependentThread):
     def load_image_into_pane_original_format(self, state_layer_name, state_selected_unit, resize_shape, images, sub_folder,
                                              file_pattern, image_index_to_set, should_crop_to_corner=False):
 
-        jpg_path = os.path.join(self.settings.caffevis_unit_jpg_dir, sub_folder, state_layer_name,
+        jpg_path = os.path.join(self.settings.caffevis_outputs_dir, sub_folder, state_layer_name,
                                 file_pattern % (state_layer_name, state_selected_unit))
 
         try:
@@ -52,7 +52,7 @@ class JPGVisLoadingThread(CodependentThread):
 
         try:
 
-            info_file_path = os.path.join(self.settings.caffevis_unit_jpg_dir, state_layer_name,
+            info_file_path = os.path.join(self.settings.caffevis_outputs_dir, state_layer_name,
                                             "unit_%04d" % (state_selected_unit),
                                             "info.txt")
 
@@ -75,7 +75,7 @@ class JPGVisLoadingThread(CodependentThread):
     def load_image_into_pane_max_tracker_format(self, state_layer_name, state_selected_unit, resize_shape, images,
                                                 file_search_pattern, image_index_to_set, should_crop_to_corner=False, first_only = False, captions = [], values = []):
 
-        unit_folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, state_layer_name,
+        unit_folder_path = os.path.join(self.settings.caffevis_outputs_dir, state_layer_name,
                                         "unit_%04d" % (state_selected_unit),
                                         file_search_pattern)
 
@@ -120,7 +120,7 @@ class JPGVisLoadingThread(CodependentThread):
                 resize_shape = (data_shape[0], data_shape[1]/3)
 
 
-            if self.settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image':
+            if self.settings.caffevis_outputs_dir_folder_format == 'original_combined_single_image':
 
                 # 0. e.g. regularized_opt/conv1/conv1_0037_montage.jpg
                 self.load_image_into_pane_original_format(state_layer_name, state_selected_unit, resize_shape, images,
@@ -129,12 +129,12 @@ class JPGVisLoadingThread(CodependentThread):
                                                           image_index_to_set=0,
                                                           should_crop_to_corner=True)
 
-            elif self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
+            elif self.settings.caffevis_outputs_dir_folder_format == 'max_tracker_output':
                 self.load_image_into_pane_max_tracker_format(state_layer_name, state_selected_unit, resize_shape, images,
                                                              file_search_pattern='opt*.jpg',
                                                              image_index_to_set=0)
 
-            if self.settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image':
+            if self.settings.caffevis_outputs_dir_folder_format == 'original_combined_single_image':
 
                 # 1. e.g. max_im/conv1/conv1_0037.jpg
                 self.load_image_into_pane_original_format(state_layer_name, state_selected_unit, resize_shape, images,
@@ -142,7 +142,7 @@ class JPGVisLoadingThread(CodependentThread):
                                                           file_pattern='%s_%04d.jpg',
                                                           image_index_to_set=1)
 
-            elif self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
+            elif self.settings.caffevis_outputs_dir_folder_format == 'max_tracker_output':
 
                 # convert to string with 2 decimal digits
                 values = self.get_score_values_for_max_input_images(state_layer_name, state_selected_unit)
@@ -156,7 +156,7 @@ class JPGVisLoadingThread(CodependentThread):
                                                              image_index_to_set=1, captions=captions, values=values)
 
 
-            if self.settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image':
+            if self.settings.caffevis_outputs_dir_folder_format == 'original_combined_single_image':
 
                 # 2. e.g. max_deconv/conv1/conv1_0037.jpg
                 self.load_image_into_pane_original_format(state_layer_name, state_selected_unit, resize_shape, images,
@@ -164,7 +164,7 @@ class JPGVisLoadingThread(CodependentThread):
                                                           file_pattern='%s_%04d.jpg',
                                                           image_index_to_set=2)
 
-            elif self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
+            elif self.settings.caffevis_outputs_dir_folder_format == 'max_tracker_output':
                 # convert to string with 2 decimal digits
                 values = self.get_score_values_for_max_input_images(state_layer_name, state_selected_unit)
 

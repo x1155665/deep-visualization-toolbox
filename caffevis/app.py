@@ -356,12 +356,12 @@ class CaffeVisApp(BaseApp):
 
             if self.state.pattern_mode == PatternMode.MAXIMAL_OPTIMIZED_IMAGE:
 
-                if self.settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image':
+                if self.settings.caffevis_outputs_dir_folder_format == 'original_combined_single_image':
 
                     display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_pattern_images_original_format(
                         default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows)
 
-                elif self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
+                elif self.settings.caffevis_outputs_dir_folder_format == 'max_tracker_output':
 
                     display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_pattern_images_optimizer_format(
                         default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows,
@@ -369,15 +369,15 @@ class CaffeVisApp(BaseApp):
 
             elif self.state.pattern_mode == PatternMode.MAXIMAL_INPUT_IMAGE:
 
-                if self.settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image':
+                if self.settings.caffevis_outputs_dir_folder_format == 'original_combined_single_image':
                     # maximal input image patterns is not implemented in original format
                     display_3D_highres = np.zeros((layer_dat_3D.shape[0], pane.data.shape[0],
                                                    pane.data.shape[1],
                                                    pane.data.shape[2]), dtype=np.uint8)
                     display_3D = self.downsample_display_3d(display_3D_highres, layer_dat_3D, pane, tile_cols, tile_rows)
-                    print "ERROR: patterns view with maximal input images is not implemented when settings.caffevis_unit_jpg_dir_folder_format == 'original_combined_single_image'"
+                    print "ERROR: patterns view with maximal input images is not implemented when settings.caffevis_outputs_dir_folder_format == 'original_combined_single_image'"
 
-                elif self.settings.caffevis_unit_jpg_dir_folder_format == 'max_tracker_output':
+                elif self.settings.caffevis_outputs_dir_folder_format == 'max_tracker_output':
                     display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_pattern_images_optimizer_format(
                         default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows,
                         self.state.pattern_first_only, file_search_pattern='maxim*.png')
@@ -535,8 +535,8 @@ class CaffeVisApp(BaseApp):
         load_layer = default_layer_name
         if self.settings.caffevis_jpgvis_remap and load_layer in self.settings.caffevis_jpgvis_remap:
             load_layer = self.settings.caffevis_jpgvis_remap[load_layer]
-        if ((self.settings.caffevis_jpgvis_layers and load_layer in self.settings.caffevis_jpgvis_layers) or (self.settings.caffevis_jpgvis_layers is None)) and self.settings.caffevis_unit_jpg_dir:
-            jpg_path = os.path.join(self.settings.caffevis_unit_jpg_dir, 'regularized_opt', load_layer, 'whole_layer.jpg')
+        if ((self.settings.caffevis_jpgvis_layers and load_layer in self.settings.caffevis_jpgvis_layers) or (self.settings.caffevis_jpgvis_layers is None)) and self.settings.caffevis_outputs_dir:
+            jpg_path = os.path.join(self.settings.caffevis_outputs_dir, 'regularized_opt', load_layer, 'whole_layer.jpg')
 
             # Get highres version
             display_3D_highres = self.img_cache.get((jpg_path, 'whole'), None)
@@ -568,7 +568,7 @@ class CaffeVisApp(BaseApp):
             # get number of units
             units_num = layer_dat_3D.shape[0]
 
-            pattern_image_key = (self.settings.caffevis_unit_jpg_dir, load_layer, "unit_%04d", units_num, file_search_pattern, first_only, show_layer_summary, file_summary_pattern)
+            pattern_image_key = (self.settings.caffevis_outputs_dir, load_layer, "unit_%04d", units_num, file_search_pattern, first_only, show_layer_summary, file_summary_pattern)
 
             # Get highres version
             display_3D_highres = self.img_cache.get(pattern_image_key, None)
@@ -576,12 +576,12 @@ class CaffeVisApp(BaseApp):
             if display_3D_highres is None:
                 try:
 
-                    if self.settings.caffevis_unit_jpg_dir:
+                    if self.settings.caffevis_outputs_dir:
                         resize_shape = pane.data.shape
 
                         if show_layer_summary:
                             # load layer summary image
-                            layer_summary_image_path = os.path.join(self.settings.caffevis_unit_jpg_dir, load_layer, file_summary_pattern)
+                            layer_summary_image_path = os.path.join(self.settings.caffevis_outputs_dir, load_layer, file_summary_pattern)
                             layer_summary_image = caffe_load_image(layer_summary_image_path, color=True, as_uint=True)
                             layer_summary_image = ensure_uint255_and_resize_without_fit(layer_summary_image, resize_shape)
                             display_3D_highres = layer_summary_image
@@ -614,7 +614,7 @@ class CaffeVisApp(BaseApp):
         # for each neuron in layer
         for unit_id in range(0, units_num):
 
-            unit_folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, load_layer, "unit_%04d" % (unit_id), file_search_pattern)
+            unit_folder_path = os.path.join(self.settings.caffevis_outputs_dir, load_layer, "unit_%04d" % (unit_id), file_search_pattern)
 
             try:
                 if unit_id % 10 == 0:
@@ -674,12 +674,12 @@ class CaffeVisApp(BaseApp):
 
             pane_shape = pane.data.shape
 
-            if not self.settings.caffevis_unit_jpg_dir:
+            if not self.settings.caffevis_outputs_dir:
                 folder_path = None
                 cache_layer_weights_histogram_image_path = None
                 cache_details_weights_histogram_image_path = None
             else:
-                folder_path = os.path.join(self.settings.caffevis_unit_jpg_dir, layer_name)
+                folder_path = os.path.join(self.settings.caffevis_outputs_dir, layer_name)
                 cache_layer_weights_histogram_image_path = os.path.join(folder_path, 'layer_weights_histogram.png')
                 cache_details_weights_histogram_image_path = os.path.join(folder_path, 'details_weights_histogram.png')
 
@@ -821,7 +821,7 @@ class CaffeVisApp(BaseApp):
                             mkdir_p(folder_path)
                             save_caffe_image(display_2D.astype(np.float32).transpose((2,0,1)), cache_layer_weights_histogram_image_path)
                         else:
-                            print "WARNING: unable to save weight histogram to cache since caffevis_unit_jpg_dir is not set"
+                            print "WARNING: unable to save weight histogram to cache since caffevis_outputs_dir is not set"
 
                     else:
 
@@ -839,7 +839,7 @@ class CaffeVisApp(BaseApp):
                             mkdir_p(folder_path)
                             save_caffe_image(display_2D.astype(np.float32).transpose((2,0,1)), cache_details_weights_histogram_image_path)
                         else:
-                            print "WARNING: unable to save weight histogram to cache since caffevis_unit_jpg_dir is not set"
+                            print "WARNING: unable to save weight histogram to cache since caffevis_outputs_dir is not set"
 
                         # generate empty highlights
                         display_2D_highlights_only = self.prepare_tile_image(display_3D * 0, True, n_channels, tile_rows, tile_cols)
@@ -876,10 +876,8 @@ class CaffeVisApp(BaseApp):
 
         is_layer_summary_loaded = False
 
-        if not self.settings.caffevis_maximum_activation_histogram_data_file:
-            return display_2D, empty_display_3D, empty_display_3D, is_layer_summary_loaded
-
-        pattern_image_key = (self.settings.caffevis_maximum_activation_histogram_data_file, default_layer_name, "max histograms", show_layer_summary)
+        maximum_activation_histogram_data_file = os.path.join(settings.caffevis_outputs_dir, 'find_max_acts_output.pickled')
+        pattern_image_key = (maximum_activation_histogram_data_file, default_layer_name, "max histograms", show_layer_summary)
 
         # Get highres version
         display_3D_highres = self.img_cache.get(pattern_image_key, None)
@@ -889,14 +887,14 @@ class CaffeVisApp(BaseApp):
         if display_3D_highres is None:
             try:
                 # load pickle file
-                net_max_tracker = load_max_tracker_from_file(self.settings.caffevis_maximum_activation_histogram_data_file)
+                net_max_tracker = load_max_tracker_from_file(maximum_activation_histogram_data_file)
 
                 if not net_max_tracker.max_trackers.has_key(default_layer_name):
                     return display_2D, empty_display_3D, empty_display_3D, is_layer_summary_loaded
 
                 # check if
                 if not hasattr(net_max_tracker.max_trackers[default_layer_name], 'channel_to_histogram'):
-                    print "ERROR: file %s is missing the field channel_to_histogram, try rerun find_max_acts to generate it" % (self.settings.caffevis_maximum_activation_histogram_data_file)
+                    print "ERROR: file %s is missing the field channel_to_histogram, try rerun find_max_acts to generate it" % (maximum_activation_histogram_data_file)
                     return display_2D, empty_display_3D, empty_display_3D, is_layer_summary_loaded
 
                 channel_to_histogram = net_max_tracker.max_trackers[default_layer_name].channel_to_histogram
@@ -932,8 +930,8 @@ class CaffeVisApp(BaseApp):
                 n_channels = len(channel_to_histogram)
                 find_maxes.max_tracker.prepare_max_histogram(default_layer_name, n_channels, channel_to_histogram_values, process_channel_figure, process_layer_figure)
 
-                pattern_image_key_layer = (self.settings.caffevis_maximum_activation_histogram_data_file, default_layer_name, "max histograms",True)
-                pattern_image_key_details = (self.settings.caffevis_maximum_activation_histogram_data_file, default_layer_name, "max histograms",False)
+                pattern_image_key_layer = (maximum_activation_histogram_data_file, default_layer_name, "max histograms",True)
+                pattern_image_key_details = (maximum_activation_histogram_data_file, default_layer_name, "max histograms",False)
 
                 self.img_cache.set(pattern_image_key_details, display_3D_highres_list[0])
                 self.img_cache.set(pattern_image_key_layer, display_3D_highres_list[1])

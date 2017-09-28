@@ -105,7 +105,7 @@ def get_files_from_siamese_image_list(settings):
     return available_files, labels
 
 
-def get_files_list(settings, should_convert_labels = False):
+def get_files_list(settings):
 
     print 'Getting image list...'
 
@@ -120,9 +120,6 @@ def get_files_list(settings, should_convert_labels = False):
     else:
         raise Exception(('Error: setting static_files_input_mode has invalid option (%s)' %
                          (settings.static_files_input_mode)))
-
-    if should_convert_labels and labels:
-        labels = [settings.convert_label_fn(label) for label in labels]
 
     print 'Getting image list... Done.'
 

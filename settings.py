@@ -205,19 +205,11 @@ caffevis_score_layers = locals().get('caffevis_score_layers', [])
 # (when no neurons are selected). None to disable.
 caffevis_prob_layer = locals().get('caffevis_prob_layer', None)
 
-# String or None. Which directory to load pre-computed per-unit
-# visualizations from, if any. None to disable.
-caffevis_unit_jpg_dir = locals().get('caffevis_unit_jpg_dir', None)
-
 # what is the folder format for loading precomputed visualizations,
 # options are:
 #   "original_combined_single_image" - every unit has a single layer
 #   "max_tracker_output" - every unit has a list of images to be loaded
-caffevis_unit_jpg_dir_folder_format = locals().get('caffevis_unit_jpg_dir_folder_format', 'original_combined_single_image')
-
-# the location of the pickle data file which contains the information about the maximum activation histograms
-# usually named 'find_max_acts_output.pickle'
-caffevis_maximum_activation_histogram_data_file = locals().get('caffevis_maximum_activation_histogram_data_file', None)
+caffevis_outputs_dir_folder_format = locals().get('caffevis_outputs_dir_folder_format', 'max_tracker_output')
 
 # List. For which layers should jpgs be loaded for
 # visualization? If a layer name (full name, not prettified) is given
@@ -252,8 +244,8 @@ if isinstance(caffevis_data_mean, basestring):
     caffevis_data_mean = caffevis_data_mean.replace('%DVT_ROOT%', dvt_root)
 if isinstance(caffevis_labels, basestring):
     caffevis_labels = caffevis_labels.replace('%DVT_ROOT%', dvt_root)
-if isinstance(caffevis_unit_jpg_dir, basestring):
-    caffevis_unit_jpg_dir = caffevis_unit_jpg_dir.replace('%DVT_ROOT%', dvt_root)
+if isinstance(caffevis_outputs_dir, basestring):
+    caffevis_outputs_dir = caffevis_outputs_dir.replace('%DVT_ROOT%', dvt_root)
 
 # Pause Caffe forward/backward computation for this many seconds after a keypress. This is to keep the processor free for a brief period after a keypress, which allow the interface to feel much more responsive. After this period has passed, Caffe resumes computation, in CPU mode often occupying all cores. Default: .1
 caffevis_pause_after_keys = locals().get('caffevis_pause_after_keys', .10)
@@ -347,10 +339,13 @@ caffevis_score_fsize = locals().get('caffevis_score_fsize', 1.0 * global_font_si
 caffevis_score_thick = locals().get('caffevis_score_thick', 1)
 
 # how should histograms be loaded: 'calculate_in_realtime' or 'load_from_file'
-caffevis_histograms_format = locals().get('caffevis_histograms_format','calculate_in_realtime')
+caffevis_histograms_format = locals().get('caffevis_histograms_format','load_from_file')
 
 # should we black maximal input images with zero or negative activation score
 caffevis_clear_negative_activations = locals().get('caffevis_clear_negative_activations', False)
+
+# folder for generating and reading deep vis outputs
+caffevis_outputs_dir = locals().get('caffevis_outputs_dir', '.')
 
 # caffe net parameter - channel swap
 caffe_net_channel_swap = locals().get('caffe_net_channel_swap', (2,1,0))
@@ -368,14 +363,8 @@ caffe_net_input_scale = locals().get('caffe_net_input_scale', None)
 # caffe net parameter - image dims
 caffe_net_image_dims = locals().get('caffe_net_image_dims', None)
 
-# function used to convert a string label into something else, can be an integer
-convert_label_fn = locals().get('convert_label_fn', lambda label: int(label.strip()))
-
 # function used to check if a layer is a convolutional
 is_conv_fn = locals().get('is_conv_fn', lambda layer_name: 'conv' in layer_name)
-
-# location for max tracker output file
-find_max_acts_output_file = locals().get('find_max_acts_output_file', 'find_max_acts_output.pickled')
 
 # default value for do_maxes parameter in max_tracker
 max_tracker_do_maxes = locals().get('max_tracker_do_maxes', True)
@@ -398,29 +387,11 @@ max_tracker_do_info = locals().get('max_tracker_do_info', True)
 # default value for do_histograms parameter in max tracker
 max_tracker_do_histograms = locals().get('max_tracker_do_histograms', True)
 
-# default value for output_dir parameter in max tracker
-max_tracker_output_dir = locals().get('max_tracker_output_dir', './')
-
 # default batch size used in max_tracker
 max_tracker_batch_size = locals().get('max_tracker_batch_size', 1)
 
 # list of layers to output when using offlien scripts
 layers_to_output_in_offline_scripts = locals().get('layers_to_output_in_offline_scripts', [])
-
-# default value for list of layers used in max tracker
-# note the default is a hardcoded choice which was used in the original code,
-# for backward comparability we keep it as default, but you should change this parameter for each network
-default_max_tracker_layers_list = []
-# Description                           Name     Type           Input      Output   Filter   Stride  Pad
-default_max_tracker_layers_list.append(('data',  'Input',       None,      None,    None,    None,   None,))
-default_max_tracker_layers_list.append(('conv1', 'Convolution', (227,227), (55,55), (11,11), (4,4),  (0,0)))
-default_max_tracker_layers_list.append(('pool1', 'Pooling',     (55,55),   (27,27), (3,3),   (2,2),  (0,0)))
-default_max_tracker_layers_list.append(('conv2', 'Convolution', (27,27),   (27,27), (5,5),   (1,1),  (2,2)))
-default_max_tracker_layers_list.append(('pool2', 'Pooling',     (27,27),   (13,13), (3,3),   (2,2),  (0,0)))
-default_max_tracker_layers_list.append(('conv3', 'Convolution', (13,13),   (13,13), (3,3),   (1,1),  (1,1)))
-default_max_tracker_layers_list.append(('conv4', 'Convolution', (13,13),   (13,13), (3,3),   (1,1),  (1,1)))
-default_max_tracker_layers_list.append(('conv5', 'Convolution', (13,13),   (13,13), (3,3),   (1,1),  (1,1)))
-max_tracker_layers_list = locals().get('max_tracker_layers_list', default_max_tracker_layers_list)
 
 # list of siamese layers/blobs to show
 # note: if an item in the list is a pair of layers, then it is a siamese layer
@@ -430,25 +401,25 @@ layers_list = locals().get('layers_list', [])
 optimize_image_rand_seed = locals().get('optimize_image_rand_seed', 0)
 
 # decay parameter for optimize_image.py
-optimize_image_decay = locals().get('optimize_image_decay', 0)
+optimize_image_decay = locals().get('optimize_image_decay', 0.0001)
 
 # blur-radius parameter for optimize_image.py
-optimize_image_blur_radius = locals().get('optimize_image_blur_radius', 0)
+optimize_image_blur_radius = locals().get('optimize_image_blur_radius', 1.0)
 
 # blur-every parameter for optimize_image.py
-optimize_image_blue_every = locals().get('optimize_image_blue_every', 0)
+optimize_image_blue_every = locals().get('optimize_image_blue_every', 4)
 
 # lr-policy parameter for optimize_image.py
 optimize_image_lr_policy = locals().get('optimize_image_lr_policy', 'constant')
 
 # lr-params parameter for optimize_image.py
-optimize_image_lr_params = locals().get('optimize_image_lr_params', '{"lr": 1}')
+optimize_image_lr_params = locals().get('optimize_image_lr_params', '{"lr": 100.0}')
 
 # max-iter parameter for optimize_image.py
-optimize_image_max_iters = locals().get('optimize_image_max_iters', [500])
+optimize_image_max_iters = locals().get('optimize_image_max_iters', [1000])
 
 # output-prefix parameter for optimize_image.py
-optimize_image_output_prefix = locals().get('optimize_image_output_prefix', 'outputs/%(p.push_layer)s/unit_%(p.push_channel)04d/opt_%(r.batch_index)03d')
+optimize_image_output_prefix = locals().get('optimize_image_output_prefix', '%(p.push_layer)s/unit_%(p.push_channel)04d/opt_%(r.batch_index)03d_seed%(p.rand_seed)d')
 
 # parameter which marks whether we should generate also the plus mean image of the optmized image
 optimize_image_generate_plus_mean = locals().get('optimize_image_generate_plus_mean', False)

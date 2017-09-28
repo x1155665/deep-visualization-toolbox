@@ -222,7 +222,7 @@ class GradientOptimizer(object):
         results = [FindResults(batch_index) for batch_index in range(params.batch_size)]
 
         # check if all required outputs exist, in which case skip this optimization
-        all_outputs = [self.generate_output_names(batch_index, params, results, prefix_template) for batch_index in range(params.batch_size)]
+        all_outputs = [self.generate_output_names(batch_index, params, results, prefix_template, self.settings.caffevis_outputs_dir) for batch_index in range(params.batch_size)]
         relevant_outputs = [best_X_name for [best_X_name, best_Xpm_name, majority_X_name, majority_Xpm_name, info_name, info_pkl_name, info_big_pkl_name] in all_outputs]
         relevant_outputs_exist = [os.path.exists(best_X_name) for best_X_name in relevant_outputs]
         if all(relevant_outputs_exist):
@@ -454,11 +454,13 @@ class GradientOptimizer(object):
 
         return -1
 
-    def generate_output_names(self, batch_index, params, results, prefix_template):
+    def generate_output_names(self, batch_index, params, results, prefix_template, output_dir):
 
         results_and_params = combine_dicts((('p.', params.__dict__),
                                             ('r.', results[batch_index].__dict__)))
         prefix = prefix_template % results_and_params
+
+        prefix = os.path.join(output_dir, prefix)
 
         if os.path.isdir(prefix):
             if prefix[-1] != '/':
@@ -484,7 +486,7 @@ class GradientOptimizer(object):
         for batch_index in range(params.batch_size):
 
             [best_X_name, best_Xpm_name, majority_X_name, majority_Xpm_name, info_name, info_pkl_name, info_big_pkl_name] = \
-                self.generate_output_names(batch_index, params, results, prefix_template)
+                self.generate_output_names(batch_index, params, results, prefix_template, self.settings.caffevis_outputs_dir)
 
             # Don't overwrite previous results
             if os.path.exists(info_name) and not brave:

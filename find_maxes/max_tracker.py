@@ -20,10 +20,9 @@ from jby_misc import WithTimer
 
 class MaxTrackerBatchRecord(object):
 
-    def __init__(self, image_idx = None, filename = None, image_class = None, im = None):
+    def __init__(self, image_idx = None, filename = None, im = None):
         self.image_idx = image_idx
         self.filename = filename
-        self.image_class = image_class
         self.im = im
 
 
@@ -32,7 +31,7 @@ class MaxTrackerCropBatchRecord(object):
     def __init__(self, cc = None, channel_idx = None, info_filename = None, maxim_filenames = None,
                  deconv_filenames = None, deconvnorm_filenames = None, backprop_filenames = None,
                  backpropnorm_filenames = None, info_file = None, max_idx_0 = None, max_idx = None, im_idx = None,
-                 im_class = None, selected_input_index = None, ii = None, jj = None, recorded_val = None,
+                 selected_input_index = None, ii = None, jj = None, recorded_val = None,
                  out_ii_start = None, out_ii_end = None, out_jj_start = None, out_jj_end = None, data_ii_start = None,
                  data_ii_end = None, data_jj_start = None, data_jj_end = None, im = None,
                  denormalized_layer_name = None, denormalized_top_name = None):
@@ -48,7 +47,6 @@ class MaxTrackerCropBatchRecord(object):
         self.max_idx_0 = max_idx_0
         self.max_idx = max_idx
         self.im_idx = im_idx
-        self.im_class = im_class
         self.selected_input_index = selected_input_index
         self.ii = ii
         self.jj = jj
@@ -147,9 +145,9 @@ class MaxTracker(object):
         self.max_vals = np.ones((n_channels, n_top), dtype = dtype) * initial_val
         self.n_top = n_top
         if is_spatial:
-            self.max_locs = -np.ones((n_channels, n_top, 5), dtype = 'int')   # image_idx, image_class, selected_input_index, i, j
+            self.max_locs = -np.ones((n_channels, n_top, 4), dtype = 'int')   # image_idx, selected_input_index, i, j
         else:
-            self.max_locs = -np.ones((n_channels, n_top, 3), dtype = 'int')   # image_idx, image_class, selected_input_index
+            self.max_locs = -np.ones((n_channels, n_top, 2), dtype = 'int')   # image_idx, selected_input_index
 
         # set of seen inputs, used to avoid updating on the same input twice
         self.seen_inputs = set()
@@ -180,7 +178,7 @@ class MaxTracker(object):
     def __repr__(self):
         return str(self.__dict__.copy())
 
-    def update(self, data, image_idx, image_class, selected_input_index, layer_unique_input_source, layer_name):
+    def update(self, data, image_idx, selected_input_index, layer_unique_input_source, layer_name):
 
         # if unique_input_source already exist, we can skip the update since we've already seen it
         if layer_unique_input_source in self.seen_inputs:
@@ -216,9 +214,9 @@ class MaxTracker(object):
             self.max_locs[ii,:idx-1] = self.max_locs[ii,1:idx]       # shift lower location data
             # store new location
             if self.is_spatial:
-                self.max_locs[ii,idx-1] = (image_idx, image_class, selected_input_index) + np.unravel_index(max_indexes[ii], data.shape[1:])
+                self.max_locs[ii,idx-1] = (image_idx, selected_input_index) + np.unravel_index(max_indexes[ii], data.shape[1:])
             else:
-                self.max_locs[ii,idx-1] = (image_idx, image_class, selected_input_index)
+                self.max_locs[ii,idx-1] = (image_idx, selected_input_index)
 
     def calculate_histogram(self, layer_name, outdir):
 
@@ -287,7 +285,7 @@ class NetMaxTracker(object):
 
         self.init_done = True
 
-    def update(self, net, image_idx, image_class, net_unique_input_source, batch_index):
+    def update(self, net, image_idx, net_unique_input_source, batch_index):
         '''Updates the maxes found so far with the state of the given net. If a new max is found, it is stored together with the image_idx.'''
 
         if not self.init_done:
@@ -308,17 +306,17 @@ class NetMaxTracker(object):
 
                 if selected_input_index == 0:
                     # first image identifier is selected
-                    self.max_trackers[normalized_layer_name].update(blob[batch_index], image_idx, image_class, selected_input_index,
+                    self.max_trackers[normalized_layer_name].update(blob[batch_index], image_idx, selected_input_index,
                                                                     net_unique_input_source[0], layer_name)
 
                 elif selected_input_index == 1:
                     # second image identifier is selected
-                    self.max_trackers[normalized_layer_name].update(blob[batch_index], image_idx, image_class, selected_input_index,
+                    self.max_trackers[normalized_layer_name].update(blob[batch_index], image_idx, selected_input_index,
                                                                     net_unique_input_source[1], layer_name)
 
                 elif selected_input_index == -1:
                     # both images are selected
-                    self.max_trackers[normalized_layer_name].update(blob[batch_index], image_idx, image_class, selected_input_index,
+                    self.max_trackers[normalized_layer_name].update(blob[batch_index], image_idx, selected_input_index,
                                                                     net_unique_input_source, layer_name)
 
             # in siamese network, implemented as single layer with batch 2, we might need to select one of the images from the siamese pair
@@ -330,20 +328,20 @@ class NetMaxTracker(object):
                 if blob.shape[0] == 2:
 
                     # update first output
-                    self.max_trackers[normalized_layer_name].update(blob[0], image_idx, image_class, 0,
+                    self.max_trackers[normalized_layer_name].update(blob[0], image_idx, 0,
                                                                     net_unique_input_source[0], layer_name)
 
                     # update second output
-                    self.max_trackers[normalized_layer_name].update(blob[1], image_idx, image_class, 1,
+                    self.max_trackers[normalized_layer_name].update(blob[1], image_idx, 1,
                                                                     net_unique_input_source[1], layer_name)
 
                 # we have single output
                 elif blob.shape[0] == 1:
-                    self.max_trackers[normalized_layer_name].update(blob[0], image_idx, image_class, -1,
+                    self.max_trackers[normalized_layer_name].update(blob[0], image_idx, -1,
                                                                     net_unique_input_source, layer_name)
 
             else:   # normal, non-siamese network
-                self.max_trackers[normalized_layer_name].update(blob[batch_index], image_idx, image_class, -1, net_unique_input_source, layer_name)
+                self.max_trackers[normalized_layer_name].update(blob[batch_index], image_idx, -1, net_unique_input_source, layer_name)
 
         pass
 
@@ -380,7 +378,7 @@ class NetMaxTracker(object):
         self.siamese_helper = None
 
 def scan_images_for_maxes(settings, net, datadir, n_top, outdir):
-    image_filenames, image_labels = get_files_list(settings, True)
+    image_filenames, image_labels = get_files_list(settings)
     print 'Scanning %d files' % len(image_filenames)
     print '  First file', os.path.join(datadir, image_filenames[0])
 
@@ -402,10 +400,6 @@ def scan_images_for_maxes(settings, net, datadir, n_top, outdir):
 
         batch[batch_index].image_idx = image_idx
         batch[batch_index].filename = image_filenames[image_idx]
-        if image_labels:
-            batch[batch_index].image_class = image_labels[image_idx]
-        else: # no labels so just put a default value
-            batch[batch_index].image_class = 0
 
         do_print = (batch[batch_index].image_idx % 100 == 0)
         if do_print:
@@ -436,7 +430,7 @@ def scan_images_for_maxes(settings, net, datadir, n_top, outdir):
             for i in range(0,batch_index):
 
                 with WithTimer('Update    ', quiet = not do_print):
-                    tracker.update(net, batch[i].image_idx, batch[i].image_class, net_unique_input_source=batch[i].filename, batch_index=i)
+                    tracker.update(net, batch[i].image_idx, net_unique_input_source=batch[i].filename, batch_index=i)
 
             batch_index = 0
 
@@ -445,7 +439,7 @@ def scan_images_for_maxes(settings, net, datadir, n_top, outdir):
 
 
 def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir):
-    image_filenames, image_labels = get_files_list(settings, True)
+    image_filenames, image_labels = get_files_list(settings)
     print 'Scanning %d pairs' % len(image_filenames)
     print '  First pair', image_filenames[0]
 
@@ -469,10 +463,6 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir):
         batch[batch_index].images_pair = image_filenames[image_idx]
         filename1 = batch[batch_index].images_pair[0]
         filename2 = batch[batch_index].images_pair[1]
-        if image_labels:
-            batch[batch_index].image_class = image_labels[image_idx]
-        else:  # no labels so just put a default value
-            batch[batch_index].image_class = 0
 
         do_print = (image_idx % 100 == 0)
         if do_print:
@@ -512,7 +502,7 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir):
             # go over batch and update statistics
             for i in range(0,batch_index):
                 with WithTimer('Update    ', quiet=not do_print):
-                    tracker.update(net, batch[i].image_idx, batch[i].image_class, net_unique_input_source=batch[i].images_pair, batch_index=i)
+                    tracker.update(net, batch[i].image_idx, net_unique_input_source=batch[i].images_pair, batch_index=i)
 
             batch_index = 0
 
@@ -537,10 +527,6 @@ def save_representations(settings, net, datadir, filelist, layer_name, first_N =
     rep = None
     for ii,image_idx in enumerate(image_indices):
         filename = image_filenames[image_idx]
-        if image_labels:
-            image_class = image_labels[image_idx]
-        else:
-            image_class = 0
         do_print = (image_idx % 10 == 0)
         if do_print:
             print '%s   Image %d/%d' % (datetime.now().ctime(), image_idx, len(image_indices))
@@ -671,7 +657,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
             channel_to_info_file[channel_idx].info_file = open(info_filename[0], 'w')
             channel_to_info_file[channel_idx].ref_count = num_top
 
-            print >> channel_to_info_file[channel_idx].info_file, '# is_spatial val image_idx image_class selected_input_index i(if is_spatial) j(if is_spatial) filename'
+            print >> channel_to_info_file[channel_idx].info_file, '# is_spatial val image_idx selected_input_index i(if is_spatial) j(if is_spatial) filename'
 
         # iterate through maxes from highest (at end) to lowest
         for max_idx_0 in range(num_top):
@@ -689,9 +675,20 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
             batch[batch_index].max_idx = num_top_in_mt - 1 - batch[batch_index].max_idx_0
 
             if mt.is_spatial:
-                batch[batch_index].im_idx, batch[batch_index].im_class, batch[batch_index].selected_input_index, batch[batch_index].ii, batch[batch_index].jj = mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]
+
+                # fix for backward compatability
+                if mt.max_locs.shape[2] == 5:
+                    # remove second column
+                    mt.max_locs = np.delete(mt.max_locs, 1, 2)
+
+                batch[batch_index].im_idx, batch[batch_index].selected_input_index, batch[batch_index].ii, batch[batch_index].jj = mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]
             else:
-                batch[batch_index].im_idx, batch[batch_index].im_class, batch[batch_index].selected_input_index = mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]
+                # fix for backward compatability
+                if mt.max_locs.shape[2] == 3:
+                    # remove second column
+                    mt.max_locs = np.delete(mt.max_locs, 1, 2)
+
+                batch[batch_index].im_idx, batch[batch_index].selected_input_index = mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]
                 batch[batch_index].ii, batch[batch_index].jj = 0, 0
 
             # if ii and jj are invalid then there is no data for this "top" image, so we can skip it
@@ -728,9 +725,9 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
             if do_info:
                 print >> batch[batch_index].info_file, 1 if mt.is_spatial else 0, '%.6f' % mt.max_vals[batch[batch_index].channel_idx, batch[batch_index].max_idx],
                 if mt.is_spatial:
-                    print >> batch[batch_index].info_file, '%d %d %d %d %d' % tuple(mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]),
+                    print >> batch[batch_index].info_file, '%d %d %d %d' % tuple(mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]),
                 else:
-                    print >> batch[batch_index].info_file, '%d %d %d' % tuple(mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]),
+                    print >> batch[batch_index].info_file, '%d %d' % tuple(mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]),
                 print >> batch[batch_index].info_file, batch[batch_index].filename
 
             if not (do_maxes or do_deconv or do_deconv_norm or do_backprop or do_backprop_norm):

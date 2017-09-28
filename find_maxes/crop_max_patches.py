@@ -33,12 +33,12 @@ def main():
     parser.add_argument('--idx-begin',    type = int, default = None, help = 'Start at this unit (default: all units).')
     parser.add_argument('--idx-end',      type = int, default = None, help = 'End at this unit (default: all units).')
     
-    parser.add_argument('--nmt_pkl',      type = str, default = settings.find_max_acts_output_file, help = 'Which pickled NetMaxTracker to load.')
+    parser.add_argument('--nmt_pkl',      type = str, default = os.path.join(settings.caffevis_outputs_dir, 'find_max_acts_output.pickled'), help = 'Which pickled NetMaxTracker to load.')
     parser.add_argument('--net_prototxt', type = str, default = settings.caffevis_deploy_prototxt, help = 'network prototxt to load')
     parser.add_argument('--net_weights',  type = str, default = settings.caffevis_network_weights, help = 'network weights to load')
     parser.add_argument('--datadir',      type = str, default = settings.static_files_dir, help = 'directory to look for files in')
     parser.add_argument('--filelist',     type = str, default = settings.static_files_input_file, help = 'List of image files to consider, one per line. Must be the same filelist used to produce the NetMaxTracker!')
-    parser.add_argument('--outdir',       type = str, default = settings.max_tracker_output_dir, help = 'Which output directory to use. Files are output into outdir/layer/unit_%%04d/{maxes,deconv,backprop}_%%03d.png')
+    parser.add_argument('--outdir',       type = str, default = settings.caffevis_outputs_dir, help = 'Which output directory to use. Files are output into outdir/layer/unit_%%04d/{maxes,deconv,backprop}_%%03d.png')
     args = parser.parse_args()
 
     settings.caffevis_deploy_prototxt = args.net_prototxt
