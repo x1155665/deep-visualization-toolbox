@@ -34,7 +34,7 @@ class MaxTrackerCropBatchRecord(object):
                  selected_input_index = None, ii = None, jj = None, recorded_val = None,
                  out_ii_start = None, out_ii_end = None, out_jj_start = None, out_jj_end = None, data_ii_start = None,
                  data_ii_end = None, data_jj_start = None, data_jj_end = None, im = None,
-                 denormalized_layer_name = None, denormalized_top_name = None):
+                 denormalized_layer_name = None, denormalized_top_name = None, layer_format = None):
         self.cc = cc
         self.channel_idx = channel_idx
         self.info_filename = info_filename
@@ -62,7 +62,7 @@ class MaxTrackerCropBatchRecord(object):
         self.im = im
         self.denormalized_layer_name = denormalized_layer_name
         self.denormalized_top_name = denormalized_top_name
-
+        self.layer_format = layer_format
 
 
 class InfoFileMetadata(object):
@@ -300,8 +300,10 @@ class NetMaxTracker(object):
 
             normalized_layer_name = self.siamese_helper.normalize_layer_name_for_max_tracker(layer_name)
 
+            layer_format = self.siamese_helper.get_layer_format_by_layer_name(layer_name)
+
             # in siamese network, implemented as pairs of layers, we might need to select one of the images from the siamese pair
-            if self.settings.is_siamese and self.settings.siamese_network_format == 'siamese_layer_pair':
+            if self.settings.is_siamese and layer_format == 'siamese_layer_pair':
                 selected_input_index = self.siamese_helper.get_index_of_saved_image_by_layer_name(layer_name)
 
                 if selected_input_index == 0:
@@ -320,7 +322,7 @@ class NetMaxTracker(object):
                                                                     net_unique_input_source, layer_name)
 
             # in siamese network, implemented as single layer with batch 2, we might need to select one of the images from the siamese pair
-            elif self.settings.is_siamese and self.settings.siamese_network_format == 'siamese_batch_pair':
+            elif self.settings.is_siamese and layer_format == 'siamese_batch_pair':
 
                 assert (self.settings.max_tracker_batch_size == 1)
 
@@ -792,16 +794,17 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                     # denormalized layer name, e.g. from "conv1_1" and selected_input_index=1 to "conv1_1_p"
                     batch[i].denormalized_layer_name = siamese_helper.denormalize_layer_name_for_max_tracker(layer_name, batch[i].selected_input_index)
                     batch[i].denormalized_top_name = layer_name_to_top_name(net, batch[i].denormalized_layer_name)
+                    batch[i].layer_format = siamese_helper.get_layer_format_by_layer_name(layer_name)
 
                     if len(net.blobs[batch[i].denormalized_top_name].data.shape) == 4:
-                        if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
+                        if settings.is_siamese and batch[i].layer_format == 'siamese_batch_pair':
                             reproduced_val = net.blobs[batch[i].denormalized_top_name].data[batch[i].selected_input_index, batch[i].channel_idx, batch[i].ii, batch[i].jj]
 
                         else: # normal network, or siamese in siamese_layer_pair format
                             reproduced_val = net.blobs[batch[i].denormalized_top_name].data[i, batch[i].channel_idx, batch[i].ii, batch[i].jj]
 
                     else:
-                        if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
+                        if settings.is_siamese and batch[i].layer_format == 'siamese_batch_pair':
                             reproduced_val = net.blobs[batch[i].denormalized_top_name].data[batch[i].selected_input_index, batch[i].channel_idx]
 
                         else:  # normal network, or siamese in siamese_layer_pair format
@@ -830,7 +833,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
                     for i in range(0, batch_index):
                         diffs = net.blobs[batch[i].denormalized_top_name].diff * 0
 
-                        if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
+                        if settings.is_siamese and batch[i].layer_format == 'siamese_batch_pair':
                             if diffs.shape[0] == 2:
                                 if len(diffs.shape) == 4:
                                     diffs[batch[i].selected_input_index, batch[i].channel_idx, batch[i].ii, batch[i].jj] = 1.0

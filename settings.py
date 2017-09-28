@@ -116,9 +116,6 @@ static_file_stretch_mode = locals().get('static_file_stretch_mode', True)
 # is the network loaded a siamese network
 is_siamese = locals().get('is_siamese', False)
 
-# siamese network format, can be either 'siamese_layer_pair' or 'siamese_batch_pair'
-siamese_network_format = locals().get('siamese_network_format', 'siamese_layer_pair')
-
 # siamese input mode, can be either 'concat_channelwise' or 'concat_along_width'
 siamese_input_mode = locals().get('siamese_input_mode', 'concat_channelwise')
 

@@ -21,11 +21,13 @@ class SiameseHelper(object):
         self.layer_name_to_normalized_layer_name = dict()
         self.normalized_layer_name_to_denormalized_layer_name = dict()
         self.layer_name_to_index_of_saved_image = dict()
+        self.layer_name_to_format = dict()
 
         # init dictionaries
         self._init_layer_name_to_normalized_layer_name()
         self._init_normalized_layer_name_to_denormalized_layer_name()
         self._init_layer_name_to_index_of_saved_image()
+        self._init_layer_name_to_format()
 
         return
 
@@ -94,10 +96,29 @@ class SiameseHelper(object):
                 self.layer_name_to_index_of_saved_image[layer_names[1]] = 1
 
             elif layer_format == 'siamese_batch_pair':
-                # raise NotImplementedError()
                 self.layer_name_to_index_of_saved_image[layer_names] = -1
 
         return
+
+    def _init_layer_name_to_format(self):
+        '''
+        init layer_name_to_format dictionary
+        :return: none
+        '''
+
+        for layer_def in self.layers_list:
+            layer_format = layer_def['format']
+            layer_names = layer_def['name/s']
+
+            if layer_format == 'normal':
+                self.layer_name_to_format[layer_names] = layer_format
+
+            elif layer_format == 'siamese_layer_pair':
+                self.layer_name_to_format[layer_names[0]] = layer_format
+                self.layer_name_to_format[layer_names[1]] = layer_format
+
+            elif layer_format == 'siamese_batch_pair':
+                self.layer_name_to_format[layer_names] = layer_format
 
     def normalize_layer_name_for_max_tracker(self, layer_name):
         '''
@@ -145,6 +166,19 @@ class SiameseHelper(object):
 
         # this can happen for layer names which don't appear in the layers_list setting
         return -1
+
+    def get_layer_format_by_layer_name(self, layer_name):
+        '''
+        function which returns the layer format given the layer name
+        :param layer_name: layer name
+        :return: layer format
+        '''
+
+        if self.layer_name_to_format.has_key(layer_name):
+            return self.layer_name_to_format[layer_name]
+
+        # fallback to normal format
+        return 'normal'
 
     @staticmethod
     def get_header_from_layer_def(layer_def):

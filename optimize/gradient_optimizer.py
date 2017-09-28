@@ -17,6 +17,8 @@ from image_misc import saveimagesc, saveimagescc
 from caffe_misc import RegionComputer, get_max_data_extent, compute_data_layer_focus_area, extract_patch_from_image, \
     layer_name_to_top_name
 
+from siamese_helper import SiameseHelper
+
 
 class FindParams(object):
     def __init__(self, **kwargs):
@@ -166,6 +168,7 @@ class GradientOptimizer(object):
         self.batched_data_mean = batched_data_mean
         self.labels = labels if labels else ['labels not provided' for ii in range(1000)]
         self.label_layers = label_layers if label_layers else list()
+        self.siamese_helper = SiameseHelper(self.settings.layers_list)
         if channel_swap_to_rgb:
             self.channel_swap_to_rgb = array(channel_swap_to_rgb)
         else:
@@ -268,8 +271,10 @@ class GradientOptimizer(object):
             top_name = layer_name_to_top_name(self.net, params.push_layer)
             acts = self.net.blobs[top_name].data
 
+            layer_format = self.siamese_helper.get_layer_format_by_layer_name(params.push_layer)
+
             # note: no batch support in 'siamese_batch_pair'
-            if self.settings.is_siamese and self.settings.siamese_network_format == 'siamese_batch_pair' and acts.shape[0] == 2:
+            if self.settings.is_siamese and layer_format == 'siamese_batch_pair' and acts.shape[0] == 2:
 
                 if not is_spatial:
                     # promote to 4D
@@ -282,7 +287,7 @@ class GradientOptimizer(object):
                 # idxmax for conv layer will be like:        (batch,37, 4, 37)
                 obj[0] = acts[0, params.push_unit[0], params.push_unit[1], params.push_unit[2]]
 
-            elif self.settings.is_siamese and self.settings.siamese_network_format == 'siamese_batch_pair' and acts.shape[0] == 1:
+            elif self.settings.is_siamese and layer_format == 'siamese_batch_pair' and acts.shape[0] == 1:
 
                 if not is_spatial:
                     # promote to 4D
@@ -337,9 +342,9 @@ class GradientOptimizer(object):
                 # Promote bc -> bc01
                 diffs = diffs[:,:,np.newaxis,np.newaxis]
 
-            if self.settings.is_siamese and self.settings.siamese_network_format == 'siamese_batch_pair' and acts.shape[0] == 2:
+            if self.settings.is_siamese and layer_format == 'siamese_batch_pair' and acts.shape[0] == 2:
                 diffs[0, params.push_unit[0], params.push_unit[1], params.push_unit[2]] = params.push_dir
-            elif self.settings.is_siamese and self.settings.siamese_network_format == 'siamese_batch_pair' and acts.shape[0] == 1:
+            elif self.settings.is_siamese and layer_format == 'siamese_batch_pair' and acts.shape[0] == 1:
                 diffs[0, params.push_unit[0], params.push_unit[1], params.push_unit[2]] = params.push_dir
             else:
                 diffs[np.arange(params.batch_size), params.push_unit[0], params.push_unit[1], params.push_unit[2]] = params.push_dir

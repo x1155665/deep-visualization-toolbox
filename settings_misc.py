@@ -9,6 +9,7 @@ from caffevis.caffevis_helper import set_mean
 def deduce_calculated_settings(settings, net):
     set_calculated_is_gray_model(settings, net)
     set_calculated_image_dims(settings, net)
+    set_calculated_siamese_network_format(settings)
     read_network_dag(settings)
 
 
@@ -36,6 +37,16 @@ def set_calculated_image_dims(settings, net):
     else:
         input_shape = net.blobs[net.inputs[0]].data.shape
         settings._calculated_image_dims = input_shape[2:4]
+
+
+def set_calculated_siamese_network_format(settings):
+
+    settings._calculated_siamese_network_format = 'normal'
+
+    for layer_def in settings.layers_list:
+        if layer_def['format'] != 'normal':
+            settings._calculated_siamese_network_format = layer_def['format']
+            return
 
 
 def process_network_proto(settings):
