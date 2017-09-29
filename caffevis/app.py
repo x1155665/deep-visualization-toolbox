@@ -27,9 +27,9 @@ from caffevis_app_state import CaffeVisAppState, SiameseViewMode, PatternMode, B
     ColorMapOption, InputOverlayOption
 from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, \
     set_mean, get_image_from_files
-from caffe_misc import layer_name_to_top_name, save_caffe_image, get_max_data_extent
+from caffe_misc import layer_name_to_top_name, save_caffe_image
 from siamese_helper import SiameseHelper
-from settings_misc import load_network
+from settings_misc import load_network, get_receptive_field
 
 
 class CaffeVisApp(BaseApp):
@@ -297,7 +297,7 @@ class CaffeVisApp(BaseApp):
 
             print >> status2, 'Layer size: %s' % (self.state.get_layer_output_size_string())
 
-            print >> status2, '| Receptive field:', '%s' % (str(self.get_receptive_field(default_layer_name)))
+            print >> status2, '| Receptive field:', '%s' % (str(get_receptive_field(self.settings, self.net, default_layer_name)))
 
             print >> status2, '| Input: %s' % (str(self.state.next_filename))
 
@@ -311,22 +311,7 @@ class CaffeVisApp(BaseApp):
                          line_spacing=self.settings.caffevis_status_line_spacing)
 
 
-    def get_receptive_field(self, layer_name):
 
-        if not hasattr(self.settings, '_receptive_field_per_layer'):
-            self.settings._receptive_field_per_layer = dict()
-
-        # calculate lazy
-        if not self.settings._receptive_field_per_layer.has_key(layer_name):
-            print "Calculating receptive fields for layer %s" % (layer_name)
-            top_name = layer_name_to_top_name(self.net, layer_name)
-            if top_name is not None:
-                blob = self.net.blobs[top_name].data
-                is_spatial = (len(blob.shape) == 4)
-                layer_receptive_field = get_max_data_extent(self.net, self.settings, layer_name, is_spatial)
-                self.settings._receptive_field_per_layer[layer_name] = layer_receptive_field
-
-        return self.settings._receptive_field_per_layer[layer_name]
 
 
     def prepare_tile_image(self, display_3D, highlight_selected, n_tiles, tile_rows, tile_cols):
