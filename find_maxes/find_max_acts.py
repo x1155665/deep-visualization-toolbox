@@ -1,5 +1,9 @@
 #! /usr/bin/env python
 
+# this import must comes first to make sure we use the non-display backend
+import matplotlib
+matplotlib.use('Agg')
+
 # add parent folder to search path, to enable import of core modules like settings
 import os,sys,inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -7,7 +11,6 @@ parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
 
 import argparse
-#import ipdb as pdb
 import cPickle as pickle
 import numpy as np
 
@@ -43,6 +46,7 @@ def main():
     parser.add_argument('--outfile', type=str, default = os.path.join(settings.caffevis_outputs_dir, 'find_max_acts_output.pickled'), help='output filename for pkl')
     parser.add_argument('--outdir', type = str, default = settings.caffevis_outputs_dir, help = 'Which output directory to use. Files are output into outdir/layer/unit_%%04d/{max_histogram}.png')
     parser.add_argument('--do-histograms', action = 'store_true', default = settings.max_tracker_do_histograms, help = 'Output histogram image file containing histogrma of max values per channel')
+    parser.add_argument('--do-correlation', action = 'store_true', default = settings.max_tracker_do_correlation, help = 'Output correlation image file containing correlation of channels per layer')
 
     args = parser.parse_args()
 
@@ -71,9 +75,11 @@ def main():
 
     save_max_tracker_to_file(args.outfile, net_max_tracker)
 
+    if args.do_correlation:
+        net_max_tracker.calculate_correlation(args.outdir)
+
     if args.do_histograms:
         net_max_tracker.calculate_histograms(args.outdir)
-
 
 
 def save_max_tracker_to_file(filename, net_max_tracker):

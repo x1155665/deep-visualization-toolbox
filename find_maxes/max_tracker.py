@@ -74,11 +74,9 @@ class InfoFileMetadata(object):
 
 def prepare_max_histogram(layer_name, n_channels, channel_to_histogram_values, process_channel_figure, process_layer_figure):
 
-    from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-    from matplotlib.figure import Figure
+    import matplotlib.pyplot as plt
 
-    fig = Figure(figsize=(10, 10))
-    canvas = FigureCanvas(fig)
+    fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111)
 
     # for each channel
@@ -136,6 +134,9 @@ def prepare_max_histogram(layer_name, n_channels, channel_to_histogram_values, p
     ax.yaxis.label.set_text('channels count')
 
     process_layer_figure(fig)
+
+    fig.clf()
+    plt.close(fig)
 
     pass
 
@@ -266,6 +267,52 @@ class MaxTracker(object):
 
         pass
 
+    def calculate_correlation(self, layer_name, outdir):
+
+        # convert list of arrays to numpy array
+        all_max_array = np.vstack(self.all_max_vals)
+
+        # skip layers with only one channel
+        if all_max_array.shape[1] == 1:
+            return
+
+        corr = np.corrcoef(all_max_array.transpose())
+
+        # fix possible NANs
+        corr = np.nan_to_num(corr)
+        np.fill_diagonal(corr, 1)
+
+        # sort correlation matrix
+        # import cPickle as pickle
+        #  with open('corr_%s.pickled' % layer_name, 'wb') as ff:
+        #     pickle.dump(corr, ff, protocol=2)
+
+        # alternative sorting
+        # values = np.dot(corr, np.arange(corr.shape[0]))
+        # indexes = np.argsort(values)
+
+        indexes = np.lexsort(corr)
+        sorted_corr = corr[indexes,:][:,indexes]
+
+        # plot correlation matrix
+        import matplotlib.pyplot as plt
+        fig = plt.figure(figsize=(10, 10))
+        plt.subplot(1, 1, 1)
+        plt.imshow(sorted_corr, interpolation='nearest', vmin=-1, vmax=1)
+        plt.colorbar()
+        plt.title('channels activations correlation matrix for layer %s' % (layer_name))
+        plt.tight_layout()
+
+        # save correlation matrix
+        layer_dir = os.path.join(outdir, layer_name)
+        mkdir_p(layer_dir)
+        filename = os.path.join(layer_dir, 'channels_correlation.png')
+        fig.savefig(filename, bbox_inches='tight')
+
+        plt.close()
+
+        return
+
 
 class NetMaxTracker(object):
     def __init__(self, settings, layers, n_top = 10, initial_val = -1e99, dtype = 'float32'):
@@ -372,6 +419,20 @@ class NetMaxTracker(object):
             normalized_layer_name = self.siamese_helper.normalize_layer_name_for_max_tracker(layer_name)
 
             self.max_trackers[normalized_layer_name].calculate_histogram(layer_name, outdir)
+
+        pass
+
+    def calculate_correlation(self, outdir):
+
+        print "calculate_correlation on network"
+        for layer_name in self.layers:
+            print "calculate_correlation on layer %s" % layer_name
+
+            # normalize layer name, this is used for siamese networks where we want layers "conv_1" and "conv_1_p" to
+            # count as the same layer in terms of activations
+            normalized_layer_name = self.siamese_helper.normalize_layer_name_for_max_tracker(layer_name)
+
+            self.max_trackers[normalized_layer_name].calculate_correlation(layer_name, outdir)
 
         pass
 

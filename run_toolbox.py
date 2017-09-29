@@ -1,5 +1,9 @@
 #! /usr/bin/env python
 
+# this import must comes first to make sure we use the non-display backend
+import matplotlib
+matplotlib.use('Agg')
+
 import os
 from live_vis import LiveVis
 from bindings import bindings

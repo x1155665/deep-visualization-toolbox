@@ -1,13 +1,12 @@
 #! /usr/bin/env python
-from sys import float_info
 
+from sys import float_info
 import numpy as np
 import os
+import glob
 
 from image_misc import get_tiles_height_width, caffe_load_image, ensure_uint255_and_resize_without_fit, FormattedString, \
     cv2_typeset_text, to_255
-import glob
-
 
 
 def net_preproc_forward(settings, net, img, data_hw):

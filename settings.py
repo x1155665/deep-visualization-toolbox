@@ -383,6 +383,9 @@ max_tracker_do_info = locals().get('max_tracker_do_info', True)
 # default value for do_histograms parameter in max tracker
 max_tracker_do_histograms = locals().get('max_tracker_do_histograms', True)
 
+# default value for do_correlation parameter in max tracker
+max_tracker_do_correlation = locals().get('max_tracker_do_correlation', True)
+
 # default batch size used in max_tracker
 max_tracker_batch_size = locals().get('max_tracker_batch_size', 1)
 

@@ -11,7 +11,9 @@ class PatternMode:
     MAXIMAL_INPUT_IMAGE = 2
     WEIGHTS_HISTOGRAM = 3
     MAX_ACTIVATIONS_HISTOGRAM = 4
-    NUMBER_OF_MODES = 5
+    ACTIVATIONS_CORRELATION = 5
+    WEIGHTS_CORRELATION = 6
+    NUMBER_OF_MODES = 7
 
 class BackpropMode:
     OFF = 0
@@ -242,8 +244,12 @@ class CaffeVisAppState(object):
                 self.layer_boost_gamma = self.layer_boost_gamma_choices[self.layer_boost_gamma_idx]
             elif tag == 'next_pattern_mode':
                 self.pattern_mode = (self.pattern_mode + 1) % PatternMode.NUMBER_OF_MODES
+                self.validate_state_for_summary_only_patterns()
+
             elif tag == 'prev_pattern_mode':
                 self.pattern_mode = (self.pattern_mode - 1 + PatternMode.NUMBER_OF_MODES) % PatternMode.NUMBER_OF_MODES
+                self.validate_state_for_summary_only_patterns()
+
             elif tag == 'pattern_first_only':
                 self.pattern_first_only = not self.pattern_first_only
             elif tag == 'show_back':
@@ -438,6 +444,8 @@ class CaffeVisAppState(object):
                     self.selected_unit += self.net_blob_info[default_top_name]['tile_cols']
                     self.cursor_area = 'top'
 
+        self.validate_state_for_summary_only_patterns()
+
     def _ensure_valid_selected(self):
 
         default_layer_name = self.get_default_layer_name()
@@ -517,3 +525,7 @@ class CaffeVisAppState(object):
             return '(%d,%d,%d)' % (layer_output_size[0], layer_output_size[1], layer_output_size[2])
         else:
             return str(layer_output_size)
+
+    def validate_state_for_summary_only_patterns(self):
+        if self.pattern_mode in [PatternMode.ACTIVATIONS_CORRELATION, PatternMode.WEIGHTS_CORRELATION]:
+            self.cursor_area = 'top'

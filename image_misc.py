@@ -29,10 +29,7 @@ def fig2data(fig):
 
 def array_histogram(arr, histogram_pane_shape, title, xlabel, ylabel):
 
-    from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-    from matplotlib.figure import Figure
-    fig = Figure(figsize=(10, 10))
-    canvas = FigureCanvas(fig)
+    fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111)
 
     # generate histogram
@@ -48,7 +45,11 @@ def array_histogram(arr, histogram_pane_shape, title, xlabel, ylabel):
     ax.yaxis.label.set_text(ylabel)
 
     figure_buffer = fig2data(fig)
-    # result = ensure_uint255_and_resize_without_fit(figure_buffer, histogram_pane_shape)
+
+    ax.cla()
+    fig.clf()
+    plt.close(fig)
+
     return figure_buffer
 
 

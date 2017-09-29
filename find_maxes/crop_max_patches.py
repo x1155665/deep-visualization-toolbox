@@ -1,5 +1,9 @@
 #! /usr/bin/env python
 
+# this import must comes first to make sure we use the non-display backend
+import matplotlib
+matplotlib.use('Agg')
+
 # add parent folder to search path, to enable import of core modules like settings
 import os,sys,inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))

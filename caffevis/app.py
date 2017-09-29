@@ -267,6 +267,10 @@ class CaffeVisApp(BaseApp):
                 print >> status, 'histogram(weights)'
             elif self.state.pattern_mode == PatternMode.MAX_ACTIVATIONS_HISTOGRAM:
                 print >> status, 'histogram(maximal activations)'
+            elif self.state.pattern_mode == PatternMode.ACTIVATIONS_CORRELATION:
+                print >> status, 'correlation(maximal activations)'
+            elif self.state.pattern_mode == PatternMode.WEIGHTS_CORRELATION:
+                print >> status, 'correlation(weights)'
             elif self.state.layers_show_back:
                 print >> status, 'back'
             else:
@@ -425,24 +429,34 @@ class CaffeVisApp(BaseApp):
                         self.state.pattern_first_only, file_search_pattern='maxim*.png')
 
             elif self.state.pattern_mode == PatternMode.WEIGHTS_HISTOGRAM:
-
-                    display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_weights_histograms(
-                        self.net, default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows,
-                        show_layer_summary=self.state.cursor_area == 'top')
+                display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_weights_histograms(
+                    self.net, default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows,
+                    show_layer_summary=self.state.cursor_area == 'top')
 
             elif self.state.pattern_mode == PatternMode.MAX_ACTIVATIONS_HISTOGRAM:
+                if self.settings.caffevis_histograms_format == 'load_from_file':
+                    display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_pattern_images_optimizer_format(
+                        default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows, True,
+                        file_search_pattern='max_histogram.png',
+                        show_layer_summary=self.state.cursor_area == 'top',
+                        file_summary_pattern='layer_inactivity.png')
 
-                    if self.settings.caffevis_histograms_format == 'load_from_file':
-                        display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_pattern_images_optimizer_format(
-                            default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows, True,
-                            file_search_pattern='max_histogram.png',
-                            show_layer_summary=self.state.cursor_area == 'top',
-                            file_summary_pattern='layer_inactivity.png')
+                elif self.settings.caffevis_histograms_format == 'calculate_in_realtime':
+                    display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_maximal_activations_histograms(
+                        default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows,
+                        show_layer_summary=self.state.cursor_area == 'top')
 
-                    elif self.settings.caffevis_histograms_format == 'calculate_in_realtime':
-                        display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_maximal_activations_histograms(
-                            default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows,
-                            show_layer_summary=self.state.cursor_area == 'top')
+            elif self.state.pattern_mode == PatternMode.ACTIVATIONS_CORRELATION:
+                display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_pattern_images_optimizer_format(
+                    default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows, True,
+                    file_search_pattern=None,
+                    show_layer_summary=True,
+                    file_summary_pattern='channels_correlation.png')
+
+            elif self.state.pattern_mode == PatternMode.WEIGHTS_CORRELATION:
+                display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_weights_correlation(
+                    self.net, default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows,
+                    show_layer_summary=True)
 
             else:
                 raise Exception("Invalid value of pattern mode: %d" % self.state.pattern_mode)
@@ -638,9 +652,12 @@ class CaffeVisApp(BaseApp):
                             is_layer_summary_loaded = True
 
                         else:
-                            with WithTimer('CaffeVisApp:load_image_per_unit', quiet=self.debug_level < 1):
-                                # load all images
-                                display_3D_highres = self.load_image_per_unit(display_3D_highres, load_layer, units_num, first_only, resize_shape, file_search_pattern)
+                            if file_search_pattern is None:
+                                display_3D_highres = None
+                            else:
+                                with WithTimer('CaffeVisApp:load_image_per_unit', quiet=self.debug_level < 1):
+                                    # load all images
+                                    display_3D_highres = self.load_image_per_unit(display_3D_highres, load_layer, units_num, first_only, resize_shape, file_search_pattern)
 
                 except IOError:
                     # File does not exist, so just display disabled.
@@ -741,10 +758,10 @@ class CaffeVisApp(BaseApp):
             # 1. calculating size of results array
             # 2. generating weights histogram for selected unit
             # 3. generating weights histograms for all units
-            from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-            from matplotlib.figure import Figure
-            fig = Figure(figsize=(10, 10))
-            canvas = FigureCanvas(fig)
+
+            import matplotlib.pyplot as plt
+
+            fig = plt.figure(figsize=(10, 10))
             ax = fig.add_subplot(111)
 
             def calculate_weights_histogram_for_specific_unit(channel_idx, fig, ax, do_print):
@@ -791,6 +808,9 @@ class CaffeVisApp(BaseApp):
 
                         # load 2d image from cache file
                         display_2D = caffe_load_image(cache_layer_weights_histogram_image_path, color=True, as_uint=False)
+                        display_3D_highres = np.zeros(pane_shape)
+                        display_3D_highres = np.expand_dims(display_3D_highres, 0)
+                        display_3D_highres[0] = display_2D
 
                         is_layer_summary_loaded = True
 
@@ -873,7 +893,7 @@ class CaffeVisApp(BaseApp):
 
                         if folder_path:
                             mkdir_p(folder_path)
-                            save_caffe_image(display_2D.astype(np.float32).transpose((2,0,1)), cache_layer_weights_histogram_image_path)
+                            save_caffe_image(display_2D[:,:,::-1].astype(np.float32).transpose((2,0,1)), cache_layer_weights_histogram_image_path)
                         else:
                             print "WARNING: unable to save weight histogram to cache since caffevis_outputs_dir is not set"
 
@@ -891,7 +911,7 @@ class CaffeVisApp(BaseApp):
                         if folder_path:
                             # save histogram image to cache
                             mkdir_p(folder_path)
-                            save_caffe_image(display_2D.astype(np.float32).transpose((2,0,1)), cache_details_weights_histogram_image_path)
+                            save_caffe_image(display_2D[:,:,::-1].astype(np.float32).transpose((2,0,1)), cache_details_weights_histogram_image_path)
                         else:
                             print "WARNING: unable to save weight histogram to cache since caffevis_outputs_dir is not set"
 
@@ -910,6 +930,9 @@ class CaffeVisApp(BaseApp):
                 self.img_cache.set(pattern_image_key_3d, display_3D_highres)
                 self.img_cache.set(pattern_image_key_2d, display_2D)
 
+            fig.clf()
+            plt.close(fig)
+
         else:
             # here we can safely assume that display_2D is not None, so we only need to check if show_layer_summary was requested
             if show_layer_summary:
@@ -922,6 +945,112 @@ class CaffeVisApp(BaseApp):
 
         return display_2D, display_3D, display_3D_highres, is_layer_summary_loaded
 
+    def load_weights_correlation(self, net, layer_name, layer_dat_3D, n_channels, pane, tile_cols, tile_rows, show_layer_summary):
+
+        is_layer_summary_loaded = False
+        display_2D = None
+        display_3D = None
+        empty_display_3D = np.zeros(layer_dat_3D.shape + (3,))
+
+        pattern_image_key_3d = (layer_name, "weights_correlation", show_layer_summary, self.state.selected_unit, "3D")
+        pattern_image_key_2d = (layer_name, "weights_correlation", show_layer_summary, self.state.selected_unit, "2D")
+
+        # Get highres version
+        display_3D_highres = self.img_cache.get(pattern_image_key_3d, None)
+        display_2D = self.img_cache.get(pattern_image_key_2d, None)
+
+        if display_3D_highres is None or display_2D is None:
+
+            pane_shape = pane.data.shape
+
+            if not self.settings.caffevis_outputs_dir:
+                folder_path = None
+                cache_layer_weights_correlation_image_path = None
+            else:
+                folder_path = os.path.join(self.settings.caffevis_outputs_dir, layer_name)
+                cache_layer_weights_correlation_image_path = os.path.join(folder_path, 'layer_weights_correlation.png')
+
+            try:
+
+                # try load cache file for layer weight correlation
+                if cache_layer_weights_correlation_image_path and os.path.exists(cache_layer_weights_correlation_image_path):
+
+                    # load 2d image from cache file
+                    display_2D = caffe_load_image(cache_layer_weights_correlation_image_path, color=True, as_uint=False)
+                    display_3D_highres = np.zeros(pane_shape)
+                    display_3D_highres = np.expand_dims(display_3D_highres, 0)
+                    display_3D_highres[0] = display_2D
+
+                    is_layer_summary_loaded = True
+
+                # if not loaded from cache, generate the data
+                if display_2D is None:
+
+                    # calculate weights correlation image
+
+                    # check if layer has weights at all
+                    if not net.params.has_key(layer_name):
+                        return display_2D, empty_display_3D, empty_display_3D, is_layer_summary_loaded
+
+                    # skip layers with only one channel
+                    if n_channels == 1:
+                        return display_2D, empty_display_3D, empty_display_3D, is_layer_summary_loaded
+
+                    data_unroll = net.params[layer_name][0].data.reshape((n_channels, -1))  # Note: no copy eg (96,3025). Does nothing if not is_spatial
+
+                    corr = np.corrcoef(data_unroll)
+
+                    # fix possible NANs
+                    corr = np.nan_to_num(corr)
+                    np.fill_diagonal(corr, 1)
+
+                    # sort correlation matrix
+                    indexes = np.lexsort(corr)
+                    sorted_corr = corr[indexes, :][:, indexes]
+
+                    # plot correlation matrix
+                    import matplotlib.pyplot as plt
+
+                    fig = plt.figure(figsize=(10, 10))
+                    plt.subplot(1, 1, 1)
+                    plt.imshow(sorted_corr, interpolation='nearest', vmin=-1, vmax=1)
+                    plt.colorbar()
+                    plt.title('channels weights correlation matrix for layer %s' % (layer_name))
+                    plt.tight_layout()
+                    figure_buffer = fig2data(fig)
+                    plt.close()
+
+                    display_3D_highres_summary = ensure_uint255_and_resize_without_fit(figure_buffer, pane_shape)
+                    display_3D_highres_summary = np.expand_dims(display_3D_highres_summary, 0)
+                    display_3D_highres = display_3D_highres_summary
+                    display_2D = display_3D_highres[0]
+                    is_layer_summary_loaded = True
+
+                    if folder_path:
+                        mkdir_p(folder_path)
+                        save_caffe_image(display_2D[:,:,::-1].astype(np.float32).transpose((2,0,1)), cache_layer_weights_correlation_image_path)
+                    else:
+                        print "WARNING: unable to save weight correlationto cache since caffevis_outputs_dir is not set"
+
+                self.img_cache.set(pattern_image_key_3d, display_3D_highres)
+                self.img_cache.set(pattern_image_key_2d, display_2D)
+
+            except IOError:
+                return display_2D, empty_display_3D, empty_display_3D, is_layer_summary_loaded
+                # File does not exist, so just display disabled.
+                pass
+
+        else:
+            # here we can safely assume that display_2D is not None, so we only need to check if show_layer_summary was requested
+            if show_layer_summary:
+                is_layer_summary_loaded = True
+
+            pass
+
+        if display_3D is None:
+            display_3D = self.downsample_display_3d(display_3D_highres, layer_dat_3D, pane, tile_cols, tile_rows)
+
+        return display_2D, display_3D, display_3D_highres, is_layer_summary_loaded
 
     def load_maximal_activations_histograms(self, default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows, show_layer_summary):
 
