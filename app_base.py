@@ -13,6 +13,10 @@ class BaseApp(object):
         '''Handle key and return either key (to let someone downstream handle it) or None (if this app handled it)'''
         pass
 
+    def handle_mouse_left_click(self, x, y, flags, param, panes):
+        '''Handle mouse events'''
+        pass
+
     def redraw_needed(self, key, panes):
         '''App should return whether or not its internal state has
         been updated (perhaps in response to handle_key, handle_input,

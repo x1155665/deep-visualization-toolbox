@@ -328,6 +328,57 @@ class CaffeVisAppState(object):
 
         return (None if key_handled else key)
 
+    def handle_mouse_left_click(self, x, y, flags, param, panes, header_boxes):
+
+        for pane_name, pane in panes.items():
+            if pane.j_begin <= x < pane.j_end and pane.i_begin <= y < pane.i_end:
+
+                if pane_name == 'caffevis_control': # layers list
+
+                    # search for layer clicked on
+                    for box_idx, box in enumerate(header_boxes):
+                        start_x, end_x, start_y, end_y = box
+                        if start_x <= x - pane.j_begin < end_x and start_y <= y - pane.i_begin <= end_y:
+                            # print 'layers list clicked on layer %d (%s,%s)' % (box_idx, x, y)
+                            self.layer_idx = box_idx
+                            self.cursor_area = 'top'
+                            self._ensure_valid_selected()
+                            self.drawing_stale = True  # Request redraw any time we handled the mouse
+                            return
+                    # print 'layers list clicked on (%s,%s)' % (x, y)
+
+                elif pane_name == 'caffevis_layers': # channels list
+                    # print 'channels list clicked on (%s,%s)' % (x, y)
+
+                    default_layer_name = self.get_default_layer_name()
+                    default_top_name = layer_name_to_top_name(self.net, default_layer_name)
+
+                    tile_rows, tile_cols = self.net_blob_info[default_top_name]['tiles_rc']
+
+                    dy_per_channel = (pane.data.shape[0] + 1) / float(tile_rows)
+                    dx_per_channel = (pane.data.shape[1] + 1) / float(tile_cols)
+
+                    tile_x = int(((x - pane.j_begin) / dx_per_channel) + 1)
+                    tile_y = int(((y - pane.i_begin) / dy_per_channel) + 1)
+
+                    channel_id = (tile_y-1) * tile_cols + (tile_x - 1)
+
+                    self.selected_unit = channel_id
+                    self.cursor_area = 'bottom'
+
+                    self.validate_state_for_summary_only_patterns()
+                    self._ensure_valid_selected()
+                    self.drawing_stale = True  # Request redraw any time we handled the mouse
+                    return
+
+
+                else:
+                    # print "Clicked: %s - %s" % (x, y)
+                    pass
+                break
+
+        pass
+
     def redraw_needed(self):
         with self.lock:
             return self.drawing_stale

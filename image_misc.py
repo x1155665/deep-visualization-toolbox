@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 
+import io
 import cv2
 import numpy as np
 import skimage
@@ -16,20 +17,26 @@ def fig2data(fig):
     @param fig a matplotlib figure
     @return a numpy 3D array of RGB values
     """
-    # draw the renderer
-    fig.canvas.draw()
 
+    # alternative implementation - which might be slower
+    # buf = io.BytesIO()
+    # fig.savefig(buf, format='png')
+    # buf.seek(0)
+    # image = caffe_load_image(buf, color=True, as_uint=True)
+    # buf.close()
+    #return image
+    
     # Get the RGB buffer from the figure
+    fig.canvas.draw()
     w, h = fig.canvas.get_width_height()
     buf = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8)
     buf.shape = (w, h, 3)
-
     return buf
+    
 
 
 def array_histogram(arr, histogram_pane_shape, title, xlabel, ylabel):
-
-    fig = plt.figure(figsize=(10, 10))
+    fig = plt.figure(figsize=(10, 10), facecolor='white')
     ax = fig.add_subplot(111)
 
     # generate histogram
@@ -527,6 +534,7 @@ def cv2_typeset_text(data, lines, loc, between = ' ', string_spacing = 0, line_s
 
     Returns:
     locy: new y location = loc[1] + y-offset resulting from lines of text
+    boxes: list of boxes, one for each line, in the format (start_x, end_x, start_y, end_y)
     '''
 
     data_width = data.shape[1]
@@ -538,12 +546,14 @@ def cv2_typeset_text(data, lines, loc, between = ' ', string_spacing = 0, line_s
         lines = [lines]
     assert isinstance(lines, list), 'lines must be a list of lines or list of FormattedString objects or a single FormattedString object'
     if len(lines) == 0:
-        return loc[1]
+        return loc[1], []
     if not isinstance(lines[0], list):
         # If a single line of text is given as a list of strings, convert to multiline format
         lines = [lines]
     
     locy = loc[1]
+
+    boxes = list()
 
     line_num = 0
     while line_num < len(lines):
@@ -574,7 +584,8 @@ def cv2_typeset_text(data, lines, loc, between = ' ', string_spacing = 0, line_s
                 lines.insert(line_num+1, new_next_line)
                 break
                 ###line_num += 1
-                ###continue    
+                ###continue
+            boxes.append((locx, locx + boxsize[0], locy - boxsize[1], locy))
             cv2.putText(data, fs.string, (locx,locy), fs.face, fs.fsize, fs.clr, fs.thick)
             maxy = max(maxy, boxsize[1])
             if fs.width is not None:
@@ -590,7 +601,7 @@ def cv2_typeset_text(data, lines, loc, between = ' ', string_spacing = 0, line_s
         line_num += 1
         locy += maxy + line_spacing
         
-    return locy
+    return locy, boxes
 
 
 def saveimage(filename, im):

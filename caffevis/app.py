@@ -67,6 +67,8 @@ class CaffeVisApp(BaseApp):
             raise Exception('caffevis_jpg_cache_size must be at least 10MB for normal operation.')
         self.img_cache = FIFOLimitedArrayCache(settings.caffevis_jpg_cache_size)
 
+        self.header_boxes = []
+
     def start(self):
         from jpg_vis_loading_thread import JPGVisLoadingThread
 
@@ -236,9 +238,9 @@ class CaffeVisApp(BaseApp):
                         fs.thick = self.settings.caffevis_control_thick_selected
             strings.append(fs)
 
-        locy = cv2_typeset_text(pane.data, strings, loc,
-                         line_spacing = self.settings.caffevis_control_line_spacing,
-                         wrap = True)
+        locy, self.header_boxes = cv2_typeset_text(pane.data, strings, loc,
+                                                   line_spacing = self.settings.caffevis_control_line_spacing,
+                                                   wrap = True)
 
         if hasattr(self.settings, 'control_pane_height'):
             self.settings._calculated_control_pane_height = self.settings.control_pane_height
@@ -304,11 +306,11 @@ class CaffeVisApp(BaseApp):
         strings_line1 = [FormattedString(line, defaults) for line in status.getvalue().split('\n')]
         strings_line2 = [FormattedString(line, defaults) for line in status2.getvalue().split('\n')]
 
-        locy = cv2_typeset_text(pane.data, strings_line1, (loc[0], loc[1] + 5),
-                         line_spacing = self.settings.caffevis_status_line_spacing)
+        locy, boxes = cv2_typeset_text(pane.data, strings_line1, (loc[0], loc[1] + 5),
+                                       line_spacing = self.settings.caffevis_status_line_spacing)
 
-        locy = cv2_typeset_text(pane.data, strings_line2, (loc[0], locy),
-                         line_spacing=self.settings.caffevis_status_line_spacing)
+        locy, boxes = cv2_typeset_text(pane.data, strings_line2, (loc[0], locy),
+                                       line_spacing=self.settings.caffevis_status_line_spacing)
 
 
 
@@ -464,7 +466,7 @@ class CaffeVisApp(BaseApp):
                                                                 boost_indiv = self.state.layer_boost_indiv,
                                                                 boost_gamma = self.state.layer_boost_gamma)
 
-            display_3D         = layer_dat_3D_normalized
+            display_3D = layer_dat_3D_normalized
 
         # Convert to float if necessary:
         display_3D = ensure_float01(display_3D)
@@ -746,7 +748,7 @@ class CaffeVisApp(BaseApp):
 
             import matplotlib.pyplot as plt
 
-            fig = plt.figure(figsize=(10, 10))
+            fig = plt.figure(figsize=(10, 10), facecolor='white', tight_layout=False)
             ax = fig.add_subplot(111)
 
             def calculate_weights_histogram_for_specific_unit(channel_idx, fig, ax, do_print):
@@ -996,12 +998,11 @@ class CaffeVisApp(BaseApp):
                     # plot correlation matrix
                     import matplotlib.pyplot as plt
 
-                    fig = plt.figure(figsize=(10, 10))
+                    fig = plt.figure(figsize=(10, 10), facecolor='white', tight_layout=True)
                     plt.subplot(1, 1, 1)
                     plt.imshow(sorted_corr, interpolation='nearest', vmin=-1, vmax=1)
                     plt.colorbar()
                     plt.title('channels weights correlation matrix for layer %s' % (layer_name))
-                    plt.tight_layout()
                     figure_buffer = fig2data(fig)
                     plt.close()
 
@@ -1453,6 +1454,9 @@ class CaffeVisApp(BaseApp):
     def handle_key(self, key, panes):
         return self.state.handle_key(key)
 
+    def handle_mouse_left_click(self, x, y, flags, param, panes):
+        self.state.handle_mouse_left_click(x, y, flags, param, panes, self.header_boxes)
+
     def get_back_what_to_disp(self):
         '''Whether to show back diff information or stale or disabled indicator'''
         if (self.state.cursor_area == 'top' and not self.state.backprop_selection_frozen) or not self.state.back_enabled:
@@ -1512,7 +1516,7 @@ class CaffeVisApp(BaseApp):
                 lines.append([FormattedString(label, defaults, width=120, align='right'),
                               FormattedString(help_string, defaults)])
 
-        locy = cv2_typeset_text(help_pane.data, lines, (locx, locy),
-                                line_spacing = self.settings.help_line_spacing)
+        locy, boxes = cv2_typeset_text(help_pane.data, lines, (locx, locy),
+                                       line_spacing = self.settings.help_line_spacing)
 
         return locy

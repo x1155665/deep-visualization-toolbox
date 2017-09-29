@@ -114,6 +114,19 @@ class LiveVis(object):
         self.help_buffer = self.window_buffer.copy() # For rendering help mode
         self.help_pane.data = self.help_buffer[self.help_pane.i_begin:self.help_pane.i_end, self.help_pane.j_begin:self.help_pane.j_end]
 
+        # add listener for mouse clicks
+        cv2.setMouseCallback(self.window_name, self.on_mouse_click)
+
+    def on_mouse_click(self, event, x, y, flags, param):
+        '''
+        Handle all button presses.
+        '''
+
+        if event == cv2.EVENT_LBUTTONUP:
+            for app_name, app in self.apps.iteritems():
+                with WithTimer('%s:on_mouse_click' % app_name, quiet=self.debug_level < 1):
+                    key = app.handle_mouse_left_click(x, y, flags, param, self.panes)
+
     def check_for_control_height_update(self):
 
         if hasattr(self.settings, '_calculated_control_pane_height') and \
@@ -375,8 +388,8 @@ class LiveVis(object):
         lines = []
         lines.append([FormattedString('~ ~ ~ Deep Visualization Toolbox ~ ~ ~', defaults, align='center', width=self.help_pane.j_size)])
 
-        locy = cv2_typeset_text(self.help_pane.data, lines, loc,
-                                line_spacing = self.settings.help_line_spacing)
+        locy, boxes = cv2_typeset_text(self.help_pane.data, lines, loc,
+                                       line_spacing = self.settings.help_line_spacing)
 
         for app_name, app in self.apps.iteritems():
             locy = app.draw_help(self.help_pane, locy)
