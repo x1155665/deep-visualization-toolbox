@@ -7,6 +7,7 @@ import cPickle as pickle
 
 from caffevis.caffevis_helper import set_mean
 from caffe_misc import layer_name_to_top_name, get_max_data_extent
+from misc import mkdir_p
 
 def deduce_calculated_settings_without_network(settings):
     set_calculated_siamese_network_format(settings)
@@ -289,6 +290,7 @@ def get_receptive_field(settings, net, layer_name):
     if should_save_to_cache:
         try:
             receptive_fields_cache_filename = _get_receptive_fields_cache_filename(settings)
+            mkdir_p(settings.caffevis_outputs_dir)
             with open(receptive_fields_cache_filename, 'wb') as receptive_fields_cache_file:
                 pickle.dump(settings._receptive_field_per_layer, receptive_fields_cache_file, -1)
         except IOError:
