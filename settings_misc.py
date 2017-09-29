@@ -75,6 +75,8 @@ def set_receptive_field_per_layer(settings, net):
 
     for layer_name in settings._layer_name_to_record.keys():
 
+        print "Calculating receptive field for layer %s..." % (layer_name)
+
         top_name = layer_name_to_top_name(net, layer_name)
         if top_name is not None:
             blob = net.blobs[top_name].data

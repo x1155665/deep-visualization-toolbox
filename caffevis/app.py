@@ -238,9 +238,14 @@ class CaffeVisApp(BaseApp):
                         fs.thick = self.settings.caffevis_control_thick_selected
             strings.append(fs)
 
-        cv2_typeset_text(pane.data, strings, loc,
+        locy = cv2_typeset_text(pane.data, strings, loc,
                          line_spacing = self.settings.caffevis_control_line_spacing,
                          wrap = True)
+
+        if hasattr(self.settings, 'control_pane_height'):
+            self.settings._calculated_control_pane_height = self.settings.control_pane_height
+        else:
+            self.settings._calculated_control_pane_height = locy - loc[1] + 4
 
     def _draw_status_pane(self, pane):
         pane.data[:] = to_255(self.settings.window_background)

@@ -69,17 +69,18 @@ debug_window_panes = locals().get('debug_window_panes', False)
 if 'default_window_panes' in locals():
     raise Exception('Override window panes in settings_MODEL.py by defining window_panes, not default_window_panes')
 
-control_pane_height = locals().get('control_pane_height', 4*20)
+# set the following member to make control pane height constant, instead of automatic
+# control_pane_height = locals().get('control_pane_height', 3*20)
 
 default_window_panes = (
     # (i, j, i_size, j_size)
-    ('input',            (  0,    0,  300,   300)),    # This pane is required to show the input picture
-    ('caffevis_aux',     (300,    0,  300,   300)),
-    ('caffevis_back',    (600,    0,  300,   300)),
-    ('caffevis_status',  (900,    0,  20*2 + 10,  1500)),
-    ('caffevis_control', (  0,  300,   control_pane_height,   900)),
-    ('caffevis_layers',  ( control_pane_height,  300,  900-control_pane_height,   900)),
-    ('caffevis_jpgvis',  (  0, 1200,  900,   300)),
+    ('input',            (   0,    0,       300,   300)),    # This pane is required to show the input picture
+    ('caffevis_aux',     ( 300,    0,       300,   300)),
+    ('caffevis_back',    ( 600,    0,       300,   300)),
+    ('caffevis_status',  ( 900,    0, 2*20 + 10,  1500)),
+    ('caffevis_control', (   0,  300,      3*20,   900)),
+    ('caffevis_layers',  (3*20,  300,  900-3*20,   900)),
+    ('caffevis_jpgvis',  (   0, 1200,       900,   300)),
 )
 window_panes = locals().get('window_panes', default_window_panes)
 

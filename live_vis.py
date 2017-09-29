@@ -24,20 +24,20 @@ class ImproperlyConfigured(Exception):
     pass
 
 
-
-
 class Pane(object):
     '''Hold info about one window pane (rectangular region within the main window)'''
 
     def __init__(self, i_begin, j_begin, i_size, j_size):
+        self.reset(i_begin, j_begin, i_size, j_size)
+
+    def reset(self, i_begin, j_begin, i_size, j_size):
         self.i_begin = i_begin
         self.j_begin = j_begin
         self.i_size = i_size
         self.j_size = j_size
         self.i_end = i_begin + i_size
         self.j_end = j_begin + j_size
-        self.data = None    # eventually contains a slice of the window buffer
-
+        self.data = None  # eventually contains a slice of the window buffer
 
 
 class LiveVis(object):
@@ -114,6 +114,33 @@ class LiveVis(object):
         self.help_buffer = self.window_buffer.copy() # For rendering help mode
         self.help_pane.data = self.help_buffer[self.help_pane.i_begin:self.help_pane.i_end, self.help_pane.j_begin:self.help_pane.j_end]
 
+    def check_for_control_height_update(self):
+
+        if hasattr(self.settings, '_calculated_control_pane_height') and \
+           self.settings._calculated_control_pane_height != self.panes['caffevis_control'].i_size:
+
+            self.panes['caffevis_control'].reset(
+                self.settings.window_panes[4][1][0],
+                self.settings.window_panes[4][1][1],
+                self.settings._calculated_control_pane_height,
+                self.settings.window_panes[4][1][3])
+
+            self.panes['caffevis_layers'].reset(
+                self.settings._calculated_control_pane_height,
+                self.settings.window_panes[5][1][1],
+                self.settings.window_panes[5][1][2] + 3*20 - self.settings._calculated_control_pane_height,
+                self.settings.window_panes[5][1][3])
+
+            for _, pane in self.panes.iteritems():
+                pane.data = self.window_buffer[pane.i_begin:pane.i_end, pane.j_begin:pane.j_end]
+
+            return True
+
+        else:
+            return False
+
+        pass
+
     def run_loop(self):
         self.quit = False
         # Setup
@@ -187,6 +214,8 @@ class LiveVis(object):
                     break
             for app_name, app in self.apps.iteritems():
                 redraw_needed |= app.redraw_needed()
+
+            redraw_needed |= self.check_for_control_height_update()
 
             # Grab latest frame from input_updater thread
             fr_idx,fr_data,fr_label,fr_filename = self.input_updater.get_frame()
