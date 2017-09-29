@@ -4,7 +4,6 @@ parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
 
 from caffevis.caffevis_helper import set_mean
-from caffe_misc import layer_name_to_top_name, get_max_data_extent
 
 def deduce_calculated_settings_without_network(settings):
     set_calculated_siamese_network_format(settings)
@@ -15,7 +14,6 @@ def deduce_calculated_settings_without_network(settings):
 def deduce_calculated_settings_with_network(settings, net):
     set_calculated_is_gray_model(settings, net)
     set_calculated_image_dims(settings, net)
-    set_receptive_field_per_layer(settings, net)
 
 
 def set_calculated_is_gray_model(settings, net):
@@ -65,28 +63,6 @@ def set_calculated_channel_swap(settings):
 
         else:
             settings._calculated_channel_swap = (2, 1, 0)
-
-
-def set_receptive_field_per_layer(settings, net):
-
-    print "Calculating receptive fields for all layers..."
-
-    receptive_field_per_layer = dict()
-
-    for layer_name in settings._layer_name_to_record.keys():
-
-        print "Calculating receptive field for layer %s..." % (layer_name)
-
-        top_name = layer_name_to_top_name(net, layer_name)
-        if top_name is not None:
-            blob = net.blobs[top_name].data
-            is_spatial = (len(blob.shape) == 4)
-            layer_receptive_field = get_max_data_extent(net, settings, layer_name, is_spatial)
-            receptive_field_per_layer[layer_name] = layer_receptive_field
-
-    settings._receptive_field_per_layer = receptive_field_per_layer
-
-    print "Calculating receptive fields for all layers... Done."
 
 
 def process_network_proto(settings):

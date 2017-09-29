@@ -54,7 +54,9 @@ class InputImageFetcher(CodependentThread):
 
         # contains the requested number of increaments for file index
         self.static_file_idx_increment = 0
-        
+
+        self.available_files, self.labels = get_files_list(self.settings)
+
     def bind_camera(self):
         # Due to OpenCV limitations, this should be called from the main thread
         print 'InputImageFetcher: bind_camera starting'
@@ -177,8 +179,6 @@ class InputImageFetcher(CodependentThread):
             self.latest_frame_data = frame
             self.latest_frame_is_from_cam = from_cam
 
-
-
     def check_increment_and_load_image(self):
         with self.lock:
             if (self.static_file_idx_increment == 0 and
@@ -188,16 +188,14 @@ class InputImageFetcher(CodependentThread):
                 # Skip if a static frame is already loaded and there is no increment
                 return
 
-            available_files, labels = get_files_list(self.settings)
-
-            assert len(available_files) != 0, ('Error: No files found in %s matching %s (current working directory is %s)' %
+            assert len(self.available_files) != 0, ('Error: No files found in %s matching %s (current working directory is %s)' %
                                                (self.settings.static_files_dir, self.settings.static_files_regexp, os.getcwd()))
             if self.static_file_idx is None:
                 self.static_file_idx = 0
-            self.static_file_idx = (self.static_file_idx + self.static_file_idx_increment) % len(available_files)
+            self.static_file_idx = (self.static_file_idx + self.static_file_idx_increment) % len(self.available_files)
             self.static_file_idx_increment = 0
-            if self.latest_static_filename != available_files[self.static_file_idx] or self.latest_static_frame is None:
-                self.latest_static_filename = available_files[self.static_file_idx]
+            if self.latest_static_filename != self.available_files[self.static_file_idx] or self.latest_static_frame is None:
+                self.latest_static_filename = self.available_files[self.static_file_idx]
 
                 if self.settings.is_siamese:
                     # loading two images for siamese network
@@ -217,6 +215,6 @@ class InputImageFetcher(CodependentThread):
                 self.latest_static_frame = im
 
                 # if we have labels, keep it
-                if labels:
-                    self.latest_label = labels[self.static_file_idx]
+                if self.labels:
+                    self.latest_label = self.labels[self.static_file_idx]
             self._increment_and_set_frame(self.latest_static_frame, False)

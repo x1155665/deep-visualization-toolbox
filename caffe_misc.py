@@ -86,7 +86,7 @@ class RegionComputer(object):
 
 
     @staticmethod
-    def convert_region_dag(settings, from_layer, to_layer, region, verbose=False, crop_to_boundary=True):
+    def convert_region_dag(settings, from_layer, to_layer, region):
 
         step_region = None
 
@@ -120,7 +120,7 @@ class RegionComputer(object):
                     continue
 
                 # calculate convert_region_dag on each one
-                current_region = RegionComputer.convert_region_dag(settings, parent_layer.name, to_layer, step_region, verbose, crop_to_boundary)
+                current_region = RegionComputer.convert_region_dag(settings, parent_layer.name, to_layer, step_region)
 
                 # aggregate results
                 if total_region is None:
@@ -167,7 +167,7 @@ def get_max_data_extent(net, settings, layer_name, is_spatial):
         top_name = layer_name_to_top_name(net, layer_name)
         conv_size = net.blobs[top_name].data.shape[2:4]        # e.g. (13,13) for conv5
         layer_slice_middle = (conv_size[0]/2,conv_size[0]/2+1, conv_size[1]/2,conv_size[1]/2+1)   # e.g. (6,7,6,7,), the single center unit
-        data_slice = RegionComputer.convert_region_dag(settings, layer_name, 'input', layer_slice_middle, crop_to_boundary=False)
+        data_slice = RegionComputer.convert_region_dag(settings, layer_name, 'input', layer_slice_middle)
         data_slice_size = data_slice[1]-data_slice[0], data_slice[3]-data_slice[2]   # e.g. (163, 163) for conv5
         # crop data slice size to data size
         data_slice_size = min(data_slice_size[0], data_size[0]), min(data_slice_size[1], data_size[1])
@@ -184,7 +184,7 @@ def compute_data_layer_focus_area(is_spatial, ii, jj, settings, layer_name, size
         # Compute the focus area of the data layer
         layer_indices = (ii, ii + 1, jj, jj + 1)
 
-        data_indices = RegionComputer.convert_region_dag(settings, layer_name, 'input', layer_indices, crop_to_boundary=False)
+        data_indices = RegionComputer.convert_region_dag(settings, layer_name, 'input', layer_indices)
         data_ii_start, data_ii_end, data_jj_start, data_jj_end = data_indices
 
         # safe guard edges

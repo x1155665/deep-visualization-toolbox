@@ -27,7 +27,7 @@ from caffevis_app_state import CaffeVisAppState, SiameseViewMode, PatternMode, B
     ColorMapOption, InputOverlayOption
 from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, \
     check_force_backward_true, set_mean, get_image_from_files
-from caffe_misc import layer_name_to_top_name, save_caffe_image
+from caffe_misc import layer_name_to_top_name, save_caffe_image, get_max_data_extent
 from siamese_helper import SiameseHelper
 from settings_misc import load_network
 
@@ -295,7 +295,7 @@ class CaffeVisApp(BaseApp):
 
             print >> status2, 'Layer size: %s' % (self.state.get_layer_output_size_string())
 
-            print >> status2, '| Receptive field:', '%s' % str(self.settings._receptive_field_per_layer[default_layer_name]) if self.settings._receptive_field_per_layer.has_key(default_layer_name) else 'N/A'
+            print >> status2, '| Receptive field:', '%s' % (str(self.get_receptive_field(default_layer_name)))
 
             print >> status2, '| Input: %s' % (str(self.state.next_filename))
 
@@ -307,6 +307,25 @@ class CaffeVisApp(BaseApp):
 
         locy = cv2_typeset_text(pane.data, strings_line2, (loc[0], locy),
                          line_spacing=self.settings.caffevis_status_line_spacing)
+
+
+    def get_receptive_field(self, layer_name):
+
+        if not hasattr(self.settings, '_receptive_field_per_layer'):
+            self.settings._receptive_field_per_layer = dict()
+
+        # calculate lazy
+        if not self.settings._receptive_field_per_layer.has_key(layer_name):
+            print "Calculating receptive fields for layer %s" % (layer_name)
+            top_name = layer_name_to_top_name(self.net, layer_name)
+            if top_name is not None:
+                blob = self.net.blobs[top_name].data
+                is_spatial = (len(blob.shape) == 4)
+                layer_receptive_field = get_max_data_extent(self.net, self.settings, layer_name, is_spatial)
+                self.settings._receptive_field_per_layer[layer_name] = layer_receptive_field
+
+        return self.settings._receptive_field_per_layer[layer_name]
+
 
     def prepare_tile_image(self, display_3D, highlight_selected, n_tiles, tile_rows, tile_cols):
 
@@ -346,6 +365,9 @@ class CaffeVisApp(BaseApp):
                 layer_dat_3D_1 = layer_dat_3D_1[:, np.newaxis, np.newaxis]
 
                 # we don't resize the images to half the size since there is no point in doing that in FC layers
+            elif layer_dat_3D_0.shape[2] == 1:
+                # we don't resize the images to half the size since it will crash
+                pass
             else:
                 # resize images to half the size
                 half_pane_shape = (layer_dat_3D_0.shape[1], layer_dat_3D_0.shape[2] / 2)
@@ -639,6 +661,12 @@ class CaffeVisApp(BaseApp):
         return display_2D, display_3D, display_3D_highres, is_layer_summary_loaded
 
     def load_image_per_unit(self, display_3D_highres, load_layer, units_num, first_only, resize_shape, file_search_pattern):
+
+        # limit loading
+        if units_num > 1000:
+            print "WARNING: load_image_per_unit was asked to load %d units, aborted to avoid hang" % (units_num)
+            return None
+
         # for each neuron in layer
         for unit_id in range(0, units_num):
 
