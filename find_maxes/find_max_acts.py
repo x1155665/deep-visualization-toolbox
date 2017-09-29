@@ -47,6 +47,7 @@ def main():
     parser.add_argument('--outdir', type = str, default = settings.caffevis_outputs_dir, help = 'Which output directory to use. Files are output into outdir/layer/unit_%%04d/{max_histogram}.png')
     parser.add_argument('--do-histograms', action = 'store_true', default = settings.max_tracker_do_histograms, help = 'Output histogram image file containing histogrma of max values per channel')
     parser.add_argument('--do-correlation', action = 'store_true', default = settings.max_tracker_do_correlation, help = 'Output correlation image file containing correlation of channels per layer')
+    parser.add_argument('--search-min', action='store_true', default=False, help='Should we also search for minimal activations?')
 
     args = parser.parse_args()
 
@@ -69,9 +70,9 @@ def main():
 
     with WithTimer('Scanning images'):
         if settings.is_siamese:
-            net_max_tracker = scan_pairs_for_maxes(settings, net, args.datadir, args.N, args.outdir)
+            net_max_tracker = scan_pairs_for_maxes(settings, net, args.datadir, args.N, args.outdir, args.search_min)
         else: # normal operation
-            net_max_tracker = scan_images_for_maxes(settings, net, args.datadir, args.N, args.outdir)
+            net_max_tracker = scan_images_for_maxes(settings, net, args.datadir, args.N, args.outdir, args.search_min)
 
     save_max_tracker_to_file(args.outfile, net_max_tracker)
 

@@ -143,14 +143,23 @@ def prepare_max_histogram(layer_name, n_channels, channel_to_histogram_values, p
 
 class MaxTracker(object):
 
-    def __init__(self, is_spatial, n_channels, n_top = 10, initial_val = -1e99, dtype = 'float32'):
+    def __init__(self, is_spatial, n_channels, n_top = 10, initial_val = -1e99, dtype = 'float32', search_min = False):
         self.is_spatial = is_spatial
-        self.max_vals = np.ones((n_channels, n_top), dtype = dtype) * initial_val
         self.n_top = n_top
+        self.search_min = search_min
+
+        self.max_vals = np.ones((n_channels, n_top), dtype=dtype) * initial_val
         if is_spatial:
             self.max_locs = -np.ones((n_channels, n_top, 4), dtype = 'int')   # image_idx, selected_input_index, i, j
         else:
             self.max_locs = -np.ones((n_channels, n_top, 2), dtype = 'int')   # image_idx, selected_input_index
+
+        if self.search_min:
+            self.min_vals = np.ones((n_channels, n_top), dtype=dtype) * (-initial_val)
+            if is_spatial:
+                self.min_locs = -np.ones((n_channels, n_top, 4), dtype='int')  # image_idx, selected_input_index, i, j
+            else:
+                self.min_locs = -np.ones((n_channels, n_top, 2), dtype='int')  # image_idx, selected_input_index
 
         # set of seen inputs, used to avoid updating on the same input twice
         self.seen_inputs = set()
@@ -218,20 +227,35 @@ class MaxTracker(object):
                 continue
 
             idx = np.searchsorted(self.max_vals[ii], max_value)
-            if idx == 0:
-                # Smaller than all 10
-                continue
-            # Store new max in the proper order. Update both arrays:
-            # self.max_vals:
-            self.max_vals[ii,:idx-1] = self.max_vals[ii,1:idx]       # shift lower values
-            self.max_vals[ii,idx-1] = max_value                      # store new max value
-            # self.max_locs
-            self.max_locs[ii,:idx-1] = self.max_locs[ii,1:idx]       # shift lower location data
-            # store new location
-            if self.is_spatial:
-                self.max_locs[ii,idx-1] = (image_idx, selected_input_index) + np.unravel_index(max_indexes[ii], data.shape[1:])
-            else:
-                self.max_locs[ii,idx-1] = (image_idx, selected_input_index)
+            # if not smaller than all elements
+            if idx != 0:
+                # Store new value in the proper order. Update both arrays:
+                # self.max_vals:
+                self.max_vals[ii,:idx-1] = self.max_vals[ii,1:idx]       # shift lower values
+                self.max_vals[ii,idx-1] = max_value                      # store new max value
+                # self.max_locs
+                self.max_locs[ii,:idx-1] = self.max_locs[ii,1:idx]       # shift lower location data
+                # store new location
+                if self.is_spatial:
+                    self.max_locs[ii,idx-1] = (image_idx, selected_input_index) + np.unravel_index(max_indexes[ii], data.shape[1:])
+                else:
+                    self.max_locs[ii,idx-1] = (image_idx, selected_input_index)
+
+            if self.search_min:
+                idx = np.searchsorted(self.min_vals[ii], max_value)
+                # if not bigger than all elements
+                if idx != self.n_top:
+                    # Store new value in the proper order. Update both arrays:
+                    # self.min_vals:
+                    self.min_vals[ii, (idx+1):(self.n_top)] = self.min_vals[ii, idx:(self.n_top-1)]  # shift upper values
+                    self.min_vals[ii, idx] = max_value  # store new value
+                    # self.min_locs
+                    self.min_locs[ii, (idx+1):(self.n_top)] = self.min_locs[ii, idx:(self.n_top-1)]  # shift upper location data
+                    # store new location
+                    if self.is_spatial:
+                        self.min_locs[ii, idx] = (image_idx, selected_input_index) + np.unravel_index(max_indexes[ii], data.shape[1:])
+                    else:
+                        self.min_locs[ii, idx] = (image_idx, selected_input_index)
 
     def calculate_histogram(self, layer_name, outdir):
 
@@ -315,10 +339,11 @@ class MaxTracker(object):
 
 
 class NetMaxTracker(object):
-    def __init__(self, settings, layers, n_top = 10, initial_val = -1e99, dtype = 'float32'):
+    def __init__(self, settings, layers, n_top = 10, initial_val = -1e99, dtype = 'float32', search_min = False):
         self.layers = layers
         self.init_done = False
         self.n_top = n_top
+        self.search_min = search_min
         self.initial_val = initial_val
         self.settings = settings
         self.siamese_helper = SiameseHelper(self.settings.layers_list)
@@ -342,7 +367,7 @@ class NetMaxTracker(object):
             if normalized_layer_name not in self.max_trackers:
                 self.max_trackers[normalized_layer_name] = MaxTracker(is_spatial, blob.shape[1], n_top = self.n_top,
                                                                       initial_val = self.initial_val,
-                                                                      dtype = blob.dtype)
+                                                                      dtype = blob.dtype, search_min = self.search_min)
 
         self.init_done = True
 
@@ -454,7 +479,7 @@ class NetMaxTracker(object):
         self.settings = None
         self.siamese_helper = None
 
-def scan_images_for_maxes(settings, net, datadir, n_top, outdir):
+def scan_images_for_maxes(settings, net, datadir, n_top, outdir, search_min):
     image_filenames, image_labels = get_files_list(settings)
     print 'Scanning %d files' % len(image_filenames)
     print '  First file', os.path.join(datadir, image_filenames[0])
@@ -462,7 +487,7 @@ def scan_images_for_maxes(settings, net, datadir, n_top, outdir):
     sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
     import caffe
 
-    tracker = NetMaxTracker(settings, n_top = n_top, layers=settings.layers_to_output_in_offline_scripts)
+    tracker = NetMaxTracker(settings, n_top = n_top, layers=settings.layers_to_output_in_offline_scripts, search_min=search_min)
 
     net_input_dims = net.blobs['data'].data.shape[2:4]
 
@@ -515,7 +540,7 @@ def scan_images_for_maxes(settings, net, datadir, n_top, outdir):
     return tracker
 
 
-def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir):
+def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir, search_min):
     image_filenames, image_labels = get_files_list(settings)
     print 'Scanning %d pairs' % len(image_filenames)
     print '  First pair', image_filenames[0]
@@ -523,7 +548,7 @@ def scan_pairs_for_maxes(settings, net, datadir, n_top, outdir):
     sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
     import caffe
 
-    tracker = NetMaxTracker(settings, n_top=n_top, layers=settings.layers_to_output_in_offline_scripts)
+    tracker = NetMaxTracker(settings, n_top=n_top, layers=settings.layers_to_output_in_offline_scripts, search_min=search_min)
 
     net_input_dims = net.blobs['data'].data.shape[2:4]
 
@@ -624,7 +649,7 @@ def save_representations(settings, net, datadir, filelist, layer_name, first_N =
     return indices,rep
 
 
-def generate_output_names(unit_dir, num_top, do_info, do_maxes, do_deconv, do_deconv_norm, do_backprop, do_backprop_norm):
+def generate_output_names(unit_dir, num_top, do_info, do_maxes, do_deconv, do_deconv_norm, do_backprop, do_backprop_norm, search_min):
 
     # init values
     info_filename = []
@@ -634,29 +659,31 @@ def generate_output_names(unit_dir, num_top, do_info, do_maxes, do_deconv, do_de
     backprop_filenames = []
     backpropnorm_filenames = []
 
+    prefix = 'min_' if search_min else ''
+
     if do_info:
-        info_filename = [os.path.join(unit_dir, 'info.txt')]
+        info_filename = [os.path.join(unit_dir, prefix + 'info.txt')]
 
     for max_idx_0 in range(num_top):
         if do_maxes:
-            maxim_filenames.append(os.path.join(unit_dir, 'maxim_%03d.png' % max_idx_0))
+            maxim_filenames.append(os.path.join(unit_dir, prefix + 'maxim_%03d.png' % max_idx_0))
 
         if do_deconv:
-            deconv_filenames.append(os.path.join(unit_dir, 'deconv_%03d.png' % max_idx_0))
+            deconv_filenames.append(os.path.join(unit_dir, prefix + 'deconv_%03d.png' % max_idx_0))
 
         if  do_deconv_norm:
-            deconvnorm_filenames.append(os.path.join(unit_dir, 'deconvnorm_%03d.png' % max_idx_0))
+            deconvnorm_filenames.append(os.path.join(unit_dir, prefix + 'deconvnorm_%03d.png' % max_idx_0))
 
         if do_backprop:
-            backprop_filenames.append(os.path.join(unit_dir, 'backprop_%03d.png' % max_idx_0))
+            backprop_filenames.append(os.path.join(unit_dir, prefix + 'backprop_%03d.png' % max_idx_0))
 
         if do_backprop_norm:
-            backpropnorm_filenames.append(os.path.join(unit_dir, 'backpropnorm_%03d.png' % max_idx_0))
+            backpropnorm_filenames.append(os.path.join(unit_dir, prefix + 'backpropnorm_%03d.png' % max_idx_0))
 
     return (info_filename, maxim_filenames, deconv_filenames, deconvnorm_filenames, backprop_filenames, backpropnorm_filenames)
 
 
-def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_end, num_top, datadir, filelist, outdir, do_which):
+def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_end, num_top, datadir, filelist, outdir, search_min, do_which):
     do_maxes, do_deconv, do_deconv_norm, do_backprop, do_backprop_norm, do_info = do_which
     assert do_maxes or do_deconv or do_deconv_norm or do_backprop or do_backprop_norm or do_info, 'nothing to do'
 
@@ -664,6 +691,9 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
     import caffe
 
     mt = max_tracker
+
+    locs = mt.min_locs if search_min else mt.max_locs
+    vals = mt.min_vals if search_min else mt.max_vals
 
     image_filenames, image_labels = get_files_list(settings)
 
@@ -676,7 +706,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
 
     siamese_helper = SiameseHelper(settings.layers_list)
 
-    num_top_in_mt = mt.max_locs.shape[1]
+    num_top_in_mt = locs.shape[1]
     assert num_top <= num_top_in_mt, 'Requested %d top images but MaxTracker contains only %d' % (num_top, num_top_in_mt)
     assert idx_end >= idx_begin, 'Range error'
 
@@ -710,7 +740,7 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
          deconv_filenames,
          deconvnorm_filenames,
          backprop_filenames,
-         backpropnorm_filenames] = generate_output_names(unit_dir, num_top, do_info, do_maxes, do_deconv, do_deconv_norm, do_backprop, do_backprop_norm)
+         backpropnorm_filenames] = generate_output_names(unit_dir, num_top, do_info, do_maxes, do_deconv, do_deconv_norm, do_backprop, do_backprop_norm, search_min)
 
         relevant_outputs = info_filename + \
                            maxim_filenames + \
@@ -754,25 +784,25 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
             if mt.is_spatial:
 
                 # fix for backward compatability
-                if mt.max_locs.shape[2] == 5:
+                if locs.shape[2] == 5:
                     # remove second column
-                    mt.max_locs = np.delete(mt.max_locs, 1, 2)
+                    locs = np.delete(locs, 1, 2)
 
-                batch[batch_index].im_idx, batch[batch_index].selected_input_index, batch[batch_index].ii, batch[batch_index].jj = mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]
+                batch[batch_index].im_idx, batch[batch_index].selected_input_index, batch[batch_index].ii, batch[batch_index].jj = locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]
             else:
                 # fix for backward compatability
-                if mt.max_locs.shape[2] == 3:
+                if locs.shape[2] == 3:
                     # remove second column
-                    mt.max_locs = np.delete(mt.max_locs, 1, 2)
+                    locs = np.delete(locs, 1, 2)
 
-                batch[batch_index].im_idx, batch[batch_index].selected_input_index = mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]
+                batch[batch_index].im_idx, batch[batch_index].selected_input_index = locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]
                 batch[batch_index].ii, batch[batch_index].jj = 0, 0
 
             # if ii and jj are invalid then there is no data for this "top" image, so we can skip it
             if (batch[batch_index].ii, batch[batch_index].jj) == (-1,-1):
                 continue
 
-            batch[batch_index].recorded_val = mt.max_vals[batch[batch_index].channel_idx, batch[batch_index].max_idx]
+            batch[batch_index].recorded_val = vals[batch[batch_index].channel_idx, batch[batch_index].max_idx]
             batch[batch_index].filename = image_filenames[batch[batch_index].im_idx]
             do_print = (batch[batch_index].max_idx_0 == 0)
             if do_print:
@@ -800,11 +830,11 @@ def output_max_patches(settings, max_tracker, net, layer_name, idx_begin, idx_en
             #        batch[batch_index].data_jj_start, batch[batch_index].data_jj_end)
 
             if do_info:
-                print >> batch[batch_index].info_file, 1 if mt.is_spatial else 0, '%.6f' % mt.max_vals[batch[batch_index].channel_idx, batch[batch_index].max_idx],
+                print >> batch[batch_index].info_file, 1 if mt.is_spatial else 0, '%.6f' % vals[batch[batch_index].channel_idx, batch[batch_index].max_idx],
                 if mt.is_spatial:
-                    print >> batch[batch_index].info_file, '%d %d %d %d' % tuple(mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]),
+                    print >> batch[batch_index].info_file, '%d %d %d %d' % tuple(locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]),
                 else:
-                    print >> batch[batch_index].info_file, '%d %d' % tuple(mt.max_locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]),
+                    print >> batch[batch_index].info_file, '%d %d' % tuple(locs[batch[batch_index].channel_idx, batch[batch_index].max_idx]),
                 print >> batch[batch_index].info_file, batch[batch_index].filename
 
             if not (do_maxes or do_deconv or do_deconv_norm or do_backprop or do_backprop_norm):

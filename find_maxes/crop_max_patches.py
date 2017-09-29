@@ -43,6 +43,7 @@ def main():
     parser.add_argument('--datadir',      type = str, default = settings.static_files_dir, help = 'directory to look for files in')
     parser.add_argument('--filelist',     type = str, default = settings.static_files_input_file, help = 'List of image files to consider, one per line. Must be the same filelist used to produce the NetMaxTracker!')
     parser.add_argument('--outdir',       type = str, default = settings.caffevis_outputs_dir, help = 'Which output directory to use. Files are output into outdir/layer/unit_%%04d/{maxes,deconv,backprop}_%%03d.png')
+    parser.add_argument('--search-min',    action='store_true', default=False, help='Should we also search for minimal activations?')
     args = parser.parse_args()
 
     settings.caffevis_deploy_prototxt = args.net_prototxt
@@ -84,10 +85,13 @@ def main():
         with WithTimer('Saved %d images per unit for %s units %d:%d.' % (args.N, normalized_layer_name, idx_begin, idx_end)):
 
             output_max_patches(settings, mt, net, normalized_layer_name, idx_begin, idx_end,
-                               args.N, args.datadir, args.filelist, args.outdir,
+                               args.N, args.datadir, args.filelist, args.outdir, False,
                                (args.do_maxes, args.do_deconv, args.do_deconv_norm, args.do_backprop, args.do_backprop_norm, args.do_info))
 
-
+            if args.search_min:
+                output_max_patches(settings, mt, net, normalized_layer_name, idx_begin, idx_end,
+                                   args.N, args.datadir, args.filelist, args.outdir, True,
+                                   (args.do_maxes, args.do_deconv, args.do_deconv_norm, args.do_backprop, args.do_backprop_norm, args.do_info))
 
 if __name__ == '__main__':
     main()
