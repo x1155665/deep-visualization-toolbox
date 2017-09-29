@@ -200,18 +200,30 @@ class MaxTracker(object):
         if len(self.all_max_vals) < MAX_LIST_SIZE:
             self.all_max_vals.append(maxes)
 
+        produced_warning = False
+
         #insertion_idx = zeros((n_channels,))
         #pdb.set_trace()
         for ii in xrange(n_channels):
 
-            idx = np.searchsorted(self.max_vals[ii], data_unroll[ii, max_indexes[ii]])
+            max_value = data_unroll[ii, max_indexes[ii]]
+
+            # skip nan
+            if np.isnan(max_value):
+                # only warn once
+                if not produced_warning:
+                    print 'WARNING: got NAN activation on input', str(layer_unique_input_source)
+                    produced_warning = True
+                continue
+
+            idx = np.searchsorted(self.max_vals[ii], max_value)
             if idx == 0:
                 # Smaller than all 10
                 continue
             # Store new max in the proper order. Update both arrays:
             # self.max_vals:
             self.max_vals[ii,:idx-1] = self.max_vals[ii,1:idx]       # shift lower values
-            self.max_vals[ii,idx-1] = data_unroll[ii, max_indexes[ii]]     # store new max value
+            self.max_vals[ii,idx-1] = max_value                      # store new max value
             # self.max_locs
             self.max_locs[ii,:idx-1] = self.max_locs[ii,1:idx]       # shift lower location data
             # store new location

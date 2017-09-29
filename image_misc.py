@@ -429,10 +429,15 @@ def resize_to_fit(img, out_max_shape,
     if convert_early:
         img = np.array(img, dtype=dtype_out)
 
-    out = np.stack([cv2.resize(img[:,:,i],
-                               (int(round(img.shape[1] * scale)), int(round(img.shape[0] * scale))),  # in (c,r) order
-                               interpolation = grow_interpolation if scale > 1 else shrink_interpolation)
-                    for i in range(img.shape[2])], axis=2)
+    if len(img.shape) == 3:
+        out = np.stack([cv2.resize(img[:,:,i],
+                                   (int(round(img.shape[1] * scale)), int(round(img.shape[0] * scale))),  # in (c,r) order
+                                   interpolation = grow_interpolation if scale > 1 else shrink_interpolation)
+                        for i in range(img.shape[2])], axis=2)
+    else:
+        out = cv2.resize(img,
+                         (int(round(img.shape[1] * scale)), int(round(img.shape[0] * scale))), # in (c,r) order
+                         interpolation=grow_interpolation if scale > 1 else shrink_interpolation)
 
     if convert_late:
         out = np.array(out, dtype=dtype_out)
@@ -476,10 +481,15 @@ def resize_without_fit(img, out_max_shape,
     if convert_early:
         img = np.array(img, dtype=dtype_out)
 
-    out = np.stack([cv2.resize(img[:,:,i],  # 0,0), fx=scale_1, fy=scale_0,
-                               (int(round(img.shape[1] * scale_1)), int(round(img.shape[0] * scale_0))),  # in (c,r) order
-                               interpolation=grow_interpolation if min(scale_0, scale_1) > 1 else shrink_interpolation)
-                    for i in range(img.shape[2])], axis=2)
+    if len(img.shape) == 3:
+        out = np.stack([cv2.resize(img[:,:,i],  # 0,0), fx=scale_1, fy=scale_0,
+                                   (int(round(img.shape[1] * scale_1)), int(round(img.shape[0] * scale_0))),  # in (c,r) order
+                                   interpolation=grow_interpolation if min(scale_0, scale_1) > 1 else shrink_interpolation)
+                        for i in range(img.shape[2])], axis=2)
+    else:
+        out = cv2.resize(img,  # 0,0), fx=scale_1, fy=scale_0,
+                         (int(round(img.shape[1] * scale_1)), int(round(img.shape[0] * scale_0))),  # in (c,r) order
+                         interpolation=grow_interpolation if min(scale_0, scale_1) > 1 else shrink_interpolation)
 
     if convert_late:
         out = np.array(out, dtype=dtype_out)

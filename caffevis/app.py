@@ -26,7 +26,7 @@ from caffe_proc_thread import CaffeProcThread
 from caffevis_app_state import CaffeVisAppState, SiameseViewMode, PatternMode, BackpropMode, BackpropViewOption, \
     ColorMapOption, InputOverlayOption
 from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, \
-    check_force_backward_true, set_mean, get_image_from_files
+    set_mean, get_image_from_files
 from caffe_misc import layer_name_to_top_name, save_caffe_image, get_max_data_extent
 from siamese_helper import SiameseHelper
 from settings_misc import load_network
@@ -56,8 +56,6 @@ class CaffeVisApp(BaseApp):
             self._net_channel_swap_inv = None
         else:
             self._net_channel_swap_inv = tuple([self._net_channel_swap.index(ii) for ii in range(len(self._net_channel_swap))])
-
-        check_force_backward_true(settings.caffevis_deploy_prototxt)
 
         self.labels = None
         if self.settings.caffevis_labels:

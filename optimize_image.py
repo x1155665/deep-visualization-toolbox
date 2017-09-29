@@ -7,7 +7,7 @@ import numpy as np
 
 import settings
 from optimize.gradient_optimizer import GradientOptimizer, FindParams
-from caffevis.caffevis_helper import check_force_backward_true, read_label_file, set_mean
+from caffevis.caffevis_helper import read_label_file, set_mean
 from settings_misc import load_network
 from caffe_misc import layer_name_to_top_name
 
@@ -149,8 +149,6 @@ def main():
         # currently, no batch support for siamese_batch_pair networks
         # it can be added by simply handle the batch indexes properly, but it should be thoroughly tested
         assert (settings.max_tracker_batch_size == 1)
-
-    check_force_backward_true(settings.caffevis_deploy_prototxt)
 
     current_data_shape = net.blobs['data'].shape
     net.blobs['data'].reshape(args.batch_size, current_data_shape[1], current_data_shape[2], current_data_shape[3])
