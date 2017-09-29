@@ -1,11 +1,6 @@
 
 ##################################### user related settings #####################################
 
-import os
-
-# base folder for all relative paths
-base_folder = os.path.expanduser('~')
-
 # Use GPU? Default is True.
 #caffevis_mode_gpu = False
 

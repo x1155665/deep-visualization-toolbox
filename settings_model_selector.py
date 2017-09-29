@@ -13,7 +13,7 @@ except ImportError:
 # Resume usual pyc creation
 sys.dont_write_bytecode = False
 
-caffevis_caffe_root = base_folder + '/caffe'
+caffevis_caffe_root = os.path.join(os.path.dirname(os.path.abspath(__file__)),'./caffe')
 
 # the following code runs dynamically the import command:
 # from models.YOUR_MODEL.settings_YOUR_MODEL import *

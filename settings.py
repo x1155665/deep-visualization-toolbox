@@ -244,6 +244,13 @@ if isinstance(caffevis_labels, basestring):
     caffevis_labels = caffevis_labels.replace('%DVT_ROOT%', dvt_root)
 if isinstance(caffevis_outputs_dir, basestring):
     caffevis_outputs_dir = caffevis_outputs_dir.replace('%DVT_ROOT%', dvt_root)
+if isinstance(static_files_input_file, basestring):
+    static_files_input_file = static_files_input_file.replace('%DVT_ROOT%', dvt_root)
+if isinstance(static_files_dir, basestring):
+    static_files_dir = static_files_dir.replace('%DVT_ROOT%', dvt_root)
+
+
+
 
 # Pause Caffe forward/backward computation for this many seconds after a keypress. This is to keep the processor free for a brief period after a keypress, which allow the interface to feel much more responsive. After this period has passed, Caffe resumes computation, in CPU mode often occupying all cores. Default: .1
 caffevis_pause_after_keys = locals().get('caffevis_pause_after_keys', .10)
