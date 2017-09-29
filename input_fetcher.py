@@ -197,24 +197,31 @@ class InputImageFetcher(CodependentThread):
             if self.latest_static_filename != self.available_files[self.static_file_idx] or self.latest_static_frame is None:
                 self.latest_static_filename = self.available_files[self.static_file_idx]
 
-                if self.settings.is_siamese:
-                    # loading two images for siamese network
-                    im1 = caffe.io.load_image(os.path.join(self.settings.static_files_dir, self.latest_static_filename[0]), color=not self.settings._calculated_is_gray_model)
-                    im2 = caffe.io.load_image(os.path.join(self.settings.static_files_dir, self.latest_static_filename[1]), color=not self.settings._calculated_is_gray_model)
-                    if not self.static_file_stretch_mode:
-                        im1 = crop_to_square(im1)
-                        im2 = crop_to_square(im2)
+                failed = False
+                try:
+                    if self.settings.is_siamese:
+                        # loading two images for siamese network
+                        im1 = caffe.io.load_image(os.path.join(self.settings.static_files_dir, self.latest_static_filename[0]), color=not self.settings._calculated_is_gray_model)
+                        im2 = caffe.io.load_image(os.path.join(self.settings.static_files_dir, self.latest_static_filename[1]), color=not self.settings._calculated_is_gray_model)
+                        if not self.static_file_stretch_mode:
+                            im1 = crop_to_square(im1)
+                            im2 = crop_to_square(im2)
 
-                    im = (im1,im2)
+                        im = (im1,im2)
 
-                else:
-                    im = caffe.io.load_image(os.path.join(self.settings.static_files_dir, self.latest_static_filename), color=not self.settings._calculated_is_gray_model)
-                    if not self.static_file_stretch_mode:
-                        im = crop_to_square(im)
+                    else:
+                        im = caffe.io.load_image(os.path.join(self.settings.static_files_dir, self.latest_static_filename), color=not self.settings._calculated_is_gray_model)
+                        if not self.static_file_stretch_mode:
+                            im = crop_to_square(im)
+                except Exception as e:
+                    failed = True
+                    print 'Failed loading data'
 
-                self.latest_static_frame = im
+                if not failed:
+                    self.latest_static_frame = im
 
-                # if we have labels, keep it
-                if self.labels:
-                    self.latest_label = self.labels[self.static_file_idx]
+                    # if we have labels, keep it
+                    if self.labels:
+                        self.latest_label = self.labels[self.static_file_idx]
+
             self._increment_and_set_frame(self.latest_static_frame, False)
