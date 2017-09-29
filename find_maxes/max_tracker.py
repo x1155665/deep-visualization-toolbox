@@ -95,7 +95,7 @@ def prepare_max_histogram(layer_name, n_channels, channel_to_histogram_values, p
         barlist = ax.bar(center, hist, align='center', width=width, color='g')
 
         for i in range(len(hist)):
-            if 0 >= bin_edges[i] and 0 <= bin_edges[i+1]:
+            if 0 >= bin_edges[i] and 0 < bin_edges[i+1]:
                 # mark dead bar in red
                 barlist[i].set_color('r')
 
