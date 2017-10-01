@@ -7,4 +7,6 @@
 #caffevis_gpu_id = 0
 
 # network selection, for network settings see file settings_local.py
-model_to_load = 'caffenet_yos'
+model_to_load = 'caffenet_yos' # AlexNet
+# model_to_load = 'bvlc_googlenet'
+# model_to_load = 'squeezenet'

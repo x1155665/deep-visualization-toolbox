@@ -1,1 +1,4 @@
 *.caffemodel
+*.processed_by_deepvis
+receptive_fields_cache.pickled
+
