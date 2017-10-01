@@ -168,7 +168,7 @@ class LiveVis(object):
         heartbeat_functions = [self.input_updater.heartbeat]
         for app_name, app in self.apps.iteritems():
             print 'Starting app:', app_name
-            app.start()
+            app.start(self)
             heartbeat_functions.extend(app.get_heartbeats())
 
         ii = 0
@@ -321,17 +321,11 @@ class LiveVis(object):
         elif tag == 'toggle_input_mode':
             self.input_updater.toggle_input_mode()
         elif tag == 'static_file_increment':
-            if self.input_updater.static_file_mode:
-                self.input_updater.increment_static_file_idx(1)
-            else:
-                self.input_updater.static_file_mode = True
+            self.input_updater.next_image()
         elif tag == 'static_file_decrement':
-            if self.input_updater.static_file_mode:
-                self.input_updater.increment_static_file_idx(-1)
-            else:
-                self.input_updater.static_file_mode = True
+            self.input_updater.prev_image()
         elif tag == 'help_mode':
-            self.help_mode = not self.help_mode
+            self.toggle_help_mode()
         elif tag == 'stretch_mode':
             self.input_updater.toggle_stretch_mode()
             print 'Stretch mode is now', self.input_updater.static_file_stretch_mode
@@ -346,7 +340,7 @@ class LiveVis(object):
     def handle_key_post_apps(self, key):
         tag = self.bindings.get_tag(key)
         if tag == 'quit':
-            self.quit = True
+            self.set_quit_flag()
         elif key == None:
             pass
         else:
@@ -394,7 +388,11 @@ class LiveVis(object):
         for app_name, app in self.apps.iteritems():
             locy = app.draw_help(self.help_pane, locy)
 
+    def toggle_help_mode(self):
+        self.help_mode = not self.help_mode
 
+    def set_quit_flag(self):
+        self.quit = True
 
 if __name__ == '__main__':
     print 'You probably want to run ./run_toolbox.py instead.'

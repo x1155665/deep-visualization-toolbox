@@ -81,6 +81,7 @@ default_window_panes = (
     ('caffevis_control', (   0,  300,      3*20,   900)),
     ('caffevis_layers',  (3*20,  300,  900-3*20,   900)),
     ('caffevis_jpgvis',  (   0, 1200,       900,   300)),
+    ('caffevis_buttons', (   0, 1500,       900,   300)),
 )
 window_panes = locals().get('window_panes', default_window_panes)
 
@@ -320,6 +321,23 @@ caffevis_status_fsize = locals().get('caffevis_status_fsize', 1.0 * global_font_
 caffevis_status_thick = locals().get('caffevis_status_thick', 1)
 caffevis_jpgvis_stack_vert = locals().get('caffevis_jpgvis_stack_vert', True)
 
+# Font settings for buttons pane (left most pane)
+caffevis_buttons_header_face = locals().get('caffevis_buttons_header_face', 'FONT_HERSHEY_COMPLEX_SMALL')
+caffevis_buttons_header_fsize = locals().get('caffevis_buttons_header_fsize', 1.0 * global_font_size)
+caffevis_buttons_header_clr = locals().get('caffevis_buttons_header_clr', (.8,.8,.8))
+caffevis_buttons_header_thick = locals().get('caffevis_buttons_header_thick', 2)
+caffevis_buttons_normal_face = locals().get('caffevis_buttons_normal_face', 'FONT_HERSHEY_COMPLEX_SMALL')
+caffevis_buttons_normal_fsize = locals().get('caffevis_buttons_normal_fsize', 1.0 * global_font_size)
+caffevis_buttons_normal_clr = locals().get('caffevis_buttons_normal_clr', (.8,.8,.8))
+caffevis_buttons_normal_thick = locals().get('caffevis_buttons_normal_thick', 1)
+caffevis_buttons_selected_face = locals().get('caffevis_buttons_selected_face', 'FONT_HERSHEY_COMPLEX_SMALL')
+caffevis_buttons_selected_fsize = locals().get('caffevis_buttons_selected_fsize', 1.0 * global_font_size)
+caffevis_buttons_selected_clr = locals().get('caffevis_buttons_selected_clr', (.5,1,.5))
+caffevis_buttons_selected_thick = locals().get('caffevis_buttons_selected_thick', 1)
+
+caffevis_buttons_loc = locals().get('caffevis_buttons_loc', (15,10))   # r,c order
+caffevis_buttons_line_spacing = locals().get('caffevis_buttons_line_spacing', 10)     # extra pixel spacing between lines
+
 # Font settings for class prob output (top 5 classes listed on left)
 caffevis_class_face = locals().get('caffevis_class_face', 'FONT_HERSHEY_COMPLEX_SMALL')
 caffevis_class_loc = locals().get('caffevis_class_loc', (20,10))   # r,c order
@@ -361,7 +379,7 @@ caffe_net_channel_swap = locals().get('caffe_net_channel_swap', None)
 caffe_net_transpose = locals().get('caffe_net_transpose', None)
 
 # caffe net parameter - raw scale, multiplies input BEFORE mean subtraction
-caffe_net_raw_scale = locals().get('caffe_net_raw_scale', None)
+caffe_net_raw_scale = locals().get('caffe_net_raw_scale', 255.0)
 
 # caffe net parameter - input scale, multiplies input AFTER mean subtraction
 caffe_net_input_scale = locals().get('caffe_net_input_scale', None)

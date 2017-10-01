@@ -105,10 +105,6 @@ class CaffeProcThread(CodependentThread):
                     with WithTimer('CaffeProcThread:deconv', quiet=self.debug_level < 1):
                         self.state.deconv_from_layer(self.net, backprop_layer_def, backprop_unit, 'Guided Backprop')
 
-                elif back_mode == BackpropMode.DECONV_UGB:
-                    with WithTimer('CaffeProcThread:deconv', quiet=self.debug_level < 1):
-                        self.state.deconv_from_layer(self.net, backprop_layer_def, backprop_unit, 'Guided Backprop', unique=True)
-
                 with self.state.lock:
                     self.state.back_stale = False
 

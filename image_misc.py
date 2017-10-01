@@ -3,10 +3,15 @@
 import io
 import cv2
 import numpy as np
+
+# note: these horrible lines solves an unknown segmentation fault, presumably related to opencv / skimage version issues
+cv2.namedWindow('test')
+cv2.destroyWindow('test')
+
 import skimage
 import skimage.io
-from copy import deepcopy
 import matplotlib.pyplot as plt
+
 
 from misc import WithTimer
 
@@ -561,6 +566,7 @@ def cv2_typeset_text(data, lines, loc, between = ' ', string_spacing = 0, line_s
         maxy = 0
         locx = loc[0]
         for ii,fs in enumerate(line):
+            text = fs.string
             last_on_line = (ii == len(line) - 1)
             if not last_on_line:
                 fs.string += between
@@ -585,7 +591,7 @@ def cv2_typeset_text(data, lines, loc, between = ' ', string_spacing = 0, line_s
                 break
                 ###line_num += 1
                 ###continue
-            boxes.append((locx, locx + boxsize[0], locy - boxsize[1], locy))
+            boxes.append((locx, locx + boxsize[0], locy - boxsize[1], locy, text))
             cv2.putText(data, fs.string, (locx,locy), fs.face, fs.fsize, fs.clr, fs.thick)
             maxy = max(maxy, boxsize[1])
             if fs.width is not None:

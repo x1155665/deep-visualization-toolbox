@@ -3,6 +3,9 @@
 
 # add parent folder to search path, to enable import of core modules like settings
 import os,sys,inspect
+
+from dask.array.random import normal
+
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
@@ -68,11 +71,13 @@ class CaffeVisApp(BaseApp):
         self.img_cache = FIFOLimitedArrayCache(settings.caffevis_jpg_cache_size)
 
         self.header_boxes = []
+        self.buttons_boxes = []
 
-    def start(self):
+    def start(self, live_vis):
         from jpg_vis_loading_thread import JPGVisLoadingThread
 
-        self.state = CaffeVisAppState(self.net, self.settings, self.bindings)
+        self.live_vis = live_vis
+        self.state = CaffeVisAppState(self.net, self.settings, self.bindings, live_vis)
         self.state.drawing_stale = True
         self.header_print_names = [get_pretty_layer_name(self.settings, nn) for nn in self.state.get_headers()]
 
@@ -158,6 +163,8 @@ class CaffeVisApp(BaseApp):
                 self._draw_control_pane(panes['caffevis_control'])
             if 'caffevis_status' in panes:
                 self._draw_status_pane(panes['caffevis_status'])
+            if 'caffevis_buttons' in panes:
+                self._draw_buttons_pane(panes['caffevis_buttons'])
             layer_data_3D_highres = None
             if 'caffevis_layers' in panes:
                 layer_data_3D_highres = self._draw_layer_pane(panes['caffevis_layers'])
@@ -312,8 +319,105 @@ class CaffeVisApp(BaseApp):
         locy, boxes = cv2_typeset_text(pane.data, strings_line2, (loc[0], locy),
                                        line_spacing=self.settings.caffevis_status_line_spacing)
 
+    def _draw_buttons_pane(self, pane):
 
+        pane.data[:] = to_255(self.settings.window_background)
 
+        header_defaults = {'face': getattr(cv2, self.settings.caffevis_buttons_header_face),
+                           'fsize': self.settings.caffevis_buttons_header_fsize,
+                           'clr': to_255(self.settings.caffevis_buttons_header_clr),
+                           'thick': self.settings.caffevis_buttons_header_thick}
+        normal_defaults = {'face': getattr(cv2, self.settings.caffevis_buttons_normal_face),
+                           'fsize': self.settings.caffevis_buttons_normal_fsize,
+                           'clr': to_255(self.settings.caffevis_buttons_normal_clr),
+                           'thick': self.settings.caffevis_buttons_normal_thick}
+        selected_defaults = {'face': getattr(cv2, self.settings.caffevis_buttons_selected_face),
+                           'fsize': self.settings.caffevis_buttons_selected_fsize,
+                           'clr': to_255(self.settings.caffevis_buttons_selected_clr),
+                           'thick': self.settings.caffevis_buttons_selected_thick}
+
+        loc = self.settings.caffevis_buttons_loc[::-1]  # Reverse to OpenCV c,r order
+
+        text = StringIO.StringIO()
+        fps = self.proc_thread.approx_fps()
+
+        lines = list()
+
+        with self.state.lock:
+            lines.append([FormattedString('Input', header_defaults)])
+
+            file_defaults = selected_defaults if self.live_vis.input_updater.static_file_mode else normal_defaults
+            camera_defaults = selected_defaults if not self.live_vis.input_updater.static_file_mode else normal_defaults
+
+            lines.append([FormattedString('File', file_defaults), FormattedString('Prev', normal_defaults), FormattedString('Next', normal_defaults)])
+            lines.append([FormattedString('Camera', camera_defaults)])
+            lines.append([FormattedString('', normal_defaults)])
+
+            activations_defaults = selected_defaults if self.state.pattern_mode == PatternMode.OFF and not self.state.layers_show_back else normal_defaults
+            gradients_defaults = selected_defaults if self.state.pattern_mode == PatternMode.OFF and self.state.layers_show_back else normal_defaults
+            max_optimized_defaults = selected_defaults if self.state.pattern_mode == PatternMode.MAXIMAL_OPTIMIZED_IMAGE else normal_defaults
+            max_input_defaults = selected_defaults if self.state.pattern_mode == PatternMode.MAXIMAL_INPUT_IMAGE else normal_defaults
+            weights_hist_defaults = selected_defaults if self.state.pattern_mode == PatternMode.WEIGHTS_HISTOGRAM else normal_defaults
+            act_hist_defaults = selected_defaults if self.state.pattern_mode == PatternMode.MAX_ACTIVATIONS_HISTOGRAM else normal_defaults
+            weights_corr_defaults = selected_defaults if self.state.pattern_mode == PatternMode.WEIGHTS_CORRELATION else normal_defaults
+            act_corr_defaults = selected_defaults if self.state.pattern_mode == PatternMode.ACTIVATIONS_CORRELATION else normal_defaults
+            lines.append([FormattedString('Modes', header_defaults)])
+            lines.append([FormattedString('Activations', activations_defaults)])
+            lines.append([FormattedString('Gradients', gradients_defaults)])
+            lines.append([FormattedString('Maximal Optimized', max_optimized_defaults)])
+            lines.append([FormattedString('Maximal Input', max_input_defaults)])
+            lines.append([FormattedString('Weights Histogram', weights_hist_defaults)])
+            lines.append([FormattedString('Activations Histogram', act_hist_defaults)])
+            lines.append([FormattedString('Weights Correlation', weights_corr_defaults)])
+            lines.append([FormattedString('Activations Correlation', act_corr_defaults)])
+            lines.append([FormattedString('', normal_defaults)])
+
+            no_overlay_defaults = selected_defaults if self.state.input_overlay_option == InputOverlayOption.OFF else normal_defaults
+            over_active_defaults = selected_defaults if self.state.input_overlay_option == InputOverlayOption.OVER_ACTIVE else normal_defaults
+            over_inactive_defaults = selected_defaults if self.state.input_overlay_option == InputOverlayOption.OVER_INACTIVE else normal_defaults
+            lines.append([FormattedString('Input Overlay', header_defaults)])
+            lines.append([FormattedString('No Overlay', no_overlay_defaults)])
+            lines.append([FormattedString('Over Active', over_active_defaults)])
+            lines.append([FormattedString('Over Inactive', over_inactive_defaults)])
+            lines.append([FormattedString('', normal_defaults)])
+
+            backprop_no_defaults = selected_defaults if self.state.back_mode == BackpropMode.OFF else normal_defaults
+            backprop_gradients_defaults = selected_defaults if self.state.back_mode == BackpropMode.GRAD else normal_defaults
+            backprop_zf_defaults = selected_defaults if self.state.back_mode == BackpropMode.DECONV_ZF else normal_defaults
+            backprop_gb_defaults = selected_defaults if self.state.back_mode == BackpropMode.DECONV_GB else normal_defaults
+            backprop_frozen_defaults = selected_defaults if self.state.backprop_selection_frozen else normal_defaults
+            lines.append([FormattedString('Backprop Modes', header_defaults)])
+            lines.append([FormattedString('No Backprop', backprop_no_defaults)])
+            lines.append([FormattedString('Gradient', backprop_gradients_defaults)])
+            lines.append([FormattedString('ZF Deconv', backprop_zf_defaults)])
+            lines.append([FormattedString('Guided Backprop', backprop_gb_defaults)])
+            lines.append([FormattedString('Freeze Origin', backprop_frozen_defaults)])
+            lines.append([FormattedString('', normal_defaults)])
+
+            backview_raw_defaults = selected_defaults if self.state.back_view_option == BackpropViewOption.RAW else normal_defaults
+            backview_gray_defaults = selected_defaults if self.state.back_view_option == BackpropViewOption.GRAY else normal_defaults
+            backview_norm_defaults = selected_defaults if self.state.back_view_option == BackpropViewOption.NORM else normal_defaults
+            backview_normblur_defaults = selected_defaults if self.state.back_view_option == BackpropViewOption.NORM_BLUR else normal_defaults
+            backview_possum_defaults = selected_defaults if self.state.back_view_option == BackpropViewOption.POS_SUM else normal_defaults
+            backview_hist_defaults = selected_defaults if self.state.back_view_option == BackpropViewOption.HISTOGRAM else normal_defaults
+            lines.append([FormattedString('Backprop Views', header_defaults)])
+            lines.append([FormattedString('Raw', backview_raw_defaults)])
+            lines.append([FormattedString('Gray', backview_gray_defaults)])
+            lines.append([FormattedString('Norm', backview_norm_defaults)])
+            lines.append([FormattedString('Blurred Norm', backview_normblur_defaults)])
+            lines.append([FormattedString('Sum > 0', backview_possum_defaults)])
+            lines.append([FormattedString('Gradient Histogram', backview_hist_defaults)])
+            lines.append([FormattedString('', normal_defaults)])
+
+            lines.append([FormattedString('Help', normal_defaults)])
+            lines.append([FormattedString('Quit', normal_defaults)])
+
+        # strings_line1 = [[FormattedString(line, defaults)] for line in text.getvalue().split('\n')]
+
+        locy, self.buttons_boxes = cv2_typeset_text(pane.data, lines, (loc[0], loc[1] + 5),
+                                       line_spacing=self.settings.caffevis_buttons_line_spacing)
+
+        return
 
 
     def prepare_tile_image(self, display_3D, highlight_selected, n_tiles, tile_rows, tile_cols):
@@ -1358,20 +1462,6 @@ class CaffeVisApp(BaseApp):
                     return norm01c(grad_blob, 0)
                 grad_img = run_processing_once_or_twice(pane.data.shape, do_raw)
 
-            elif back_view_option == BackpropViewOption.RAW_POS:
-                def do_raw_pos(grad_blob, resize_shape, input_image):
-                    if len(grad_blob.shape) == 3 and grad_blob.shape[2] != 3:
-                        return np.zeros(resize_shape)
-                    return norm01c(grad_blob, 0) * (grad_blob > 0) + (0.5) * (grad_blob <= 0)
-                grad_img = run_processing_once_or_twice(pane.data.shape, do_raw_pos)
-
-            elif back_view_option == BackpropViewOption.RAW_NEG:
-                def do_raw_neg(grad_blob, resize_shape, input_image):
-                    if len(grad_blob.shape) == 3 and grad_blob.shape[2] != 3:
-                        return np.zeros(resize_shape)
-                    return norm01c(grad_blob, 0) * (grad_blob < 0) + (0.5) * (grad_blob >= 0)
-                grad_img = run_processing_once_or_twice(pane.data.shape, do_raw_neg)
-
             elif back_view_option == BackpropViewOption.GRAY:
                 def do_gray(grad_blob, resize_shape, input_image):
                     return norm01c(grad_blob.mean(axis=2), 0)
@@ -1455,7 +1545,7 @@ class CaffeVisApp(BaseApp):
         return self.state.handle_key(key)
 
     def handle_mouse_left_click(self, x, y, flags, param, panes):
-        self.state.handle_mouse_left_click(x, y, flags, param, panes, self.header_boxes)
+        self.state.handle_mouse_left_click(x, y, flags, param, panes, self.header_boxes, self.buttons_boxes)
 
     def get_back_what_to_disp(self):
         '''Whether to show back diff information or stale or disabled indicator'''

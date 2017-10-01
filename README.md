@@ -1,5 +1,16 @@
 # Deep Visualization Toolbox
 
+## Installation 
+
+Following are installation instruction for the new improved version of Deepvis.
+
+    $ git clone --recursive https://github.com/arikpoz/deep-visualization-toolbox.git
+    $ cd deep-visualization-toolbox && ./build_default.sh
+    
+    
+    
+## Original Version Credit
+
 This is the code required to run the Deep Visualization Toolbox, as well as to generate the neuron-by-neuron visualizations using regularized optimization.
 The toolbox and methods are described casually [here](http://yosinski.com/deepvis) and more formally in this paper:
 

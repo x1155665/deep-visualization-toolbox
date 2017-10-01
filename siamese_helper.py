@@ -419,7 +419,7 @@ class SiameseHelper(object):
         pass
 
     @staticmethod
-    def deconv_from_layer(net, backprop_layer_def, backprop_unit, siamese_view_mode, deconv_type, unique=False):
+    def deconv_from_layer(net, backprop_layer_def, backprop_unit, siamese_view_mode, deconv_type):
 
         # if we are in siamese_batch_pair, we don't care of siamese_view_mode since we must do deconv on the 2-batch
         # otherwise, if we are in siamese_layer_pair, we do it on both layers only if both deconv are requested
@@ -436,21 +436,14 @@ class SiameseHelper(object):
             diffs1 = expand_dims(diffs1, 0)
 
             if backprop_layer_def['format'] == 'siamese_layer_pair':
-                if not unique:
-                    net.deconv_from_layer(backprop_layer_def['name/s'][0], diffs0, zero_higher=True, deconv_type=deconv_type)
-                    net.deconv_from_layer(backprop_layer_def['name/s'][1], diffs1, zero_higher=True, deconv_type=deconv_type)
-                else:
-                    SiameseHelper.siamese_unique_deconv_from_layer(net, backprop_layer_def['name/s'][0], backprop_layer_def['name/s'][1], diffs0, diffs1, deconv_type)
+                net.deconv_from_layer(backprop_layer_def['name/s'][0], diffs0, zero_higher=True, deconv_type=deconv_type)
+                net.deconv_from_layer(backprop_layer_def['name/s'][1], diffs1, zero_higher=True, deconv_type=deconv_type)
 
             elif backprop_layer_def['format'] == 'siamese_batch_pair':
                 # combine them to 2-batch and send once
                 diffs = concatenate((diffs0, diffs1), axis=0)
 
-                if not unique:
-                    net.deconv_from_layer(backprop_layer_def['name/s'], diffs, zero_higher=True, deconv_type=deconv_type)
-
-                else:  # unique deconv
-                    SiameseHelper.unique_deconv_from_layer(net, backprop_layer_def['name/s'], diffs, deconv_type)
+                net.deconv_from_layer(backprop_layer_def['name/s'], diffs, zero_higher=True, deconv_type=deconv_type)
 
         else: # normal layer, or siamese layer but siamese input mode is 'first' or 'second'
 
@@ -464,89 +457,7 @@ class SiameseHelper(object):
 
             selected_backprop_layer_name = SiameseHelper.get_single_selected_layer_name(backprop_layer_def, siamese_view_mode)
 
-            if not unique:
-                net.deconv_from_layer(selected_backprop_layer_name, diffs, zero_higher=True, deconv_type=deconv_type)
-
-            else: # unique deconv
-                SiameseHelper.unique_deconv_from_layer(net, selected_backprop_layer_name, diffs, deconv_type)
-
-    @staticmethod
-    def unique_deconv_from_layer(net, selected_backprop_layer_name, diffs, deconv_type):
-        try:
-            # invert weights of selected layer
-            net.params[selected_backprop_layer_name][0].data[...] *= -1
-            # run deconv using invereted weights on last layer
             net.deconv_from_layer(selected_backprop_layer_name, diffs, zero_higher=True, deconv_type=deconv_type)
-            # save gradients of first selected unit
-            first_dict = dict()
-            for key in net.blobs.keys():
-                # L1 normalize first signal
-                first = net.blobs[key].diff.copy()
-                sum_first = np.sum(np.abs(first))
-                first /= (sum_first + np.finfo(np.float32).eps)
-
-                # keep first signal
-                first_dict[key] = first
-
-            # invert weights back
-            net.params[selected_backprop_layer_name][0].data[...] *= -1
-            # run deconv using normal weights on last layer
-            net.deconv_from_layer(selected_backprop_layer_name, diffs, zero_higher=True, deconv_type=deconv_type)
-            for key in net.blobs.keys():
-                # L1 normalize current signal
-                current = net.blobs[key].diff.copy()
-                sum_current = np.sum(np.abs(current))
-                current /= (sum_current + np.finfo(np.float32).eps)
-
-                # get normalized first signal
-                first = first_dict[key]
-
-                net.blobs[key].diff[...] = current - first
-        except Exception as err:
-            print "ERROR while running unique_deconv_from_layer(), error:", str(err)
-            for key in net.blobs.keys():
-                net.blobs[key].diff[...] = 0
-
-    @staticmethod
-    def siamese_unique_deconv_from_layer(net, backprop_layer_name1, backprop_layer_name2, diffs1, diffs2, deconv_type):
-        try:
-            # invert weights of selected layer
-            # note: we only need to inverse the weights of the first layer, since they are shared
-            net.params[backprop_layer_name1][0].data[...] *= -1
-            # run deconv using invereted weights on last layer
-            net.deconv_from_layer(backprop_layer_name1, diffs1, zero_higher=True, deconv_type=deconv_type)
-            net.deconv_from_layer(backprop_layer_name2, diffs2, zero_higher=True, deconv_type=deconv_type)
-            # save gradients of first selected unit
-            first_dict = dict()
-            for key in net.blobs.keys():
-                # L1 normalize first signal
-                first = net.blobs[key].diff.copy()
-                sum_first = np.sum(np.abs(first))
-                first /= (sum_first + np.finfo(np.float32).eps)
-
-                # keep first signal
-                first_dict[key] = first
-
-            # invert weights back
-            net.params[backprop_layer_name1][0].data[...] *= -1
-            # run deconv using normal weights on last layer
-            net.deconv_from_layer(backprop_layer_name1, diffs1, zero_higher=True, deconv_type=deconv_type)
-            net.deconv_from_layer(backprop_layer_name2, diffs2, zero_higher=True, deconv_type=deconv_type)
-            for key in net.blobs.keys():
-                # L1 normalize current signal
-                current = net.blobs[key].diff.copy()
-                sum_current = np.sum(np.abs(current))
-                current /= (sum_current + np.finfo(np.float32).eps)
-
-                # get normalized first signal
-                first = first_dict[key]
-
-                net.blobs[key].diff[...] = current - first
-
-        except Exception as err:
-            print "ERROR while running siamese_unique_deconv_from_layer(), error:", str(err)
-            for key in net.blobs.keys():
-                net.blobs[key].diff[...] = 0
 
     @staticmethod
     def get_image_from_frame(frame, is_siamese, image_shape, siamese_view_mode):

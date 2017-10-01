@@ -11,8 +11,8 @@ class PatternMode:
     MAXIMAL_INPUT_IMAGE = 2
     WEIGHTS_HISTOGRAM = 3
     MAX_ACTIVATIONS_HISTOGRAM = 4
-    ACTIVATIONS_CORRELATION = 5
-    WEIGHTS_CORRELATION = 6
+    WEIGHTS_CORRELATION = 5
+    ACTIVATIONS_CORRELATION = 6
     NUMBER_OF_MODES = 7
 
 class BackpropMode:
@@ -20,8 +20,7 @@ class BackpropMode:
     GRAD = 1
     DECONV_ZF = 2
     DECONV_GB = 3
-    DECONV_UGB = 4
-    NUMBER_OF_MODES = 5
+    NUMBER_OF_MODES = 4
 
     @staticmethod
     def to_string(back_mode):
@@ -33,30 +32,22 @@ class BackpropMode:
             return 'deconv zf'
         elif back_mode == BackpropMode.DECONV_GB:
             return 'deconv gb'
-        elif back_mode == BackpropMode.DECONV_UGB:
-            return 'deconv ugb'
 
         return 'n/a'
 
 class BackpropViewOption:
     RAW = 0
-    RAW_POS = 1
-    RAW_NEG = 2
-    GRAY = 3
-    NORM = 4
-    NORM_BLUR = 5
-    POS_SUM = 6
-    HISTOGRAM = 7
-    NUMBER_OF_OPTIONS = 8
+    GRAY = 1
+    NORM = 2
+    NORM_BLUR = 3
+    POS_SUM = 4
+    HISTOGRAM = 5
+    NUMBER_OF_OPTIONS = 6
 
     @staticmethod
     def to_string(back_view_option):
         if back_view_option == BackpropViewOption.RAW:
             return 'raw'
-        elif back_view_option == BackpropViewOption.RAW_POS:
-            return 'raw>0'
-        elif back_view_option == BackpropViewOption.RAW_NEG:
-            return 'raw<0'
         elif back_view_option == BackpropViewOption.GRAY:
             return 'gray'
         elif back_view_option == BackpropViewOption.NORM:
@@ -107,11 +98,12 @@ class InputOverlayOption:
 class CaffeVisAppState(object):
     '''State of CaffeVis app.'''
 
-    def __init__(self, net, settings, bindings):
+    def __init__(self, net, settings, bindings, live_vis):
         self.lock = Lock()  # State is accessed in multiple threads
         self.settings = settings
         self.bindings = bindings
         self.net = net
+        self.live_vis = live_vis
 
         self.fill_layers_list(net)
 
@@ -184,7 +176,7 @@ class CaffeVisAppState(object):
         self.back_enabled = False
         self.back_mode = BackpropMode.OFF
         self.back_view_option = BackpropViewOption.RAW
-        self.color_map_option = ColorMapOption.GRAY
+        self.color_map_option = ColorMapOption.JET
         self.pattern_mode = PatternMode.OFF    # type of patterns to show instead of activations in layers pane: maximal optimized image, maximal input image, maximal histogram, off
         self.pattern_first_only = True         # should we load only the first pattern image for each neuron, or all the relevant images per neuron
         self.layers_pane_zoom_mode = 0       # 0: off, 1: zoom selected (and show pref in small pane), 2: zoom backprop
@@ -243,43 +235,28 @@ class CaffeVisAppState(object):
                 self.layer_boost_gamma_idx = (self.layer_boost_gamma_idx + 1) % len(self.layer_boost_gamma_choices)
                 self.layer_boost_gamma = self.layer_boost_gamma_choices[self.layer_boost_gamma_idx]
             elif tag == 'next_pattern_mode':
-                self.pattern_mode = (self.pattern_mode + 1) % PatternMode.NUMBER_OF_MODES
-                self.validate_state_for_summary_only_patterns()
+                self.set_pattern_mode((self.pattern_mode + 1) % PatternMode.NUMBER_OF_MODES)
 
             elif tag == 'prev_pattern_mode':
-                self.pattern_mode = (self.pattern_mode - 1 + PatternMode.NUMBER_OF_MODES) % PatternMode.NUMBER_OF_MODES
-                self.validate_state_for_summary_only_patterns()
+                self.set_pattern_mode((self.pattern_mode - 1 + PatternMode.NUMBER_OF_MODES) % PatternMode.NUMBER_OF_MODES)
 
             elif tag == 'pattern_first_only':
                 self.pattern_first_only = not self.pattern_first_only
+
             elif tag == 'show_back':
-                # If in pattern mode: switch to fwd/back. Else toggle fwd/back mode
-                if self.pattern_mode != PatternMode.OFF:
-                    self.pattern_mode = PatternMode.OFF
-                else:
-                    self.layers_show_back = not self.layers_show_back
-                if self.layers_show_back:
-                    if not self.back_enabled:
-                        if self.back_mode == BackpropMode.OFF:
-                            self.back_mode = BackpropMode.GRAD
-                        self.back_enabled = True
-                        self.back_stale = True
+                self.set_show_back(not self.layers_show_back)
 
             elif tag == 'next_ez_back_mode_loop':
-                self.back_mode = (self.back_mode + 1) % BackpropMode.NUMBER_OF_MODES
-                self.back_enabled = (self.back_mode != BackpropMode.OFF)
-                self.back_stale = True
+                self.set_back_mode((self.back_mode + 1) % BackpropMode.NUMBER_OF_MODES)
 
             elif tag == 'prev_ez_back_mode_loop':
-                self.back_mode = (self.back_mode - 1 + BackpropMode.NUMBER_OF_MODES) % BackpropMode.NUMBER_OF_MODES
-                self.back_enabled = (self.back_mode != BackpropMode.OFF)
-                self.back_stale = True
+                self.set_back_mode((self.back_mode - 1 + BackpropMode.NUMBER_OF_MODES) % BackpropMode.NUMBER_OF_MODES)
 
             elif tag == 'next_back_view_option':
-                self.back_view_option = (self.back_view_option + 1) % BackpropViewOption.NUMBER_OF_OPTIONS
+                self.set_back_view_option((self.back_view_option + 1) % BackpropViewOption.NUMBER_OF_OPTIONS)
 
             elif tag == 'prev_back_view_option':
-                self.back_view_option = (self.back_view_option - 1 + BackpropViewOption.NUMBER_OF_OPTIONS) % BackpropViewOption.NUMBER_OF_OPTIONS
+                self.set_back_view_option((self.back_view_option - 1 + BackpropViewOption.NUMBER_OF_OPTIONS) % BackpropViewOption.NUMBER_OF_OPTIONS)
 
             elif tag == 'next_color_map':
                 self.color_map_option = (self.color_map_option  + 1) % ColorMapOption.NUMBER_OF_OPTIONS
@@ -288,13 +265,8 @@ class CaffeVisAppState(object):
                 self.color_map_option  = (self.color_map_option  - 1 + ColorMapOption.NUMBER_OF_OPTIONS) % ColorMapOption.NUMBER_OF_OPTIONS
 
             elif tag == 'freeze_back_unit':
-                # Freeze selected layer/unit as backprop unit
-                self.backprop_selection_frozen = not self.backprop_selection_frozen
-                if self.backprop_selection_frozen:
-                    # Grap layer/selected_unit upon transition from non-frozen -> frozen
-                    self.backprop_layer_idx = self.layer_idx
-                    self.backprop_unit = self.selected_unit
-                    self.backprop_siamese_view_mode = self.siamese_view_mode
+                self.toggle_freeze_back_unit()
+
             elif tag == 'zoom_mode':
                 self.layers_pane_zoom_mode = (self.layers_pane_zoom_mode + 1) % 3
                 if self.layers_pane_zoom_mode == 2 and not self.back_enabled:
@@ -314,10 +286,10 @@ class CaffeVisAppState(object):
                 self.show_maximal_score = not self.show_maximal_score
 
             elif tag == 'next_input_overlay':
-                self.input_overlay_option = (self.input_overlay_option + 1) % InputOverlayOption.NUMBER_OF_OPTIONS
+                self.set_input_overlay((self.input_overlay_option + 1) % InputOverlayOption.NUMBER_OF_OPTIONS)
 
             elif tag == 'prev_input_overlay':
-                self.input_overlay_option  = (self.input_overlay_option  - 1 + InputOverlayOption.NUMBER_OF_OPTIONS) % InputOverlayOption.NUMBER_OF_OPTIONS
+                self.set_input_overlay((self.input_overlay_option  - 1 + InputOverlayOption.NUMBER_OF_OPTIONS) % InputOverlayOption.NUMBER_OF_OPTIONS)
 
             else:
                 key_handled = False
@@ -328,7 +300,7 @@ class CaffeVisAppState(object):
 
         return (None if key_handled else key)
 
-    def handle_mouse_left_click(self, x, y, flags, param, panes, header_boxes):
+    def handle_mouse_left_click(self, x, y, flags, param, panes, header_boxes, buttons_boxes):
 
         for pane_name, pane in panes.items():
             if pane.j_begin <= x < pane.j_end and pane.i_begin <= y < pane.i_end:
@@ -337,7 +309,7 @@ class CaffeVisAppState(object):
 
                     # search for layer clicked on
                     for box_idx, box in enumerate(header_boxes):
-                        start_x, end_x, start_y, end_y = box
+                        start_x, end_x, start_y, end_y, text = box
                         if start_x <= x - pane.j_begin < end_x and start_y <= y - pane.i_begin <= end_y:
                             # print 'layers list clicked on layer %d (%s,%s)' % (box_idx, x, y)
                             self.layer_idx = box_idx
@@ -371,6 +343,123 @@ class CaffeVisAppState(object):
                     self.drawing_stale = True  # Request redraw any time we handled the mouse
                     return
 
+                elif pane_name == 'caffevis_buttons':
+                    # print 'buttons!'
+
+                    # search for layer clicked on
+                    for box_idx, box in enumerate(buttons_boxes):
+                        start_x, end_x, start_y, end_y, text = box
+                        if start_x <= x - pane.j_begin < end_x and start_y <= y - pane.i_begin <= end_y:
+                            # print 'DEBUG: pressed %s' % text
+
+                            if text == 'File':
+                                self.live_vis.input_updater.set_mode_static()
+                                pass
+                            elif text == 'Prev':
+                                self.live_vis.input_updater.prev_image()
+                                pass
+                            elif text == 'Next':
+                                self.live_vis.input_updater.next_image()
+                                pass
+                            elif text == 'Camera':
+                                self.live_vis.input_updater.set_mode_cam()
+                                pass
+
+                            elif text == 'Modes':
+                                pass
+                            elif text == 'Activations':
+                                self.set_show_back(False)
+                                pass
+                            elif text == 'Gradients':
+                                self.set_show_back(True)
+                                pass
+                            elif text == 'Maximal Optimized':
+                                with self.lock:
+                                    self.set_pattern_mode(PatternMode.MAXIMAL_OPTIMIZED_IMAGE)
+                                pass
+                            elif text == 'Maximal Input':
+                                with self.lock:
+                                    self.set_pattern_mode(PatternMode.MAXIMAL_INPUT_IMAGE)
+                                pass
+                            elif text == 'Weights Histogram':
+                                with self.lock:
+                                    self.set_pattern_mode(PatternMode.WEIGHTS_HISTOGRAM)
+                                pass
+                            elif text == 'Activations Histogram':
+                                with self.lock:
+                                    self.set_pattern_mode(PatternMode.MAX_ACTIVATIONS_HISTOGRAM)
+                                pass
+                            elif text == 'Weights Correlation':
+                                with self.lock:
+                                    self.set_pattern_mode(PatternMode.WEIGHTS_CORRELATION)
+                                pass
+                            elif text == 'Activations Correlation':
+                                with self.lock:
+                                    self.set_pattern_mode(PatternMode.ACTIVATIONS_CORRELATION)
+                                pass
+
+                            elif text == 'Input Overlay':
+                                pass
+                            elif text == 'No Overlay':
+                                self.set_input_overlay(InputOverlayOption.OFF)
+                                pass
+                            elif text == 'Over Active':
+                                self.set_input_overlay(InputOverlayOption.OVER_ACTIVE)
+                                pass
+                            elif text == 'Over Inactive':
+                                self.set_input_overlay(InputOverlayOption.OVER_INACTIVE)
+                                pass
+
+                            elif text == 'Backprop Modes':
+                                pass
+                            elif text == 'No Backprop':
+                                self.set_back_mode(BackpropMode.OFF)
+                                pass
+                            elif text == 'Gradient':
+                                self.set_back_mode(BackpropMode.GRAD)
+                                pass
+                            elif text == 'ZF Deconv':
+                                self.set_back_mode(BackpropMode.DECONV_ZF)
+                                pass
+                            elif text == 'Guided Backprop':
+                                self.set_back_mode(BackpropMode.DECONV_GB)
+                                pass
+                            elif text == 'Freeze Origin':
+                                self.toggle_freeze_back_unit()
+                                pass
+
+                            elif text == 'Backprop Views':
+                                pass
+                            elif text == 'Raw':
+                                self.set_back_view_option(BackpropViewOption.RAW)
+                                pass
+                            elif text == 'Gray':
+                                self.set_back_view_option(BackpropViewOption.GRAY)
+                                pass
+                            elif text == 'Norm':
+                                self.set_back_view_option(BackpropViewOption.NORM)
+                                pass
+                            elif text == 'Blurred Norm':
+                                self.set_back_view_option(BackpropViewOption.NORM_BLUR)
+                                pass
+                            elif text == 'Sum > 0':
+                                self.set_back_view_option(BackpropViewOption.POS_SUM)
+                                pass
+                            elif text == 'Gradient Histogram':
+                                self.set_back_view_option(BackpropViewOption.HISTOGRAM)
+                                pass
+
+                            elif text == 'Help':
+                                self.live_vis.toggle_help_mode()
+                                pass
+
+                            elif text == 'Quit':
+                                self.live_vis.set_quit_flag()
+                                pass
+
+                            self._ensure_valid_selected()
+                            self.drawing_stale = True
+                            return
 
                 else:
                     # print "Clicked: %s - %s" % (x, y)
@@ -434,10 +523,10 @@ class CaffeVisAppState(object):
             with self.lock:
                 self.back_enabled = False
 
-    def deconv_from_layer(self, net, backprop_layer_def, backprop_unit, deconv_type, unique=False):
+    def deconv_from_layer(self, net, backprop_layer_def, backprop_unit, deconv_type):
 
         try:
-            return SiameseHelper.deconv_from_layer(net, backprop_layer_def, backprop_unit, self.siamese_view_mode, deconv_type, unique)
+            return SiameseHelper.deconv_from_layer(net, backprop_layer_def, backprop_unit, self.siamese_view_mode, deconv_type)
         except AttributeError:
             print 'ERROR: required bindings (deconv_from_layer) not found! Try using the deconv-deep-vis-toolbox branch as described here: https://github.com/yosinski/deep-visualization-toolbox'
             raise
@@ -580,3 +669,40 @@ class CaffeVisAppState(object):
     def validate_state_for_summary_only_patterns(self):
         if self.pattern_mode in [PatternMode.ACTIVATIONS_CORRELATION, PatternMode.WEIGHTS_CORRELATION]:
             self.cursor_area = 'top'
+
+    def set_pattern_mode(self, pattern_mode):
+        self.pattern_mode = pattern_mode
+        self.validate_state_for_summary_only_patterns()
+
+    def set_show_back(self, show_back):
+        # If in pattern mode: switch to fwd/back. Else toggle fwd/back mode
+        if self.pattern_mode != PatternMode.OFF:
+            self.set_pattern_mode(PatternMode.OFF)
+
+        self.layers_show_back = show_back
+        if self.layers_show_back:
+            if not self.back_enabled:
+                if self.back_mode == BackpropMode.OFF:
+                    self.back_mode = BackpropMode.GRAD
+                self.back_enabled = True
+                self.back_stale = True
+
+    def set_input_overlay(self, input_overlay):
+        self.input_overlay_option = input_overlay
+
+    def set_back_mode(self, back_mode):
+        self.back_mode = back_mode
+        self.back_enabled = (self.back_mode != BackpropMode.OFF)
+        self.back_stale = True
+
+    def toggle_freeze_back_unit(self):
+        # Freeze selected layer/unit as backprop unit
+        self.backprop_selection_frozen = not self.backprop_selection_frozen
+        if self.backprop_selection_frozen:
+            # Grap layer/selected_unit upon transition from non-frozen -> frozen
+            self.backprop_layer_idx = self.layer_idx
+            self.backprop_unit = self.selected_unit
+            self.backprop_siamese_view_mode = self.siamese_view_mode
+
+    def set_back_view_option(self, back_view_option):
+        self.back_view_option = back_view_option

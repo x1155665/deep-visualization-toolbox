@@ -32,7 +32,7 @@ class BaseApp(object):
         '''Tells the app to draw its help screen in the given pane. No return necessary.'''
         pass
 
-    def start(self):
+    def start(self, live_vis):
         '''Notify app to start, possibly creating any necessary threads'''
         pass
 

@@ -17,5 +17,5 @@ caffevis_caffe_root = os.path.join(os.path.dirname(os.path.abspath(__file__)),'.
 
 # the following code runs dynamically the import command:
 # from models.YOUR_MODEL.settings_YOUR_MODEL import *
-import_code = 'from models.' + model_to_load + '.settings_' + model_to_load + ' import *'
+import_code = 'from model_settings.settings_' + model_to_load + ' import *'
 exec (import_code, globals())

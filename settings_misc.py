@@ -28,7 +28,7 @@ def set_calculated_is_gray_model(settings, net):
         channels = input_shape[1]
         if channels == 1:
             settings._calculated_is_gray_model = True
-        elif channels == 2 and setings.is_siamese:
+        elif channels == 2 and settings.is_siamese:
             settings._calculated_is_gray_model = True
         elif channels == 3:
             settings._calculated_is_gray_model = False

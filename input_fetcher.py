@@ -172,6 +172,18 @@ class InputImageFetcher(CodependentThread):
         with self.lock:
             self.static_file_idx_increment += amount
 
+    def next_image(self):
+        if self.static_file_mode:
+            self.increment_static_file_idx(1)
+        else:
+            self.static_file_mode = True
+
+    def prev_image(self):
+        if self.static_file_mode:
+            self.increment_static_file_idx(-1)
+        else:
+            self.static_file_mode = True
+
     def _increment_and_set_frame(self, frame, from_cam):
         assert frame is not None
         with self.lock:

@@ -1,0 +1,2 @@
+cd caffe
+make clean
