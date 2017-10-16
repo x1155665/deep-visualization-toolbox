@@ -7,7 +7,9 @@ Following are installation instruction for the new improved version of Deepvis.
     $ git clone --recursive https://github.com/arikpoz/deep-visualization-toolbox.git
     $ cd deep-visualization-toolbox && ./build_default.sh
     
-    
+Note: there is no need to download Caffe separately, it is now a sub-module of this repository and will get downloaded and built using the above instructions.
+
+
     
 ## Original Version Credit
 
