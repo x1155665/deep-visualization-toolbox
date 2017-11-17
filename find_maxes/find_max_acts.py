@@ -19,7 +19,7 @@ import settings
 from caffevis.caffevis_helper import set_mean
 from jby_misc import WithTimer
 from max_tracker import scan_images_for_maxes, scan_pairs_for_maxes
-from settings_misc import load_network
+# from settings_misc import load_network
 
 from misc import mkdir_p
 

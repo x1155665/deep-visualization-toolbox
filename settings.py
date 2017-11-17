@@ -6,6 +6,8 @@
 # Import network settings. Turn off creation of X.pyc to avoid stale settings if X.py is removed.
 import os
 import sys
+from adapters.base_adapter import BaseAdapter
+
 sys.dont_write_bytecode = True
 try:
     from settings_model_selector import *
@@ -177,6 +179,9 @@ help_thick = locals().get('help_thick', 1)
 #
 ####################################
 
+# Adapter to use for interfacing the model
+adapter = locals().get('adapter', BaseAdapter())
+
 # Whether to use GPU mode (if True) or CPU mode (if False)
 caffevis_mode_gpu = locals().get('caffevis_mode_gpu', True)
 
@@ -235,8 +240,6 @@ caffevis_layers_aspect_ratio = locals().get('caffevis_layers_aspect_ratio', 1.0)
 # Replace magic '%DVT_ROOT%' string with the root DeepVis Toolbox
 # directory (the location of this settings file)
 dvt_root = os.path.dirname(os.path.abspath(__file__))
-if 'caffevis_deploy_prototxt' in locals():
-    caffevis_deploy_prototxt = caffevis_deploy_prototxt.replace('%DVT_ROOT%', dvt_root)
 if 'caffevis_network_weights' in locals():
     caffevis_network_weights = caffevis_network_weights.replace('%DVT_ROOT%', dvt_root)
 if isinstance(caffevis_data_mean, basestring):
@@ -466,15 +469,11 @@ def assert_in_settings(setting_name):
     if not setting_name in bound_locals:
         raise Exception('The "%s" setting is required; be sure to define it in settings_MODEL.py' % setting_name)
 
+
+assert_in_settings('adapter')
+
 # Set this to point to your compiled checkout of caffe
 assert_in_settings('caffevis_caffe_root')
-
-# Path to caffe deploy prototxt file. Minibatch size should be 1.
-assert_in_settings('caffevis_deploy_prototxt')
-
-# Path to network weights to load.
-assert_in_settings('caffevis_network_weights')
-assert_in_settings('caffevis_data_mean')
 
 # Check that caffe directory actually exists
 if not os.path.exists(caffevis_caffe_root):

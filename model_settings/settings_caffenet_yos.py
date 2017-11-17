@@ -1,9 +1,10 @@
+from adapters.caffe_adapter import CaffeAdapter
 
-# basic network configuration
 base_folder = '%DVT_ROOT%/'
-caffevis_deploy_prototxt = base_folder + './models/caffenet-yos/caffenet-yos-deploy.prototxt'
-caffevis_network_weights = base_folder + './models/caffenet-yos/caffenet-yos-weights'
-caffevis_data_mean       = base_folder + './models/caffenet-yos/ilsvrc_2012_mean.npy'
+adapter = CaffeAdapter(
+    deploy_prototxt_filepath=base_folder + './models/caffenet-yos/caffenet-yos-deploy.prototxt',
+    network_weights_filepath=base_folder + './models/caffenet-yos/caffenet-yos-weights',
+    data_mean_filepath=base_folder + './models/caffenet-yos/ilsvrc_2012_mean.npy')
 
 # input images
 static_files_dir = base_folder + './input_images/'

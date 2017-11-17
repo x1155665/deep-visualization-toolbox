@@ -32,7 +32,7 @@ from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_
     set_mean, get_image_from_files
 from caffe_misc import layer_name_to_top_name, save_caffe_image
 from siamese_helper import SiameseHelper
-from settings_misc import load_network, get_receptive_field
+from settings_misc import get_receptive_field
 
 
 class CaffeVisApp(BaseApp):
@@ -45,7 +45,7 @@ class CaffeVisApp(BaseApp):
         self.settings = settings
         self.bindings = key_bindings
 
-        self.net, self._data_mean = load_network(settings)
+        self.net, self._data_mean = settings.adapter.load_network(settings)
 
         # set network batch size to 1
         current_input_shape = self.net.blobs[self.net.inputs[0]].shape
