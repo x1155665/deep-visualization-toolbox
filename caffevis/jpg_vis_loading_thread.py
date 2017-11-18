@@ -1,21 +1,15 @@
 import os
 import time
-
-import cv2
 import numpy as np
-import glob
-import math
 
 from codependent_thread import CodependentThread
-from image_misc import caffe_load_image, ensure_uint255_and_resize_to_fit, \
-    ensure_uint255_and_resize_without_fit
+from image_misc import load_image, ensure_uint255_and_resize_to_fit, ensure_uint255_and_resize_without_fit
 from caffevis_helper import crop_to_corner, get_image_from_files
 
-import caffe
 
 class JPGVisLoadingThread(CodependentThread):
-    '''Loads JPGs necessary for caffevis_jpgvis pane in separate
-    thread and inserts them into the cache.
+    '''
+    Loads JPGs necessary for caffevis_jpgvis pane in separate thread and inserts them into the cache.
     '''
 
     def __init__(self, settings, state, cache, loop_sleep, heartbeat_required):
@@ -27,15 +21,14 @@ class JPGVisLoadingThread(CodependentThread):
         self.loop_sleep = loop_sleep
         self.debug_level = 0
 
-
-    def load_image_into_pane_original_format(self, state_layer_name, state_selected_unit, resize_shape, images, sub_folder,
-                                             file_pattern, image_index_to_set, should_crop_to_corner=False):
+    def load_image_into_pane_original_format(self, state_layer_name, state_selected_unit, resize_shape, images,
+                                             sub_folder, file_pattern, image_index_to_set, should_crop_to_corner=False):
 
         jpg_path = os.path.join(self.settings.caffevis_outputs_dir, sub_folder, state_layer_name,
                                 file_pattern % (state_layer_name, state_selected_unit))
 
         try:
-            img = caffe.io.load_image(jpg_path)
+            img = load_image(jpg_path)
 
             if should_crop_to_corner:
                 img = crop_to_corner(img, 2)

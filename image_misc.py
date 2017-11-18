@@ -27,7 +27,7 @@ def fig2data(fig):
     # buf = io.BytesIO()
     # fig.savefig(buf, format='png')
     # buf.seek(0)
-    # image = caffe_load_image(buf, color=True, as_uint=True)
+    # image = load_image(buf, color=True, as_uint=True)
     # buf.close()
     #return image
     
@@ -172,19 +172,18 @@ def cv2_imshow_rgb(window_name, img):
     #cv2.imshow(window_name, img)
 
 
-def caffe_load_image(filename, color=True, as_uint=False):
+def load_image(filename, color=True, as_uint=False):
     '''
-    Copied from Caffe to simplify potential import problems.
-    
     Load an image converting from grayscale or alpha as needed.
+    Copied from Caffe to decouple loading images from the network used.
 
-    Take
-    filename: string
-    color: flag for color format. True (default) loads as RGB while False
-        loads as intensity (if image is already grayscale).
+    :param filename: image file name
+    :param color: flag for color format. True (default) loads as RGB while False
+                loads as intensity (if image is already grayscale).
+    :param as_uint: should we return the image as uint array
 
-    Give
-    image: an image with type np.float32 in range [0, 1]
+    :return:
+    image : an image with type np.float32 in range [0, 1], or [0,255] if uint=True
         of size (H x W x 3) in RGB or
         of size (H x W x 1) in grayscale.
     '''
@@ -192,7 +191,7 @@ def caffe_load_image(filename, color=True, as_uint=False):
         if as_uint:
             img = skimage.io.imread(filename)
         else:
-            img = skimage.img_as_float(skimage.io.imread(filename)).astype(np.float32)
+            img = skimage.img_as_float(skimage.io.imread(filename, as_grey=not color)).astype(np.float32)
     if img.ndim == 2:
         img = img[:, :, np.newaxis]
         if color:

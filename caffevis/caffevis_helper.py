@@ -5,7 +5,7 @@ import numpy as np
 import os
 import glob
 
-from image_misc import get_tiles_height_width, caffe_load_image, ensure_uint255_and_resize_without_fit, FormattedString, \
+from image_misc import get_tiles_height_width, load_image, ensure_uint255_and_resize_without_fit, FormattedString, \
     cv2_typeset_text, to_255
 
 
@@ -82,7 +82,7 @@ def load_sprite_image(img_path, rows_cols, n_sprites = None):
     rows,cols = rows_cols
     if n_sprites is None:
         n_sprites = rows * cols
-    img = caffe_load_image(img_path, color = True, as_uint = True)
+    img = load_image(img_path, color = True, as_uint = True)
     assert img.shape[0] % rows == 0, 'sprite image has shape %s which is not divisible by rows_cols %' % (img.shape, rows_cols)
     assert img.shape[1] % cols == 0, 'sprite image has shape %s which is not divisible by rows_cols %' % (img.shape, rows_cols)
     sprite_height = img.shape[0] / rows
@@ -146,8 +146,7 @@ def get_image_from_files(settings, unit_folder_path, should_crop_to_corner, resi
             unit_images_path = [unit_images_path[0]]
 
         # load all images
-        unit_images = [caffe_load_image(unit_image_path, color=True, as_uint=True) for unit_image_path in
-                       unit_images_path]
+        unit_images = [load_image(unit_image_path, color=True, as_uint=True) for unit_image_path in unit_images_path]
 
         if settings.caffevis_clear_negative_activations:
             # clear images with 0 value

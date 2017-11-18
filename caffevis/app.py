@@ -23,7 +23,7 @@ from numpy_cache import FIFOLimitedArrayCache
 from app_base import BaseApp
 from image_misc import norm01, norm01c, tile_images_normalize, ensure_float01, tile_images_make_tiles, \
     ensure_uint255_and_resize_to_fit, resize_without_fit, ensure_uint255, \
-    caffe_load_image, ensure_uint255_and_resize_without_fit, array_histogram, fig2data
+    load_image, ensure_uint255_and_resize_without_fit, array_histogram, fig2data
 from image_misc import FormattedString, cv2_typeset_text, to_255
 from caffe_proc_thread import CaffeProcThread
 from caffevis_app_state import CaffeVisAppState, SiameseViewMode, PatternMode, BackpropMode, BackpropViewOption, \
@@ -735,7 +735,7 @@ class CaffeVisApp(BaseApp):
                         if show_layer_summary:
                             # load layer summary image
                             layer_summary_image_path = os.path.join(self.settings.caffevis_outputs_dir, load_layer, file_summary_pattern)
-                            layer_summary_image = caffe_load_image(layer_summary_image_path, color=True, as_uint=True)
+                            layer_summary_image = load_image(layer_summary_image_path, color=True, as_uint=True)
                             layer_summary_image = ensure_uint255_and_resize_without_fit(layer_summary_image, resize_shape)
                             display_3D_highres = layer_summary_image
                             display_3D_highres = np.expand_dims(display_3D_highres, 0)
@@ -898,7 +898,7 @@ class CaffeVisApp(BaseApp):
                     if cache_layer_weights_histogram_image_path and os.path.exists(cache_layer_weights_histogram_image_path):
 
                         # load 2d image from cache file
-                        display_2D = caffe_load_image(cache_layer_weights_histogram_image_path, color=True, as_uint=False)
+                        display_2D = load_image(cache_layer_weights_histogram_image_path, color=True, as_uint=False)
                         display_3D_highres = np.zeros(pane_shape)
                         display_3D_highres = np.expand_dims(display_3D_highres, 0)
                         display_3D_highres[0] = display_2D
@@ -911,7 +911,7 @@ class CaffeVisApp(BaseApp):
                     if cache_details_weights_histogram_image_path and os.path.exists(cache_details_weights_histogram_image_path):
 
                         # load 2d image from cache file
-                        display_2D = caffe_load_image(cache_details_weights_histogram_image_path, color=True, as_uint=False)
+                        display_2D = load_image(cache_details_weights_histogram_image_path, color=True, as_uint=False)
 
                         # calculate weights histogram for selected unit
                         calculate_weights_histogram_for_specific_unit(self.state.selected_unit, fig, ax, do_print=False)
@@ -921,8 +921,12 @@ class CaffeVisApp(BaseApp):
                         # generate empty highlights
                         display_2D_highlights_only = self.prepare_tile_image(display_3D * 0, True, n_channels, tile_rows, tile_cols)
 
-                        # mix highlights with cached image
-                        display_2D = (display_2D_highlights_only != 0) * display_2D_highlights_only + (display_2D_highlights_only == 0) * display_2D
+                        # if shapes are not equal, cache is invalid
+                        if display_2D_highlights_only.shape == display_2D.shape:
+                            # mix highlights with cached image
+                            display_2D = (display_2D_highlights_only != 0) * display_2D_highlights_only + (display_2D_highlights_only == 0) * display_2D
+                        else:
+                            display_2D = None
 
                 # if not loaded from cache, generate the data
                 if display_2D is None:
@@ -1067,7 +1071,7 @@ class CaffeVisApp(BaseApp):
                 if cache_layer_weights_correlation_image_path and os.path.exists(cache_layer_weights_correlation_image_path):
 
                     # load 2d image from cache file
-                    display_2D = caffe_load_image(cache_layer_weights_correlation_image_path, color=True, as_uint=False)
+                    display_2D = load_image(cache_layer_weights_correlation_image_path, color=True, as_uint=False)
                     display_3D_highres = np.zeros(pane_shape)
                     display_3D_highres = np.expand_dims(display_3D_highres, 0)
                     display_3D_highres[0] = display_2D

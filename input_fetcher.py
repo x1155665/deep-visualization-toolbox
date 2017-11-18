@@ -1,15 +1,11 @@
 import os
 import cv2
-import re
 import time
 from threading import RLock
-import numpy as np
 
 from codependent_thread import CodependentThread
-from image_misc import cv2_imshow_rgb, read_cam_frame, crop_to_square
-from misc import tsplit, get_files_list
-
-import caffe
+from image_misc import read_cam_frame, crop_to_square, load_image
+from misc import get_files_list
 
 class InputImageFetcher(CodependentThread):
     '''Fetches images from a webcam or loads from a directory.'''
@@ -213,8 +209,8 @@ class InputImageFetcher(CodependentThread):
                 try:
                     if self.settings.is_siamese:
                         # loading two images for siamese network
-                        im1 = caffe.io.load_image(os.path.join(self.settings.static_files_dir, self.latest_static_filename[0]), color=not self.settings._calculated_is_gray_model)
-                        im2 = caffe.io.load_image(os.path.join(self.settings.static_files_dir, self.latest_static_filename[1]), color=not self.settings._calculated_is_gray_model)
+                        im1 = load_image(os.path.join(self.settings.static_files_dir, self.latest_static_filename[0]), color=not self.settings._calculated_is_gray_model)
+                        im2 = load_image(os.path.join(self.settings.static_files_dir, self.latest_static_filename[1]), color=not self.settings._calculated_is_gray_model)
                         if not self.static_file_stretch_mode:
                             im1 = crop_to_square(im1)
                             im2 = crop_to_square(im2)
@@ -222,7 +218,7 @@ class InputImageFetcher(CodependentThread):
                         im = (im1,im2)
 
                     else:
-                        im = caffe.io.load_image(os.path.join(self.settings.static_files_dir, self.latest_static_filename), color=not self.settings._calculated_is_gray_model)
+                        im = load_image(os.path.join(self.settings.static_files_dir, self.latest_static_filename), color=not self.settings._calculated_is_gray_model)
                         if not self.static_file_stretch_mode:
                             im = crop_to_square(im)
                 except Exception as e:
