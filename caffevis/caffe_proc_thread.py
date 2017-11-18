@@ -32,18 +32,8 @@ class CaffeProcThread(CodependentThread):
         print 'CaffeProcThread.run called'
         frame = None
 
-        import caffe
-        # Set the mode to CPU or GPU. Note: in the latest Caffe
-        # versions, there is one Caffe object *per thread*, so the
-        # mode must be set per thread! Here we set the mode for the
-        # CaffeProcThread thread; it is also set in the main thread.
-        if self.mode_gpu:
-            caffe.set_mode_gpu()
-            print 'CaffeVisApp mode (in CaffeProcThread): GPU'
-        else:
-            caffe.set_mode_cpu()
-            print 'CaffeVisApp mode (in CaffeProcThread): CPU'
-        
+        self.settings.adapter.init_thread_specific(self.settings)
+
         while not self.is_timed_out():
             with self.state.lock:
                 if self.state.quit:

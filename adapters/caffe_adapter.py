@@ -22,16 +22,34 @@ class CaffeAdapter(BaseAdapter):
         if not os.path.exists(caffe_root):
             raise Exception('The Caffe directory specified in caffe_root parameter, %s, does not exist' % caffe_root)
 
+        self._caffe_root = caffe_root
+        sys.path.insert(0, os.path.join(self._caffe_root, 'python'))
+
         self._deploy_prototxt_filepath = replace_magic_DVT_ROOT(deploy_prototxt_filepath)
         self._network_weights_filepath = replace_magic_DVT_ROOT(network_weights_filepath)
         self._data_mean_ref = data_mean_ref
         if isinstance(self._data_mean_ref, basestring):
             self._data_mean_ref = replace_magic_DVT_ROOT(self._data_mean_ref)
-        self._caffe_root = caffe_root
 
         pass
 
     pass
+
+    def init_thread_specific(self, settings):
+
+        import caffe
+        # Set the mode to CPU or GPU. Note: in the latest Caffe
+        # versions, there is one Caffe object *per thread*, so the
+        # mode must be set per thread! Here we set the mode for the
+        # CaffeProcThread thread; it is also set in the main thread.
+        if settings.caffevis_mode_gpu:
+            caffe.set_mode_gpu()
+            print 'CaffeVisApp mode (in CaffeProcThread): GPU'
+        else:
+            caffe.set_mode_cpu()
+            print 'CaffeVisApp mode (in CaffeProcThread): CPU'
+
+        return
 
     def load_network(self, settings):
 
@@ -39,7 +57,6 @@ class CaffeAdapter(BaseAdapter):
         # versions, there is one Caffe object *per thread*, so the
         # mode must be set per thread! Here we set the mode for the
         # main thread; it is also separately set in CaffeProcThread.
-        sys.path.insert(0, os.path.join(self._caffe_root, 'python'))
         import caffe
 
         if settings.caffevis_mode_gpu:
