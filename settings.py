@@ -460,13 +460,4 @@ def assert_in_settings(setting_name):
     if not setting_name in bound_locals:
         raise Exception('The "%s" setting is required; be sure to define it in settings_MODEL.py' % setting_name)
 
-
 assert_in_settings('adapter')
-
-# Set this to point to your compiled checkout of caffe
-assert_in_settings('caffevis_caffe_root')
-
-# Check that caffe directory actually exists
-if not os.path.exists(caffevis_caffe_root):
-    raise Exception('The Caffe directory specified in settings_model_selector.py, %s, does not exist. Set the caffevis_caffe_root variable in your settings_model_selector.py to the path of your compiled Caffe checkout.' % caffevis_caffe_root)
-

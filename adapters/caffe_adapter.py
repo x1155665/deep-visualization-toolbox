@@ -7,18 +7,25 @@ from settings_misc import replace_magic_DVT_ROOT
 
 class CaffeAdapter(BaseAdapter):
 
-    def __init__(self, deploy_prototxt_filepath, network_weights_filepath, data_mean_ref=None):
+    def __init__(self, deploy_prototxt_filepath, network_weights_filepath, data_mean_ref=None,
+                 caffe_root=os.path.join(os.path.dirname(os.path.abspath(__file__)),'../caffe')):
         '''
         Ctor of CaffeAdapter class
         :param deploy_prototxt_filepath: Path to caffe deploy prototxt file
         :param network_weights_filepath: Path to network weights to load.
         :param data_mean_ref: Reference to data mean, if any, to be subtracted from input image file / webcam image.
+        :param caffe_root: caffe root directory
         Specify as string path to file or tuple of one value per channel or None.
         '''
+
+        # Check that caffe root directory actually exists
+        if not os.path.exists(caffe_root):
+            raise Exception('The Caffe directory specified in caffe_root parameter, %s, does not exist' % caffe_root)
 
         self._deploy_prototxt_filepath = replace_magic_DVT_ROOT(deploy_prototxt_filepath)
         self._network_weights_filepath = replace_magic_DVT_ROOT(network_weights_filepath)
         self._data_mean_ref = replace_magic_DVT_ROOT(data_mean_ref)
+        self._caffe_root = caffe_root
 
         pass
 
@@ -30,7 +37,7 @@ class CaffeAdapter(BaseAdapter):
         # versions, there is one Caffe object *per thread*, so the
         # mode must be set per thread! Here we set the mode for the
         # main thread; it is also separately set in CaffeProcThread.
-        sys.path.insert(0, os.path.join(settings.caffevis_caffe_root, 'python'))
+        sys.path.insert(0, os.path.join(self._caffe_root, 'python'))
         import caffe
 
         if settings.caffevis_mode_gpu:
@@ -86,7 +93,9 @@ class CaffeAdapter(BaseAdapter):
                     new_proto_file.write(line)
 
         # run upgrade tool on new file name (same output file)
-        upgrade_tool_command_line = settings.caffevis_caffe_root + '/build/tools/upgrade_net_proto_text.bin ' + self._processed_deploy_prototxt_filepath + ' ' + self._processed_deploy_prototxt_filepath
+        upgrade_tool_command_line = self._caffe_root + '/build/tools/upgrade_net_proto_text.bin ' + \
+                                    self._processed_deploy_prototxt_filepath + ' ' + \
+                                    self._processed_deploy_prototxt_filepath
         os.system(upgrade_tool_command_line)
 
         return

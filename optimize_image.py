@@ -22,8 +22,6 @@ def get_parser():
     )
 
     # Network and data options
-    parser.add_argument('--caffe-root', type = str, default = settings.caffevis_caffe_root,
-                        help = 'Path to caffe root directory.')
     parser.add_argument('--channel-swap-to-rgb', type = str, default = '(2,1,0)',
                         help = 'Permutation to apply to channels to change to RGB space for plotting. Hint: (0,1,2) if your network is trained for RGB, (2,1,0) if it is trained for BGR.')
     parser.add_argument('--data-size', type = str, default = '(227,227)',
