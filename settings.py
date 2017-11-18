@@ -188,11 +188,6 @@ caffevis_mode_gpu = locals().get('caffevis_mode_gpu', True)
 # ID of GPU to use, default is 0
 caffevis_gpu_id = locals().get('caffevis_gpu_id', 0)
 
-# Data mean, if any, to be subtracted from input image file / webcam
-# image. Specify as string path to file or tuple of one value per
-# channel or None.
-caffevis_data_mean = locals().get('caffevis_data_mean', None)
-
 # should we generate the channelwise average of the input mean file
 generate_channelwise_mean = locals().get('generate_channelwise_mean', False)
 
@@ -240,8 +235,6 @@ caffevis_layers_aspect_ratio = locals().get('caffevis_layers_aspect_ratio', 1.0)
 # Replace magic '%DVT_ROOT%' string with the root DeepVis Toolbox
 # directory (the location of this settings file)
 dvt_root = os.path.dirname(os.path.abspath(__file__))
-if isinstance(caffevis_data_mean, basestring):
-    caffevis_data_mean = caffevis_data_mean.replace('%DVT_ROOT%', dvt_root)
 if isinstance(caffevis_labels, basestring):
     caffevis_labels = caffevis_labels.replace('%DVT_ROOT%', dvt_root)
 if isinstance(caffevis_outputs_dir, basestring):

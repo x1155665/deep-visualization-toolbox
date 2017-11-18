@@ -4,7 +4,7 @@ base_folder = '%DVT_ROOT%/'
 adapter = CaffeAdapter(
     deploy_prototxt_filepath=base_folder + './models/caffenet-yos/caffenet-yos-deploy.prototxt',
     network_weights_filepath=base_folder + './models/caffenet-yos/caffenet-yos-weights',
-    data_mean_filepath=base_folder + './models/caffenet-yos/ilsvrc_2012_mean.npy')
+    data_mean_ref=base_folder + './models/caffenet-yos/ilsvrc_2012_mean.npy')
 
 # input images
 static_files_dir = base_folder + './input_images/'

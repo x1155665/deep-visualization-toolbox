@@ -29,7 +29,7 @@ from caffe_proc_thread import CaffeProcThread
 from caffevis_app_state import CaffeVisAppState, SiameseViewMode, PatternMode, BackpropMode, BackpropViewOption, \
     ColorMapOption, InputOverlayOption
 from caffevis_helper import get_pretty_layer_name, read_label_file, load_sprite_image, load_square_sprite_image, \
-    set_mean, get_image_from_files
+    get_image_from_files
 from caffe_misc import layer_name_to_top_name, save_caffe_image
 from siamese_helper import SiameseHelper
 from settings_misc import get_receptive_field

@@ -11,11 +11,8 @@ parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
 
 import argparse
-#import ipdb as pdb
-import cPickle as pickle
 
 import settings
-from caffevis.caffevis_helper import set_mean
 from siamese_helper import SiameseHelper
 
 from jby_misc import WithTimer

@@ -4,19 +4,16 @@
 import matplotlib
 matplotlib.use('Agg')
 
-import os
-import sys
 import argparse
 import numpy as np
 
 import settings
 from optimize.gradient_optimizer import GradientOptimizer, FindParams
-from caffevis.caffevis_helper import read_label_file, set_mean
+from caffevis.caffevis_helper import read_label_file
 from caffe_misc import layer_name_to_top_name
 
 
 LR_POLICY_CHOICES = ('constant', 'progress', 'progress01')
-
 
 
 def get_parser():

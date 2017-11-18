@@ -1,18 +1,24 @@
 import sys
 import os
+import numpy as np
 
 from adapters.base_adapter import BaseAdapter
 from settings_misc import replace_magic_DVT_ROOT
-from caffevis.caffevis_helper import set_mean
-
 
 class CaffeAdapter(BaseAdapter):
 
-    def __init__(self, deploy_prototxt_filepath, network_weights_filepath, data_mean_filepath):
+    def __init__(self, deploy_prototxt_filepath, network_weights_filepath, data_mean_ref=None):
+        '''
+        Ctor of CaffeAdapter class
+        :param deploy_prototxt_filepath: Path to caffe deploy prototxt file
+        :param network_weights_filepath: Path to network weights to load.
+        :param data_mean_ref: Reference to data mean, if any, to be subtracted from input image file / webcam image.
+        Specify as string path to file or tuple of one value per channel or None.
+        '''
 
         self._deploy_prototxt_filepath = replace_magic_DVT_ROOT(deploy_prototxt_filepath)
         self._network_weights_filepath = replace_magic_DVT_ROOT(network_weights_filepath)
-        self._data_mean_filepath = replace_magic_DVT_ROOT(data_mean_filepath)
+        self._data_mean_ref = replace_magic_DVT_ROOT(data_mean_ref)
 
         pass
 
@@ -54,7 +60,7 @@ class CaffeAdapter(BaseAdapter):
         if settings.caffe_net_transpose:
             net.transformer.set_transpose(net.inputs[0], settings.caffe_net_transpose)
 
-        data_mean = set_mean(settings.caffevis_data_mean, settings.generate_channelwise_mean, net)
+        data_mean = CaffeAdapter.set_mean(self._data_mean_ref, settings.generate_channelwise_mean, net)
 
         return net, data_mean
 
@@ -258,3 +264,68 @@ class CaffeAdapter(BaseAdapter):
         else:
             input_shape = net.blobs[net.inputs[0]].data.shape
             settings._calculated_image_dims = input_shape[2:4]
+
+    @staticmethod
+    def set_mean(data_mean_ref, generate_channelwise_mean, net):
+
+        if isinstance(data_mean_ref, basestring):
+            # If the mean is given as a filename, load the file
+            try:
+                data_mean = CaffeAdapter.load_mean_file(data_mean_ref)
+            except IOError:
+                print '\n\nCound not load mean file:', data_mean_ref
+                print 'Ensure that the values in settings.py point to a valid model weights file, network'
+                print 'definition prototxt, and mean. To fetch a default model and mean file, use:\n'
+                print '$ cd models/caffenet-yos/'
+                print '$ ./fetch.sh\n\n'
+                raise
+            input_shape = net.blobs[net.inputs[0]].data.shape[-2:]  # e.g. 227x227
+            # Crop center region (e.g. 227x227) if mean is larger (e.g. 256x256)
+            excess_h = data_mean.shape[1] - input_shape[0]
+            excess_w = data_mean.shape[2] - input_shape[1]
+            assert excess_h >= 0 and excess_w >= 0, 'mean should be at least as large as %s' % repr(input_shape)
+            data_mean = data_mean[:, (excess_h / 2):(excess_h / 2 + input_shape[0]),
+                              (excess_w / 2):(excess_w / 2 + input_shape[1])]
+        elif data_mean_ref is None:
+            data_mean = None
+        else:
+            # The mean has been given as a value or a tuple of values
+            data_mean = np.array(data_mean_ref)
+            # Promote to shape C,1,1
+            # while len(data_mean.shape) < 3:
+            #     data_mean = np.expand_dims(data_mean, -1)
+
+        if generate_channelwise_mean:
+            data_mean = data_mean.mean(1).mean(1)
+
+        if data_mean is not None:
+            print 'Using mean with shape:', data_mean.shape
+            net.transformer.set_mean(net.inputs[0], data_mean)
+
+        return data_mean
+
+    @staticmethod
+    def load_mean_file(data_mean_file):
+        filename, file_extension = os.path.splitext(data_mean_file)
+        if file_extension == ".npy":
+            # load mean from numpy array
+            data_mean = np.load(data_mean_file)
+            print "Loaded mean from numpy file, data_mean.shape: ", data_mean.shape
+
+        elif file_extension == ".binaryproto":
+
+            # load mean from binary protobuf file
+            import caffe
+            blob = caffe.proto.caffe_pb2.BlobProto()
+            data = open(data_mean_file, 'rb').read()
+            blob.ParseFromString(data)
+            data_mean = np.array(caffe.io.blobproto_to_array(blob))
+            data_mean = np.squeeze(data_mean)
+            print "Loaded mean from binaryproto file, data_mean.shape: ", data_mean.shape
+
+        else:
+            # unknown file extension, trying to load as numpy array
+            data_mean = np.load(data_mean_file)
+            print "Loaded mean from numpy file, data_mean.shape: ", data_mean.shape
+
+        return data_mean
