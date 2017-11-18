@@ -1,9 +1,11 @@
+from adapters.caffe_adapter import CaffeAdapter
 
 # basic network configuration
 base_folder = '%DVT_ROOT%/'
-caffevis_deploy_prototxt = base_folder + './models/bvlc-googlenet/bvlc-googlenet-deploy.prototxt'
-caffevis_network_weights = base_folder + './models/bvlc-googlenet/bvlc_googlenet.caffemodel'
-caffevis_data_mean       = (104, 117, 123)
+adapter = CaffeAdapter(
+    deploy_prototxt_filepath=base_folder + './models/bvlc-googlenet/bvlc-googlenet-deploy.prototxt',
+    network_weights_filepath=base_folder + './models/bvlc-googlenet/bvlc_googlenet.caffemodel',
+    data_mean_filepath=(104, 117, 123))
 
 # input images
 static_files_dir = base_folder + './input_images/'

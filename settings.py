@@ -240,8 +240,6 @@ caffevis_layers_aspect_ratio = locals().get('caffevis_layers_aspect_ratio', 1.0)
 # Replace magic '%DVT_ROOT%' string with the root DeepVis Toolbox
 # directory (the location of this settings file)
 dvt_root = os.path.dirname(os.path.abspath(__file__))
-if 'caffevis_network_weights' in locals():
-    caffevis_network_weights = caffevis_network_weights.replace('%DVT_ROOT%', dvt_root)
 if isinstance(caffevis_data_mean, basestring):
     caffevis_data_mean = caffevis_data_mean.replace('%DVT_ROOT%', dvt_root)
 if isinstance(caffevis_labels, basestring):

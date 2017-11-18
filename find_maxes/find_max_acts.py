@@ -40,8 +40,6 @@ def main():
     parser = argparse.ArgumentParser(description='Finds images in a training set that cause max activation for a network; saves results in a pickled NetMaxTracker.')
     parser.add_argument('--N', type = int, default = 9, help = 'note and save top N activations')
     parser.add_argument('--gpu', action = 'store_true', default = settings.caffevis_mode_gpu, help = 'use gpu')
-    parser.add_argument('--net_prototxt', type = str, default = settings.caffevis_deploy_prototxt, help = 'network prototxt to load')
-    parser.add_argument('--net_weights', type = str, default = settings.caffevis_network_weights, help = 'network weights to load')
     parser.add_argument('--datadir', type = str, default = settings.static_files_dir, help = 'directory to look for files in')
     parser.add_argument('--outfile', type=str, default = os.path.join(settings.caffevis_outputs_dir, 'find_max_acts_output.pickled'), help='output filename for pkl')
     parser.add_argument('--outdir', type = str, default = settings.caffevis_outputs_dir, help = 'Which output directory to use. Files are output into outdir/layer/unit_%%04d/{max_histogram}.png')
@@ -51,10 +49,7 @@ def main():
 
     args = parser.parse_args()
 
-    settings.caffevis_deploy_prototxt = args.net_prototxt
-    settings.caffevis_network_weights = args.net_weights
-
-    net, data_mean = load_network(settings)
+    net, data_mean = settings.adapter.load_network(settings)
 
     # validate batch size
     if settings.is_siamese and settings._calculated_siamese_network_format == 'siamese_batch_pair':

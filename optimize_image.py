@@ -12,7 +12,6 @@ import numpy as np
 import settings
 from optimize.gradient_optimizer import GradientOptimizer, FindParams
 from caffevis.caffevis_helper import read_label_file, set_mean
-from settings_misc import load_network
 from caffe_misc import layer_name_to_top_name
 
 
@@ -28,10 +27,6 @@ def get_parser():
     # Network and data options
     parser.add_argument('--caffe-root', type = str, default = settings.caffevis_caffe_root,
                         help = 'Path to caffe root directory.')
-    parser.add_argument('--deploy-proto', type = str, default = settings.caffevis_deploy_prototxt,
-                        help = 'Path to caffe network prototxt.')
-    parser.add_argument('--net-weights', type = str, default = settings.caffevis_network_weights,
-                        help = 'Path to caffe network weights.')
     parser.add_argument('--channel-swap-to-rgb', type = str, default = '(2,1,0)',
                         help = 'Permutation to apply to channels to change to RGB space for plotting. Hint: (0,1,2) if your network is trained for RGB, (2,1,0) if it is trained for BGR.')
     parser.add_argument('--data-size', type = str, default = '(227,227)',
@@ -143,10 +138,7 @@ def main():
     lr_params = parse_and_validate_lr_params(parser, args.lr_policy, args.lr_params)
     push_spatial = parse_and_validate_push_spatial(parser, args.push_spatial)
 
-    settings.caffevis_deploy_prototxt = args.deploy_proto
-    settings.caffevis_network_weights = args.net_weights
-
-    net, data_mean = load_network(settings)
+    net, data_mean = settings.adapter.load_network(settings)
 
     # validate batch size
     if settings.is_siamese and settings.siamese_network_format == 'siamese_batch_pair':
