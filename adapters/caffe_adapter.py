@@ -24,7 +24,9 @@ class CaffeAdapter(BaseAdapter):
 
         self._deploy_prototxt_filepath = replace_magic_DVT_ROOT(deploy_prototxt_filepath)
         self._network_weights_filepath = replace_magic_DVT_ROOT(network_weights_filepath)
-        self._data_mean_ref = replace_magic_DVT_ROOT(data_mean_ref)
+        self._data_mean_ref = data_mean_ref
+        if isinstance(self._data_mean_ref, basestring):
+            self._data_mean_ref = replace_magic_DVT_ROOT(self._data_mean_ref)
         self._caffe_root = caffe_root
 
         pass
