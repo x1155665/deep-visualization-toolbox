@@ -921,8 +921,12 @@ class CaffeVisApp(BaseApp):
                         # generate empty highlights
                         display_2D_highlights_only = self.prepare_tile_image(display_3D * 0, True, n_channels, tile_rows, tile_cols)
 
-                        # mix highlights with cached image
-                        display_2D = (display_2D_highlights_only != 0) * display_2D_highlights_only + (display_2D_highlights_only == 0) * display_2D
+                        # if shapes are not equal, cache is invalid
+                        if display_2D_highlights_only.shape == display_2D.shape:
+                            # mix highlights with cached image
+                            display_2D = (display_2D_highlights_only != 0) * display_2D_highlights_only + (display_2D_highlights_only == 0) * display_2D
+                        else:
+                            display_2D = None
 
                 # if not loaded from cache, generate the data
                 if display_2D is None:
