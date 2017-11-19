@@ -9,7 +9,7 @@ class CaffeAdapter(BaseAdapter):
 
     def __init__(self, deploy_prototxt_filepath, network_weights_filepath, data_mean_ref=None,
                  caffe_root=os.path.join(os.path.dirname(os.path.abspath(__file__)),'../caffe'),
-                 use_gpu=True, gpu_id=0, image_dims=None, raw_scale=255.0, input_scale=None):
+                 use_gpu=True, gpu_id=0, image_dims=None, raw_scale=255.0, input_scale=None, channel_swap=None):
         '''
         Ctor of CaffeAdapter class
         :param deploy_prototxt_filepath: Path to caffe deploy prototxt file
@@ -21,6 +21,9 @@ class CaffeAdapter(BaseAdapter):
         :param image_dims: image dimensions
         :param raw_scale: raw scale, multiplies input BEFORE mean subtraction
         :param input_scale: input scale, multiplies input AFTER mean subtraction
+        :param channel_swap: channel swap, default is None which will make automatic decision according to other
+               settings the automatic setting is either (2,1,0) or (2,1,0,5,4,3) according to is_siamese value and
+               siamese_input_mode
         Specify as string path to file or tuple of one value per channel or None.
         '''
 
@@ -42,6 +45,7 @@ class CaffeAdapter(BaseAdapter):
         self._image_dims = image_dims
         self._raw_scale = raw_scale
         self._input_scale = input_scale
+        self._channel_swap = channel_swap
 
         pass
 
@@ -79,10 +83,10 @@ class CaffeAdapter(BaseAdapter):
             self._processed_deploy_prototxt_filepath,
             self._network_weights_filepath,
             image_dims=self._image_dims,
-            mean=None,  # Set to None for now, assign later
+            mean=None,  # assigned later
             raw_scale=self._raw_scale,
             input_scale=self._input_scale,
-            channel_swap=settings._calculated_channel_swap)
+            channel_swap=self._calculated_channel_swap)
 
         self._deduce_calculated_settings_with_network(settings, net)
 
@@ -124,7 +128,7 @@ class CaffeAdapter(BaseAdapter):
 
     def _deduce_calculated_settings_without_network(self, settings, processed_deploy_prototxt_filepath):
         CaffeAdapter._set_calculated_siamese_network_format(settings)
-        CaffeAdapter._set_calculated_channel_swap(settings)
+        self._set_calculated_channel_swap(settings)
         CaffeAdapter._read_network_dag(settings, processed_deploy_prototxt_filepath)
 
     def _deduce_calculated_settings_with_network(self, settings, net):
@@ -141,18 +145,17 @@ class CaffeAdapter(BaseAdapter):
                 settings._calculated_siamese_network_format = layer_def['format']
                 return
 
-    @staticmethod
-    def _set_calculated_channel_swap(settings):
+    def _set_calculated_channel_swap(self, settings):
 
-        if settings.caffe_net_channel_swap is not None:
-            settings._calculated_channel_swap = settings.caffe_net_channel_swap
+        if self._channel_swap is not None:
+            self._calculated_channel_swap = self._channel_swap
 
         else:
             if settings.is_siamese and settings.siamese_input_mode == 'concat_channelwise':
-                settings._calculated_channel_swap = (2, 1, 0, 5, 4, 3)
+                self._calculated_channel_swap = (2, 1, 0, 5, 4, 3)
 
             else:
-                settings._calculated_channel_swap = (2, 1, 0)
+                self._calculated_channel_swap = (2, 1, 0)
 
     class LayerRecord:
 

@@ -160,7 +160,7 @@ def main():
 
     optimizer = GradientOptimizer(settings, net, batched_data_mean, labels = labels,
                                   label_layers = settings.caffevis_label_layers,
-                                  channel_swap_to_rgb = settings.caffe_net_channel_swap)
+                                  channel_swap_to_rgb = settings.adapter._calculated_channel_swap)
 
     if not args.push_layers:
         print "ERROR: No layers to work on, please set layers_to_output_in_offline_scripts to list of layers"

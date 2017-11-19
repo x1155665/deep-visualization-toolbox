@@ -53,7 +53,7 @@ class CaffeVisApp(BaseApp):
         self.net.blobs[self.net.inputs[0]].reshape(*current_input_shape)
         self.net.reshape()
 
-        self._net_channel_swap = settings._calculated_channel_swap
+        self._net_channel_swap = settings.adapter._calculated_channel_swap
 
         if self._net_channel_swap is None:
             self._net_channel_swap_inv = None

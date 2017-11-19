@@ -358,10 +358,6 @@ caffevis_clear_negative_activations = locals().get('caffevis_clear_negative_acti
 # folder for generating and reading deep vis outputs
 caffevis_outputs_dir = locals().get('caffevis_outputs_dir', '.')
 
-# caffe net parameter - channel swap, default is None which will make automatic decision according to other settings
-# the automatic setting is either (2,1,0) or (2,1,0,5,4,3) according to is_siamese value and siamese_input_mode
-caffe_net_channel_swap = locals().get('caffe_net_channel_swap', None)
-
 # caffe net parameter - transpose, used to convert HxWxK to KxHxW, when None uses caffe default which is (2,0,1)
 # this parameter should rarely change
 caffe_net_transpose = locals().get('caffe_net_transpose', None)
