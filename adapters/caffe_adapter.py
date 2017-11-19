@@ -9,7 +9,8 @@ class CaffeAdapter(BaseAdapter):
 
     def __init__(self, deploy_prototxt_filepath, network_weights_filepath, data_mean_ref=None,
                  caffe_root=os.path.join(os.path.dirname(os.path.abspath(__file__)),'../caffe'),
-                 use_gpu=True, gpu_id=0, image_dims=None, raw_scale=255.0, input_scale=None, channel_swap=None):
+                 use_gpu=True, gpu_id=0, image_dims=None, raw_scale=255.0, input_scale=None, channel_swap=None,
+                 transpose=None):
         '''
         Ctor of CaffeAdapter class
         :param deploy_prototxt_filepath: Path to caffe deploy prototxt file
@@ -24,6 +25,8 @@ class CaffeAdapter(BaseAdapter):
         :param channel_swap: channel swap, default is None which will make automatic decision according to other
                settings the automatic setting is either (2,1,0) or (2,1,0,5,4,3) according to is_siamese value and
                siamese_input_mode
+        :param transpose: transpose, used to convert HxWxK to KxHxW, when None uses caffe default which is (2,0,1)
+               this parameter should rarely change
         Specify as string path to file or tuple of one value per channel or None.
         '''
 
@@ -46,6 +49,7 @@ class CaffeAdapter(BaseAdapter):
         self._raw_scale = raw_scale
         self._input_scale = input_scale
         self._channel_swap = channel_swap
+        self._transpose = transpose
 
         pass
 
@@ -90,8 +94,8 @@ class CaffeAdapter(BaseAdapter):
 
         self._deduce_calculated_settings_with_network(settings, net)
 
-        if settings.caffe_net_transpose:
-            net.transformer.set_transpose(net.inputs[0], settings.caffe_net_transpose)
+        if self._transpose:
+            net.transformer.set_transpose(net.inputs[0], self._transpose)
 
         data_mean = CaffeAdapter.set_mean(self._data_mean_ref, settings.generate_channelwise_mean, net)
 

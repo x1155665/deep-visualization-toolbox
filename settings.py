@@ -358,10 +358,6 @@ caffevis_clear_negative_activations = locals().get('caffevis_clear_negative_acti
 # folder for generating and reading deep vis outputs
 caffevis_outputs_dir = locals().get('caffevis_outputs_dir', '.')
 
-# caffe net parameter - transpose, used to convert HxWxK to KxHxW, when None uses caffe default which is (2,0,1)
-# this parameter should rarely change
-caffe_net_transpose = locals().get('caffe_net_transpose', None)
-
 # default value for do_maxes parameter in max_tracker
 max_tracker_do_maxes = locals().get('max_tracker_do_maxes', True)
 
