@@ -8,13 +8,16 @@ from settings_misc import replace_magic_DVT_ROOT
 class CaffeAdapter(BaseAdapter):
 
     def __init__(self, deploy_prototxt_filepath, network_weights_filepath, data_mean_ref=None,
-                 caffe_root=os.path.join(os.path.dirname(os.path.abspath(__file__)),'../caffe')):
+                 caffe_root=os.path.join(os.path.dirname(os.path.abspath(__file__)),'../caffe'),
+                 use_gpu=True, gpu_id=0):
         '''
         Ctor of CaffeAdapter class
         :param deploy_prototxt_filepath: Path to caffe deploy prototxt file
         :param network_weights_filepath: Path to network weights to load.
         :param data_mean_ref: Reference to data mean, if any, to be subtracted from input image file / webcam image.
         :param caffe_root: caffe root directory
+        :param use_gpu: whether to use GPU mode (if True) or CPU mode (if False)
+        :param gpu_id: ID of GPU to use
         Specify as string path to file or tuple of one value per channel or None.
         '''
 
@@ -31,42 +34,36 @@ class CaffeAdapter(BaseAdapter):
         if isinstance(self._data_mean_ref, basestring):
             self._data_mean_ref = replace_magic_DVT_ROOT(self._data_mean_ref)
 
+        self._use_gpu = use_gpu
+        self._gpu_id = gpu_id
+
         pass
 
     pass
 
-    def init_thread_specific(self, settings):
+    def init_thread_specific(self):
 
         import caffe
+
         # Set the mode to CPU or GPU. Note: in the latest Caffe
         # versions, there is one Caffe object *per thread*, so the
         # mode must be set per thread! Here we set the mode for the
         # CaffeProcThread thread; it is also set in the main thread.
-        if settings.caffevis_mode_gpu:
+        if self._use_gpu:
             caffe.set_mode_gpu()
-            print 'CaffeVisApp mode (in CaffeProcThread): GPU'
+            caffe.set_device(self._gpu_id)
+            print 'Loaded caffe in GPU mode, using device', self._gpu_id
         else:
             caffe.set_mode_cpu()
-            print 'CaffeVisApp mode (in CaffeProcThread): CPU'
+            print 'Loaded caffe in CPU mode'
 
         return
 
     def load_network(self, settings):
 
-        # Set the mode to CPU or GPU. Note: in the latest Caffe
-        # versions, there is one Caffe object *per thread*, so the
-        # mode must be set per thread! Here we set the mode for the
-        # main thread; it is also separately set in CaffeProcThread.
         import caffe
 
-        if settings.caffevis_mode_gpu:
-            caffe.set_mode_gpu()
-            caffe.set_device(settings.caffevis_gpu_id)
-            print 'Loaded caffe in GPU mode, using device', settings.caffevis_gpu_id
-
-        else:
-            caffe.set_mode_cpu()
-            print 'Loaded caffe in CPU mode'
+        self.init_thread_specific()
 
         self._process_network_proto(settings)
 

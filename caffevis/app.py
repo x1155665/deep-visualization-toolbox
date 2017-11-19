@@ -86,8 +86,7 @@ class CaffeVisApp(BaseApp):
             self.proc_thread = CaffeProcThread(self.settings, self.net, self.state,
                                                self.settings.caffevis_frame_wait_sleep,
                                                self.settings.caffevis_pause_after_keys,
-                                               self.settings.caffevis_heartbeat_required,
-                                               self.settings.caffevis_mode_gpu)
+                                               self.settings.caffevis_heartbeat_required)
             self.proc_thread.start()
 
         if self.jpgvis_thread is None or not self.jpgvis_thread.is_alive():
@@ -96,7 +95,6 @@ class CaffeVisApp(BaseApp):
                                                      self.settings.caffevis_jpg_load_sleep,
                                                      self.settings.caffevis_heartbeat_required)
             self.jpgvis_thread.start()
-                
 
     def get_heartbeats(self):
         return [self.proc_thread.heartbeat, self.jpgvis_thread.heartbeat]

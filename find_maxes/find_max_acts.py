@@ -36,7 +36,6 @@ def main():
 
     parser = argparse.ArgumentParser(description='Finds images in a training set that cause max activation for a network; saves results in a pickled NetMaxTracker.')
     parser.add_argument('--N', type = int, default = 9, help = 'note and save top N activations')
-    parser.add_argument('--gpu', action = 'store_true', default = settings.caffevis_mode_gpu, help = 'use gpu')
     parser.add_argument('--datadir', type = str, default = settings.static_files_dir, help = 'directory to look for files in')
     parser.add_argument('--outfile', type=str, default = os.path.join(settings.caffevis_outputs_dir, 'find_max_acts_output.pickled'), help='output filename for pkl')
     parser.add_argument('--outdir', type = str, default = settings.caffevis_outputs_dir, help = 'Which output directory to use. Files are output into outdir/layer/unit_%%04d/{max_histogram}.png')

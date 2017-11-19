@@ -182,12 +182,6 @@ help_thick = locals().get('help_thick', 1)
 # Adapter to use for interfacing the model
 adapter = locals().get('adapter', BaseAdapter())
 
-# Whether to use GPU mode (if True) or CPU mode (if False)
-caffevis_mode_gpu = locals().get('caffevis_mode_gpu', True)
-
-# ID of GPU to use, default is 0
-caffevis_gpu_id = locals().get('caffevis_gpu_id', 0)
-
 # should we generate the channelwise average of the input mean file
 generate_channelwise_mean = locals().get('generate_channelwise_mean', False)
 

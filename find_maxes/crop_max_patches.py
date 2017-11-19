@@ -23,7 +23,6 @@ from find_max_acts import load_max_tracker_from_file
 def main():
     parser = argparse.ArgumentParser(description='Loads a pickled NetMaxTracker and outputs one or more of {the patches of the image, a deconv patch, a backprop patch} associated with the maxes.')
     parser.add_argument('--N',            type = int, default = 9, help = 'Note and save top N activations.')
-    parser.add_argument('--gpu',          action = 'store_true', default=settings.caffevis_mode_gpu, help = 'Use gpu.')
     parser.add_argument('--do-maxes',     action = 'store_true', default=settings.max_tracker_do_maxes, help = 'Output max patches.')
     parser.add_argument('--do-deconv',    action = 'store_true', default=settings.max_tracker_do_deconv, help = 'Output deconv patches.')
     parser.add_argument('--do-deconv-norm', action = 'store_true', default=settings.max_tracker_do_deconv_norm, help = 'Output deconv-norm patches.')

@@ -1,11 +1,14 @@
 from adapters.caffe_adapter import CaffeAdapter
 
+use_gpu = False
+
 # basic network configuration
 base_folder = '%DVT_ROOT%/'
 adapter = CaffeAdapter(
     deploy_prototxt_filepath=base_folder + './models/squeezenet/deploy.prototxt',
     network_weights_filepath=base_folder + './models/squeezenet/squeezenet_v1.0.caffemodel',
-    data_mean_ref=(104, 117, 123))
+    data_mean_ref=(104, 117, 123),
+    use_gpu = use_gpu)
 
 # input images
 static_files_dir = base_folder + './input_images/'
