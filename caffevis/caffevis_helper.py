@@ -19,7 +19,6 @@ def net_preproc_forward(settings, net, img, data_hw):
         appropriate_shape = data_hw + (3,)
 
     assert img.shape == appropriate_shape, 'img is wrong size (got %s but expected %s)' % (img.shape, appropriate_shape)
-    #resized = caffe.io.resize_image(img, net.image_dims)   # e.g. (227, 227, 3)
 
     data_blob = net.transformer.preprocess('data', img)                # e.g. (3, 227, 227), mean subtracted and scaled to [0,255]
     data_blob = data_blob[np.newaxis,:,:,:]                   # e.g. (1, 3, 227, 227)

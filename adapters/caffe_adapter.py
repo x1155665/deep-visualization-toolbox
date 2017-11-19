@@ -9,7 +9,7 @@ class CaffeAdapter(BaseAdapter):
 
     def __init__(self, deploy_prototxt_filepath, network_weights_filepath, data_mean_ref=None,
                  caffe_root=os.path.join(os.path.dirname(os.path.abspath(__file__)),'../caffe'),
-                 use_gpu=True, gpu_id=0):
+                 use_gpu=True, gpu_id=0, image_dims=None):
         '''
         Ctor of CaffeAdapter class
         :param deploy_prototxt_filepath: Path to caffe deploy prototxt file
@@ -18,6 +18,7 @@ class CaffeAdapter(BaseAdapter):
         :param caffe_root: caffe root directory
         :param use_gpu: whether to use GPU mode (if True) or CPU mode (if False)
         :param gpu_id: ID of GPU to use
+        :param image_dims: image dimensions
         Specify as string path to file or tuple of one value per channel or None.
         '''
 
@@ -36,6 +37,7 @@ class CaffeAdapter(BaseAdapter):
 
         self._use_gpu = use_gpu
         self._gpu_id = gpu_id
+        self._image_dims = image_dims
 
         pass
 
@@ -67,18 +69,18 @@ class CaffeAdapter(BaseAdapter):
 
         self._process_network_proto(settings)
 
-        CaffeAdapter._deduce_calculated_settings_without_network(settings, self._processed_deploy_prototxt_filepath)
+        self._deduce_calculated_settings_without_network(settings, self._processed_deploy_prototxt_filepath)
 
         net = caffe.Classifier(
             self._processed_deploy_prototxt_filepath,
             self._network_weights_filepath,
-            image_dims=settings.caffe_net_image_dims,
+            image_dims=self._image_dims,
             mean=None,  # Set to None for now, assign later
             input_scale=settings.caffe_net_input_scale,
             raw_scale=settings.caffe_net_raw_scale,
             channel_swap=settings._calculated_channel_swap)
 
-        CaffeAdapter._deduce_calculated_settings_with_network(settings, net)
+        self._deduce_calculated_settings_with_network(settings, net)
 
         if settings.caffe_net_transpose:
             net.transformer.set_transpose(net.inputs[0], settings.caffe_net_transpose)
@@ -116,16 +118,14 @@ class CaffeAdapter(BaseAdapter):
 
         return
 
-    @staticmethod
-    def _deduce_calculated_settings_without_network(settings, processed_deploy_prototxt_filepath):
+    def _deduce_calculated_settings_without_network(self, settings, processed_deploy_prototxt_filepath):
         CaffeAdapter._set_calculated_siamese_network_format(settings)
         CaffeAdapter._set_calculated_channel_swap(settings)
         CaffeAdapter._read_network_dag(settings, processed_deploy_prototxt_filepath)
 
-    @staticmethod
-    def _deduce_calculated_settings_with_network(settings, net):
+    def _deduce_calculated_settings_with_network(self, settings, net):
         CaffeAdapter._set_calculated_is_gray_model(settings, net)
-        CaffeAdapter._set_calculated_image_dims(settings, net)
+        self._set_calculated_image_dims(net)
 
     @staticmethod
     def _set_calculated_siamese_network_format(settings):
@@ -282,13 +282,21 @@ class CaffeAdapter(BaseAdapter):
             else:
                 settings._calculated_is_gray_model = None
 
-    @staticmethod
-    def _set_calculated_image_dims(settings, net):
-        if settings.caffe_net_image_dims is not None:
-            settings._calculated_image_dims = settings.caffe_net_image_dims
+    def _set_calculated_image_dims(self, net):
+        '''
+        set calculate image dimensions
+        :param settings:
+        :param net: loaded caffe network
+        '''
+
+        # if image dimensions were externally set, use them
+        if self._image_dims is not None:
+            self._calculated_image_dims = self._image_dims
+
         else:
+            # otherwise, use network assigned shape
             input_shape = net.blobs[net.inputs[0]].data.shape
-            settings._calculated_image_dims = input_shape[2:4]
+            self._calculated_image_dims = input_shape[2:4]
 
     @staticmethod
     def set_mean(data_mean_ref, generate_channelwise_mean, net):
