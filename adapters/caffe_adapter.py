@@ -7,15 +7,25 @@ from settings_misc import replace_magic_DVT_ROOT
 
 class CaffeAdapter(BaseAdapter):
 
-    def __init__(self, deploy_prototxt_filepath, network_weights_filepath, data_mean_ref=None,
+    def __init__(self,
+                 deploy_prototxt_filepath,
+                 network_weights_filepath,
+                 data_mean_ref=None,
+                 generate_channelwise_mean=False,
                  caffe_root=os.path.join(os.path.dirname(os.path.abspath(__file__)),'../caffe'),
-                 use_gpu=True, gpu_id=0, image_dims=None, raw_scale=255.0, input_scale=None, channel_swap=None,
+                 use_gpu=True,
+                 gpu_id=0,
+                 image_dims=None,
+                 raw_scale=255.0,
+                 input_scale=None,
+                 channel_swap=None,
                  transpose=None):
         '''
         Ctor of CaffeAdapter class
         :param deploy_prototxt_filepath: Path to caffe deploy prototxt file
         :param network_weights_filepath: Path to network weights to load.
         :param data_mean_ref: Reference to data mean, if any, to be subtracted from input image file / webcam image.
+        :param generate_channelwise_mean: should we generate the channelwise average of the input mean file
         :param caffe_root: caffe root directory
         :param use_gpu: whether to use GPU mode (if True) or CPU mode (if False)
         :param gpu_id: ID of GPU to use
@@ -42,6 +52,7 @@ class CaffeAdapter(BaseAdapter):
         self._data_mean_ref = data_mean_ref
         if isinstance(self._data_mean_ref, basestring):
             self._data_mean_ref = replace_magic_DVT_ROOT(self._data_mean_ref)
+        self._generate_channelwise_mean = generate_channelwise_mean
 
         self._use_gpu = use_gpu
         self._gpu_id = gpu_id
@@ -97,7 +108,7 @@ class CaffeAdapter(BaseAdapter):
         if self._transpose:
             net.transformer.set_transpose(net.inputs[0], self._transpose)
 
-        data_mean = CaffeAdapter.set_mean(self._data_mean_ref, settings.generate_channelwise_mean, net)
+        data_mean = CaffeAdapter.set_mean(self._data_mean_ref, self._generate_channelwise_mean, net)
 
         return net, data_mean
 
