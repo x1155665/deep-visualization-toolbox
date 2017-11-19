@@ -9,7 +9,7 @@ class CaffeAdapter(BaseAdapter):
 
     def __init__(self, deploy_prototxt_filepath, network_weights_filepath, data_mean_ref=None,
                  caffe_root=os.path.join(os.path.dirname(os.path.abspath(__file__)),'../caffe'),
-                 use_gpu=True, gpu_id=0, image_dims=None):
+                 use_gpu=True, gpu_id=0, image_dims=None, raw_scale=255.0, input_scale=None):
         '''
         Ctor of CaffeAdapter class
         :param deploy_prototxt_filepath: Path to caffe deploy prototxt file
@@ -19,6 +19,8 @@ class CaffeAdapter(BaseAdapter):
         :param use_gpu: whether to use GPU mode (if True) or CPU mode (if False)
         :param gpu_id: ID of GPU to use
         :param image_dims: image dimensions
+        :param raw_scale: raw scale, multiplies input BEFORE mean subtraction
+        :param input_scale: input scale, multiplies input AFTER mean subtraction
         Specify as string path to file or tuple of one value per channel or None.
         '''
 
@@ -38,6 +40,8 @@ class CaffeAdapter(BaseAdapter):
         self._use_gpu = use_gpu
         self._gpu_id = gpu_id
         self._image_dims = image_dims
+        self._raw_scale = raw_scale
+        self._input_scale = input_scale
 
         pass
 
@@ -76,8 +80,8 @@ class CaffeAdapter(BaseAdapter):
             self._network_weights_filepath,
             image_dims=self._image_dims,
             mean=None,  # Set to None for now, assign later
-            input_scale=settings.caffe_net_input_scale,
-            raw_scale=settings.caffe_net_raw_scale,
+            raw_scale=self._raw_scale,
+            input_scale=self._input_scale,
             channel_swap=settings._calculated_channel_swap)
 
         self._deduce_calculated_settings_with_network(settings, net)

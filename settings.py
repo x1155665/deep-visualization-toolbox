@@ -366,12 +366,6 @@ caffe_net_channel_swap = locals().get('caffe_net_channel_swap', None)
 # this parameter should rarely change
 caffe_net_transpose = locals().get('caffe_net_transpose', None)
 
-# caffe net parameter - raw scale, multiplies input BEFORE mean subtraction
-caffe_net_raw_scale = locals().get('caffe_net_raw_scale', 255.0)
-
-# caffe net parameter - input scale, multiplies input AFTER mean subtraction
-caffe_net_input_scale = locals().get('caffe_net_input_scale', None)
-
 # default value for do_maxes parameter in max_tracker
 max_tracker_do_maxes = locals().get('max_tracker_do_maxes', True)
 
