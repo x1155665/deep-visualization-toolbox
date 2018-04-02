@@ -47,3 +47,5 @@ else
     echo
     echo "Rerun as \"$0 all\" to also fetch fc6 and fc7 unit visualizations (Warning: 4.5G more)"
 fi
+
+python relocate_jpgs.py
