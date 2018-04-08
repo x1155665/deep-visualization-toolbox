@@ -517,7 +517,7 @@ class CaffeVisApp(BaseApp):
                 elif self.settings.caffevis_outputs_dir_folder_format == 'max_tracker_output':
                     display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_pattern_images_optimizer_format(
                         default_layer_name, layer_dat_3D, n_tiles, pane, tile_cols, tile_rows,
-                        self.state.pattern_first_only, file_search_pattern='maxim*.jpg')
+                        self.state.pattern_first_only, file_search_pattern='maxim*.png')
 
             elif self.state.pattern_mode == PatternMode.WEIGHTS_HISTOGRAM:
                 display_2D, display_3D, display_3D_highres, is_layer_summary_loaded = self.load_weights_histograms(

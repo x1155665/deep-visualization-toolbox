@@ -152,7 +152,7 @@ class JPGVisLoadingThread(CodependentThread):
                 else:
                     captions = []
                 self.load_image_into_pane_max_tracker_format(state_layer_name, state_selected_unit, resize_shape, images,
-                                                             file_search_pattern='maxim*.jpg',
+                                                             file_search_pattern='maxim*.png',
                                                              image_index_to_set=1, captions=captions, values=values)
 
 
@@ -169,7 +169,7 @@ class JPGVisLoadingThread(CodependentThread):
                 values = self.get_score_values_for_max_input_images(state_layer_name, state_selected_unit)
 
                 self.load_image_into_pane_max_tracker_format(state_layer_name, state_selected_unit, resize_shape, images,
-                                                             file_search_pattern='deconv*.jpg',
+                                                             file_search_pattern='deconv*.png',
                                                              image_index_to_set=2, values=values)
 
             # Prune images that were not found:
